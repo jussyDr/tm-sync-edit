@@ -1,0 +1,3 @@
+[workspace]
+members = ["server", "clients/openplanet/lib"]
+default-members = ["server"]
