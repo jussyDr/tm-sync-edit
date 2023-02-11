@@ -1,14 +1,10 @@
-mod map;
-mod serde;
-
-use bytes::Bytes;
-use futures_util::SinkExt;
-use map::Map;
-use std::fs::File;
+use ::serde::{Deserialize, Serialize};
+use futures_util::{SinkExt, TryStreamExt};
 use std::io::Result;
 use std::net::{Ipv4Addr, SocketAddrV4};
-use tokio::net::TcpListener;
-use tokio_util::codec::LengthDelimitedCodec;
+use tm_sync_edit_server::map::{Block, FreeBlock, Item};
+use tokio::net::{TcpListener, TcpStream};
+use tokio_util::codec::{Framed, LengthDelimitedCodec};
 use tracing::Level;
 
 #[tokio::main]
@@ -34,17 +30,57 @@ async fn main() -> Result<()> {
         tokio::spawn(async move {
             tracing::debug!("accepted connection from {addr}");
 
-            let mut framed_stream = LengthDelimitedCodec::builder()
+            let framed_stream = LengthDelimitedCodec::builder()
                 .little_endian()
                 .length_field_type::<u32>()
                 .new_framed(stream);
 
-            let map =
-                Map::load(File::open("Gammax 2 - 8 punten & 3 strepen.Map.Gbx").unwrap()).unwrap();
-            let bytes: Bytes = serde_json::to_vec(&map).unwrap().into();
-            framed_stream.send(bytes).await.unwrap();
+            if let Err(err) = handle_client(framed_stream).await {
+                tracing::error!("error: {}", err);
+            }
 
             tracing::debug!("closed connection to {addr}");
         });
     }
+}
+
+#[derive(Serialize, Deserialize)]
+enum Command {
+    PlaceBlock(Block),
+    RemoveBlock(Block),
+    PlaceFreeBlock(FreeBlock),
+    RemoveFreeBlock(FreeBlock),
+    PlaceItem(Item),
+    RemoveItem(Item),
+}
+
+async fn handle_client(mut stream: Framed<TcpStream, LengthDelimitedCodec>) -> anyhow::Result<()> {
+    loop {
+        tokio::select! {
+            result = stream.try_next() => match result? {
+                Some(frame) => {
+                    let command: Command = serde_json::from_slice(&frame)?;
+
+                    match command {
+                        Command::PlaceBlock(block) => {
+                            let response = Command::RemoveBlock(block);
+                            let frame = serde_json::to_vec(&response)?;
+
+                            stream.send(frame.into()).await?;
+                        }
+                        Command::RemoveBlock(block) => {
+                            let response = Command::PlaceBlock(block);
+                            let frame = serde_json::to_vec(&response)?;
+
+                            stream.send(frame.into()).await?;
+                        }
+                        _ => {}
+                    }
+                },
+                None => break,
+            }
+        }
+    }
+
+    Ok(())
 }

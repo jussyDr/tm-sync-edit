@@ -1,75 +1,331 @@
 use crate::serde;
-use ::serde::Serialize;
+use ::serde::{Deserialize, Serialize};
 use anyhow::anyhow;
+use flat_multimap::FlatMultiset;
+use gbx::map::{Color, Direction, PhaseOffset};
+use gbx::Vec3;
 use lazy_static::lazy_static;
+use ordered_float::OrderedFloat;
 use sha2::{Digest, Sha256};
+use std::borrow::Cow;
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::io::{Cursor, Read};
 use zip::ZipArchive;
 
+#[derive(Deserialize)]
+enum BlockInfoClip {
+    NonExclusive,
+    ExclusiveSymmetric { id: String },
+    ExclusiveAsymmetric { id: String, asym_clip_id: String },
+}
+
+impl BlockInfoClip {
+    fn clips(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::NonExclusive, Self::NonExclusive) => false,
+            (Self::ExclusiveSymmetric { id }, Self::ExclusiveSymmetric { id: other_id }) => {
+                id != other_id
+            }
+            (
+                Self::ExclusiveAsymmetric { id, asym_clip_id },
+                Self::ExclusiveAsymmetric {
+                    id: other_id,
+                    asym_clip_id: other_asym_clip_id,
+                },
+            ) => id != other_asym_clip_id || asym_clip_id != other_id,
+            _ => true,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct BlockUnitInfo {
+    offset: Vec3<u8>,
+    clip_north: Option<BlockInfoClip>,
+    clip_east: Option<BlockInfoClip>,
+    clip_south: Option<BlockInfoClip>,
+    clip_west: Option<BlockInfoClip>,
+}
+
+impl BlockUnitInfo {
+    fn clip(&self, dir: Direction) -> Option<&BlockInfoClip> {
+        match dir {
+            Direction::North => self.clip_north.as_ref(),
+            Direction::East => self.clip_east.as_ref(),
+            Direction::South => self.clip_south.as_ref(),
+            Direction::West => self.clip_west.as_ref(),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct BlockInfoVariant {
+    extent: Vec3<u8>,
+    units: Vec<BlockUnitInfo>,
+}
+
+#[derive(Deserialize)]
+struct BlockInfo {
+    variants_ground: Vec<BlockInfoVariant>,
+    variants_air: Vec<BlockInfoVariant>,
+}
+
+impl BlockInfo {
+    fn variant(&self, ground: bool, index: u8) -> Option<&BlockInfoVariant> {
+        if ground {
+            self.variants_ground.get(index as usize)
+        } else {
+            self.variants_air.get(index as usize)
+        }
+    }
+}
+
 lazy_static! {
-    static ref BLOCK_INFOS: HashMap<&'static str, ()> =
+    static ref BLOCK_INFOS: HashMap<&'static str, BlockInfo> =
         serde_json::from_str(include_str!("BlockInfos.json")).unwrap();
     static ref ITEM_MODEL_IDS: HashSet<&'static str> =
         serde_json::from_str(include_str!("ItemModelIds.json")).unwrap();
 }
 
-#[derive(Serialize)]
-enum ModelRef {
-    Id(&'static str),
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ModelRef {
+    Id(Cow<'static, str>),
     Hash(serde::Base64<[u8; 32]>),
 }
 
-#[derive(Serialize)]
-struct Block {
-    model: ModelRef,
-    coord: gbx::Vec3<u8>,
-    dir: gbx::map::Direction,
-    is_ground: bool,
-    variant_index: u8,
-    is_ghost: bool,
-    color: gbx::map::Color,
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Block {
+    pub model: ModelRef,
+    pub coord: Vec3<u8>,
+    pub dir: Direction,
+    pub is_ground: bool,
+    pub variant_index: u8,
+    pub is_ghost: bool,
+    pub color: Color,
 }
 
-#[derive(Serialize)]
-struct FreeBlock {
+#[derive(PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct FreeBlock {
     model: ModelRef,
-    pos: gbx::Vec3<f32>,
-    yaw: f32,
-    pitch: f32,
-    roll: f32,
-    color: gbx::map::Color,
+    pos: Vec3<OrderedFloat<f32>>,
+    yaw: OrderedFloat<f32>,
+    pitch: OrderedFloat<f32>,
+    roll: OrderedFloat<f32>,
+    color: Color,
 }
 
-#[derive(Serialize)]
-struct Item {
+#[derive(PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Item {
     model: ModelRef,
-    pos: gbx::Vec3<f32>,
-    yaw: f32,
-    pitch: f32,
-    roll: f32,
-    pivot_pos: gbx::Vec3<f32>,
-    color: gbx::map::Color,
-    anim_offset: gbx::map::PhaseOffset,
+    pos: Vec3<OrderedFloat<f32>>,
+    yaw: OrderedFloat<f32>,
+    pitch: OrderedFloat<f32>,
+    roll: OrderedFloat<f32>,
+    pivot_pos: Vec3<OrderedFloat<f32>>,
+    color: Color,
+    anim_offset: PhaseOffset,
 }
 
+#[allow(clippy::type_complexity)]
 #[derive(Serialize)]
 pub struct Map {
-    blocks: Vec<Block>,
-    free_blocks: Vec<FreeBlock>,
-    items: Vec<Item>,
-    embedded_blocks: HashMap<serde::Base64<[u8; 32]>, serde::Base64<Vec<u8>>>,
+    blocks: FlatMultiset<Block>,
+    free_blocks: FlatMultiset<FreeBlock>,
+    items: FlatMultiset<Item>,
+    embedded_blocks: HashMap<serde::Base64<[u8; 32]>, (&'static str, serde::Base64<Vec<u8>>)>,
     embedded_items: HashMap<serde::Base64<[u8; 32]>, serde::Base64<Vec<u8>>>,
 }
 
 impl Map {
+    pub fn new() -> Self {
+        Self {
+            blocks: FlatMultiset::new(),
+            free_blocks: FlatMultiset::new(),
+            items: FlatMultiset::new(),
+            embedded_blocks: HashMap::new(),
+            embedded_items: HashMap::new(),
+        }
+    }
+
+    fn get_block_info(&self, model_ref: &ModelRef) -> Option<&BlockInfo> {
+        let block_info_id = match *model_ref {
+            ModelRef::Id(ref id) => id.as_ref(),
+            ModelRef::Hash(ref hash) => self
+                .embedded_blocks
+                .get(hash)
+                .map(|(archetype, _)| *archetype)?,
+        };
+
+        BLOCK_INFOS.get(block_info_id)
+    }
+}
+
+fn rotate_unit_coord(coord: Vec3<u8>, dir: Direction, extent: Vec3<u8>) -> Vec3<u8> {
+    match dir {
+        Direction::North => coord,
+        Direction::East => Vec3 {
+            x: extent.z - coord.z,
+            y: coord.y,
+            z: coord.x,
+        },
+        Direction::South => Vec3 {
+            x: extent.x - coord.x,
+            y: coord.y,
+            z: extent.z - coord.z,
+        },
+        Direction::West => Vec3 {
+            x: coord.z,
+            y: coord.y,
+            z: extent.x - coord.x,
+        },
+    }
+}
+
+impl Map {
+    pub fn can_place_block(&mut self, block: &Block) -> Result<(), ()> {
+        let block_info = self.get_block_info(&block.model).ok_or(())?;
+
+        if !block.is_ghost {
+            for other_block in &self.blocks {
+                if !other_block.is_ghost {
+                    let other_block_info = self.get_block_info(&other_block.model).unwrap();
+
+                    let variant = block_info
+                        .variant(block.is_ground, block.variant_index)
+                        .ok_or(())?;
+
+                    let other_variant = other_block_info
+                        .variant(other_block.is_ground, other_block.variant_index)
+                        .unwrap();
+
+                    for unit in &variant.units {
+                        for other_unit in &other_variant.units {
+                            let coord = block.coord
+                                + rotate_unit_coord(unit.offset, block.dir, variant.extent);
+
+                            let other_coord = other_block.coord
+                                + rotate_unit_coord(
+                                    other_unit.offset,
+                                    other_block.dir,
+                                    other_variant.extent,
+                                );
+
+                            if coord.y == other_coord.y {
+                                match (coord.x.cmp(&other_coord.x), coord.z.cmp(&other_coord.z)) {
+                                    (Ordering::Equal, Ordering::Equal) => return Err(()),
+                                    (Ordering::Less, Ordering::Equal)
+                                        if other_coord.x - coord.x == 1 =>
+                                    {
+                                        if let (Some(clip), Some(other_clip)) = (
+                                            unit.clip(Direction::West - block.dir),
+                                            other_unit.clip(Direction::East - other_block.dir),
+                                        ) {
+                                            if clip.clips(other_clip) {
+                                                return Err(());
+                                            }
+                                        }
+                                    }
+                                    (Ordering::Greater, Ordering::Equal)
+                                        if coord.x - other_coord.x == 1 =>
+                                    {
+                                        if let (Some(clip), Some(other_clip)) = (
+                                            unit.clip(Direction::East - block.dir),
+                                            other_unit.clip(Direction::West - other_block.dir),
+                                        ) {
+                                            if clip.clips(other_clip) {
+                                                return Err(());
+                                            }
+                                        }
+                                    }
+                                    (Ordering::Equal, Ordering::Less)
+                                        if other_coord.x - coord.z == 1 =>
+                                    {
+                                        if let (Some(clip), Some(other_clip)) = (
+                                            unit.clip(Direction::North - block.dir),
+                                            other_unit.clip(Direction::South - other_block.dir),
+                                        ) {
+                                            if clip.clips(other_clip) {
+                                                return Err(());
+                                            }
+                                        }
+                                    }
+                                    (Ordering::Equal, Ordering::Greater)
+                                        if coord.z - other_coord.z == 1 =>
+                                    {
+                                        if let (Some(clip), Some(other_clip)) = (
+                                            unit.clip(Direction::South - block.dir),
+                                            other_unit.clip(Direction::North - other_block.dir),
+                                        ) {
+                                            if clip.clips(other_clip) {
+                                                return Err(());
+                                            }
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn place_block(&mut self, block: Block) -> Result<(), ()> {
+        self.can_place_block(&block)?;
+
+        self.blocks.insert(block);
+
+        Ok(())
+    }
+
+    pub fn remove_block(&mut self, block: &Block) -> bool {
+        self.blocks.remove(block)
+    }
+
+    pub fn place_free_block(&mut self, free_block: FreeBlock) -> Result<(), ()> {
+        if self.get_block_info(&free_block.model).is_none() {
+            return Err(());
+        }
+
+        self.free_blocks.insert(free_block);
+
+        Ok(())
+    }
+
+    pub fn remove_free_block(&mut self, free_block: &FreeBlock) -> bool {
+        self.free_blocks.remove(free_block)
+    }
+
+    pub fn place_item(&mut self, item: Item) -> Result<(), ()> {
+        let known_item_model = match item.model {
+            ModelRef::Id(ref id) => ITEM_MODEL_IDS.contains(id.as_ref()),
+            ModelRef::Hash(ref hash) => self.embedded_items.contains_key(hash),
+        };
+
+        if !known_item_model {
+            return Err(());
+        }
+
+        self.items.insert(item);
+
+        Ok(())
+    }
+
+    pub fn remove_item(&mut self, item: &Item) -> bool {
+        self.items.remove(item)
+    }
+
     pub fn load<R>(reader: R) -> anyhow::Result<Self>
     where
         R: Read,
     {
         let gbx_map = gbx::Map::reader().read_from(reader)?;
 
-        let mut embedded_blocks = HashMap::new();
+        let mut embedded_blocks: HashMap<_, (&'static str, _)> = HashMap::new();
         let mut embedded_items = HashMap::new();
         let mut embedded_files = HashMap::new();
 
@@ -88,7 +344,13 @@ impl Map {
                 let path_lowercase = path.to_ascii_lowercase();
 
                 if path_lowercase.ends_with(".block.gbx") {
-                    embedded_blocks.insert(hash.into(), bytes.into());
+                    let block = gbx::Block::reader().read_from(bytes.as_slice())?;
+
+                    let (archetype, _) = BLOCK_INFOS
+                        .get_key_value(block.archetype.as_str())
+                        .ok_or_else(|| anyhow!("unknown block archetype"))?;
+
+                    embedded_blocks.insert(hash.into(), (archetype, bytes.into()));
                 } else if path_lowercase.ends_with(".item.gbx") {
                     embedded_items.insert(hash.into(), bytes.into());
                 } else {
@@ -99,15 +361,15 @@ impl Map {
             }
         }
 
-        let mut blocks = vec![];
-        let mut free_blocks = vec![];
+        let mut blocks = FlatMultiset::new();
+        let mut free_blocks = FlatMultiset::new();
 
         for gbx_block in gbx_map.blocks {
             let model_id = gbx_block.model_id();
 
             let model = BLOCK_INFOS
                 .get_key_value(model_id.as_str())
-                .map(|(model_id, _)| ModelRef::Id(model_id))
+                .map(|(model_id, _)| ModelRef::Id(Cow::Borrowed(model_id)))
                 .or_else(|| {
                     embedded_files
                         .get(model_id.strip_suffix("_CustomBlock").unwrap())
@@ -117,7 +379,7 @@ impl Map {
 
             match gbx_block {
                 gbx::map::BlockType::Normal(gbx_block) => {
-                    blocks.push(Block {
+                    blocks.insert(Block {
                         model,
                         coord: gbx_block.coord,
                         dir: gbx_block.dir,
@@ -128,24 +390,28 @@ impl Map {
                     });
                 }
                 gbx::map::BlockType::Free(gbx_free_block) => {
-                    free_blocks.push(FreeBlock {
+                    free_blocks.insert(FreeBlock {
                         model,
-                        pos: gbx_free_block.pos,
-                        yaw: gbx_free_block.yaw,
-                        pitch: gbx_free_block.pitch,
-                        roll: gbx_free_block.roll,
+                        pos: Vec3 {
+                            x: gbx_free_block.pos.x.into(),
+                            y: gbx_free_block.pos.y.into(),
+                            z: gbx_free_block.pos.z.into(),
+                        },
+                        yaw: gbx_free_block.yaw.into(),
+                        pitch: gbx_free_block.pitch.into(),
+                        roll: gbx_free_block.roll.into(),
                         color: gbx_free_block.color,
                     });
                 }
             }
         }
 
-        let mut items = vec![];
+        let mut items = FlatMultiset::new();
 
         for gbx_item in gbx_map.items {
             let model = ITEM_MODEL_IDS
                 .get(gbx_item.model_id.as_str())
-                .map(|model_id| ModelRef::Id(model_id))
+                .map(|model_id| ModelRef::Id(Cow::Borrowed(model_id)))
                 .or_else(|| {
                     embedded_files
                         .get(gbx_item.model_id.as_str())
@@ -153,13 +419,21 @@ impl Map {
                 })
                 .ok_or_else(|| anyhow!("unknown item model id: {}", gbx_item.model_id))?;
 
-            items.push(Item {
+            items.insert(Item {
                 model,
-                pos: gbx_item.pos,
-                yaw: gbx_item.yaw,
-                pitch: gbx_item.pitch,
-                roll: gbx_item.roll,
-                pivot_pos: gbx_item.pivot_pos,
+                pos: Vec3 {
+                    x: gbx_item.pos.x.into(),
+                    y: gbx_item.pos.y.into(),
+                    z: gbx_item.pos.z.into(),
+                },
+                yaw: gbx_item.yaw.into(),
+                pitch: gbx_item.pitch.into(),
+                roll: gbx_item.roll.into(),
+                pivot_pos: Vec3 {
+                    x: gbx_item.pivot_pos.x.into(),
+                    y: gbx_item.pivot_pos.y.into(),
+                    z: gbx_item.pivot_pos.z.into(),
+                },
                 color: gbx_item.color,
                 anim_offset: gbx_item.anim_offset,
             });
@@ -172,5 +446,112 @@ impl Map {
             embedded_blocks,
             embedded_items,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Block, Map, ModelRef};
+    use gbx::map::{Color, Direction};
+    use gbx::Vec3;
+    use std::borrow::Cow;
+
+    #[test]
+    fn can_place_block_unit_intersection() {
+        let mut map = Map::new();
+
+        let coord = Vec3::new(20, 20, 20);
+
+        map.place_block(Block {
+            model: ModelRef::Id(Cow::Borrowed("PlatformBase")),
+            coord,
+            dir: Direction::North,
+            is_ground: false,
+            is_ghost: false,
+            variant_index: 0,
+            color: Color::Default,
+        })
+        .unwrap();
+
+        for (coord, no_intersection_dir) in [
+            (Vec3::new(coord.x, coord.y, coord.z - 2), Direction::North),
+            (coord, Direction::East),
+            (Vec3::new(coord.x - 2, coord.y, coord.z), Direction::South),
+            (
+                Vec3::new(coord.x - 2, coord.y, coord.z - 2),
+                Direction::West,
+            ),
+        ] {
+            for dir in [
+                Direction::North,
+                Direction::East,
+                Direction::South,
+                Direction::West,
+            ] {
+                println!("{coord:?} {dir:?}");
+
+                let can_place = map
+                    .can_place_block(&Block {
+                        model: ModelRef::Id(Cow::Borrowed("TrackWallCurve3")),
+                        coord,
+                        dir,
+                        is_ground: false,
+                        variant_index: 0,
+                        is_ghost: false,
+                        color: Color::Default,
+                    })
+                    .is_ok();
+
+                assert_eq!(can_place, dir == no_intersection_dir);
+            }
+        }
+    }
+
+    #[test]
+    fn can_place_block_clipping() {
+        let mut map = Map::new();
+
+        let coord = Vec3::new(20, 20, 20);
+
+        map.place_block(Block {
+            model: ModelRef::Id(Cow::Borrowed("PlatformBase")),
+            coord,
+            dir: Direction::North,
+            is_ground: false,
+            is_ghost: false,
+            variant_index: 0,
+            color: Color::Default,
+        })
+        .unwrap();
+
+        for (coord, no_clip_dir) in [
+            (Vec3::new(coord.x - 1, coord.y, coord.z), Direction::North),
+            (Vec3::new(coord.x, coord.y, coord.z - 1), Direction::East),
+            (Vec3::new(coord.x + 1, coord.y, coord.z), Direction::South),
+            (Vec3::new(coord.x, coord.y, coord.z + 1), Direction::West),
+        ] {
+            for dir in [
+                Direction::North,
+                Direction::East,
+                Direction::South,
+                Direction::West,
+            ] {
+                println!("{coord:?} {dir:?}");
+
+                let can_place = map
+                    .can_place_block(&Block {
+                        model: ModelRef::Id(Cow::Borrowed("RoadTechBranchTShaped")),
+                        coord,
+                        dir,
+                        is_ground: false,
+                        variant_index: 0,
+                        is_ghost: false,
+                        color: Color::Default,
+                    })
+                    .is_ok();
+
+                assert_eq!(can_place, dir == no_clip_dir);
+            }
+        }
     }
 }

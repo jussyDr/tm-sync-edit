@@ -3,3 +3,6 @@ name = "Object Info Extractor"
 version = "0.1.0"
 author = "Jussy"
 category = "Tools"
+
+[script]
+timeout = 5000
