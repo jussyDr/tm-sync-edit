@@ -128,7 +128,7 @@ pub struct Item {
 }
 
 #[allow(clippy::type_complexity)]
-#[derive(Serialize)]
+#[derive(Default, Serialize)]
 pub struct Map {
     blocks: FlatMultiset<Block>,
     free_blocks: FlatMultiset<FreeBlock>,
@@ -139,13 +139,7 @@ pub struct Map {
 
 impl Map {
     pub fn new() -> Self {
-        Self {
-            blocks: FlatMultiset::new(),
-            free_blocks: FlatMultiset::new(),
-            items: FlatMultiset::new(),
-            embedded_blocks: HashMap::new(),
-            embedded_items: HashMap::new(),
-        }
+        Self::default()
     }
 
     fn get_block_info(&self, model_ref: &ModelRef) -> Option<&BlockInfo> {

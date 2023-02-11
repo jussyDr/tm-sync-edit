@@ -1,3 +1,10 @@
+const string c_title = Icons::Syncthing + " Sync Edit";
+
+bool g_interfaceVisible = true;
+string g_host = "127.0.0.1";
+string g_port = "8369";
+bool g_disconnected = true;
+
 void Main() {
     auto pfPlaceBlock = Dev::FindPattern("48 89 5c 24 10 48 89 74 24 20 4c 89 44 24 18 55 57 41 55");
     auto pfRemoveBlock = Dev::FindPattern("48 89 5c 24 08 48 89 6c 24 10 48 89 74 24 18 57 48 83 ec 40 83 7c");
@@ -13,37 +20,14 @@ void Main() {
     auto fnRemoveItem = library.GetFunction("RemoveItem");
     auto fnLoadBlockInfo = library.GetFunction("LoadBlockInfo");
 
-    auto editor = cast<CGameCtnEditorCommon>(GetApp().Editor);
-
     dictionary blockInfos;
-
-    auto fids = Fids::GetGameFolder("GameData/Stadium/GameCtnBlockInfo/GameCtnBlockInfoClassic");
-    
-    for (uint i = 0; i < fids.Leaves.Length; i++) {
-        auto fid = fids.Leaves[i];
-        auto blockInfo = cast<CGameCtnBlockInfo>(Fids::Preload(fid));
-        blockInfos[blockInfo.IdName] = @blockInfo;
-    }
-
-    @fids = Fids::GetGameFolder("GameData/Stadium/GameCtnBlockInfo/GameCtnBlockInfoClassic/Deprecated");
-
-    for (uint i = 0; i < fids.Leaves.Length; i++) {
-        auto fid = fids.Leaves[i];
-        auto blockInfo = cast<CGameCtnBlockInfo>(Fids::Preload(fid));
-        blockInfos[blockInfo.IdName] = @blockInfo;
-    }
-
-    @fids = Fids::GetGameFolder("GameData/Stadium/GameCtnBlockInfo/GameCtnBlockInfoPillar");
-
-    for (uint i = 0; i < fids.Leaves.Length; i++) {
-        auto fid = fids.Leaves[i];
-        auto blockInfo = cast<CGameCtnBlockInfo>(Fids::Preload(fid));
-        blockInfos[blockInfo.IdName] = @blockInfo;
-    }
+    LoadBlockInfos(blockInfos, "GameCtnBlockInfoClassic");
+    LoadBlockInfos(blockInfos, "GameCtnBlockInfoClassic/Deprecated");
+    LoadBlockInfos(blockInfos, "GameCtnBlockInfoPillar");
 
     dictionary itemModels;
 
-    @fids = Fids::GetGameFolder("GameData/Stadium/Items");
+    auto fids = Fids::GetGameFolder("GameData/Stadium/Items");
 
     for (uint i = 0; i < fids.Leaves.Length; i++) {
         auto fid = fids.Leaves[i];
@@ -51,161 +35,76 @@ void Main() {
         itemModels[itemModel.IdName] = @itemModel;
     }
 
-    Net::Socket socket;
-    socket.Connect("127.0.0.1", 8369);
+    auto placeBlockHook = Dev::Hook(pfPlaceBlock, 0, "OnPlaceBlock");
+    auto removeBlockHook = Dev::Hook(pfRemoveBlock, 0, "OnRemoveBlock");
+    auto placeItemHook = Dev::Hook(pfPlaceItem, 0, "OnPlaceItem");
+    auto removeItemHook = Dev::Hook(pfRemoveItem, 0, "OnRemoveItem");
 
-    while (!socket.CanWrite()) {
-        yield();
-    }
+    Dev::Unhook(placeBlockHook);
+    Dev::Unhook(removeBlockHook);
+    Dev::Unhook(placeItemHook);
+    Dev::Unhook(removeItemHook);
+}
 
-    while (!socket.CanRead()) {
-        yield();
-    }
+void RenderInterface() {
+    if (Setting_InterfaceVisible) {
+        if (UI::Begin(c_title)) {
+            if (g_disconnected) {
+                g_host = UI::InputText("Host", g_host, UI::InputTextFlags::CharsNoBlank);
+                g_port = UI::InputText("Port", g_port, UI::InputTextFlags::CharsDecimal);
 
-    auto startTime = Time::Now;
+                if (g_disconnected) {
+                    if (UI::Button("Join")) {
+                        startnew(Join);
+                    }
+                }
 
-    auto available = socket.Available();
-    socket.ReadUint32();
-    auto json = socket.ReadRaw(available - 4);
-    auto mapValue = Json::Parse(json);
-
-    dictionary embeddedBlocks;
-
-    auto embeddedBlocksValue = mapValue["embedded_blocks"];
-
-    for (uint i = 0; i < embeddedBlocksValue.GetKeys().Length; i++) {
-        auto hash = embeddedBlocksValue.GetKeys()[i];
-        string base64 = embeddedBlocksValue.Get(hash);
-        MemoryBuffer buffer;
-        buffer.WriteFromBase64(base64);
-        IO::File file(IO::FromUserGameFolder("temp.Block.Gbx"), IO::FileMode::Write);
-        file.Write(buffer);
-        file.Close();
-        auto fid = Fids::GetUser("temp.Block.Gbx");
-        auto nod = Fids::Preload(fid);
-        IO::Delete("temp.Block.Gbx");
-        auto itemModel = cast<CGameItemModel>(nod);
-        auto blockItem = cast<CGameBlockItem>(itemModel.EntityModelEdition);
-        auto blockInfo = LoadBlockInfo(fnLoadBlockInfo, pfLoadBlockInfo, blockItem);
-        embeddedBlocks[hash] = @blockInfo;
-    }
-
-    dictionary embeddedItems;
-
-    auto embeddedItemsValue = mapValue["embedded_items"];
-
-    for (uint i = 0; i < embeddedItemsValue.GetKeys().Length; i++) {
-        auto hash = embeddedItemsValue.GetKeys()[i];
-        string base64 = embeddedItemsValue.Get(hash);
-        MemoryBuffer buffer;
-        buffer.WriteFromBase64(base64);
-        IO::File file(IO::FromUserGameFolder("temp.Item.Gbx"), IO::FileMode::Write);
-        file.Write(buffer);
-        file.Close();
-        auto fid = Fids::GetUser("temp.Item.Gbx");
-        auto nod = Fids::Preload(fid);
-        IO::Delete("temp.Item.Gbx");
-        auto itemModel = cast<CGameItemModel>(nod);
-        embeddedItems[hash] = @itemModel;
-    }
-
-    auto blocksValue = mapValue["blocks"];
-
-    for (uint i = 0; i < blocksValue.Length; i++) {
-        auto blockValue = blocksValue[i];
-
-        auto modelvalue = blockValue["model"];
-        CGameCtnBlockInfo@ model;
-
-        if (modelvalue.HasKey("Id")) {
-            string modelId = modelvalue["Id"];
-            blockInfos.Get(modelId, @model);
-        } else {
-            string modelHash = modelvalue["Hash"];
-            embeddedBlocks.Get(modelHash, @model);
+                UI::Text("Disconnected");
+            }
+            
+            UI::End();
         }
-    
-        auto coordValue = blockValue["coord"];
-        uint8 x = coordValue["x"];
-        uint8 y = coordValue["y"];
-        uint8 z = coordValue["z"];
-
-        auto dir = ParseDir(blockValue["dir"]);
-        bool isGround = blockValue["is_ground"];
-        bool isGhost = blockValue["is_ghost"];
-        auto color = ParseColor(blockValue["color"]);
-
-        PlaceBlock(fnPlaceBlock, pfPlaceBlock, editor, model, x, y, z, dir, isGround, isGhost, color);
     }
+}
 
-    auto freeBlocksValue = mapValue["free_blocks"];
-
-    for (uint i = 0; i < freeBlocksValue.Length; i++) {
-        auto freeBlockValue = freeBlocksValue[i];
-
-        auto modelvalue = freeBlockValue["model"];
-        CGameCtnBlockInfo@ model;
-
-        if (modelvalue.HasKey("Id")) {
-            string modelId = modelvalue["Id"];
-            blockInfos.Get(modelId, @model);
-        } else {
-            string modelHash = modelvalue["Hash"];
-            embeddedBlocks.Get(modelHash, @model);
-        }
-    
-        auto posValue = freeBlockValue["pos"];
-        float x = posValue["x"];
-        float y = posValue["y"];
-        float z = posValue["z"];
-
-        float yaw = freeBlockValue["yaw"];
-        float pitch = freeBlockValue["pitch"];
-        float roll = freeBlockValue["roll"];
-        auto color = ParseColor(freeBlockValue["color"]);
-
-        PlaceFreeBlock(fnPlaceFreeBlock, pfPlaceBlock, editor, model, x, y, z, yaw, pitch, roll, color);
+void RenderMenu() {
+    if (UI::MenuItem(c_title, "", Setting_InterfaceVisible)) {
+        Setting_InterfaceVisible = !Setting_InterfaceVisible;
     }
+}
 
-    auto itemsValue = mapValue["items"];
+void OnDestroyed() {
 
-    for (uint i = 0; i < itemsValue.Length; i++) {
-        auto itemValue = itemsValue[i];
+}
 
-        auto modelvalue = itemValue["model"];
-        CGameItemModel@ model;
+void OnPlaceBlock() {
+    print("placed block");
+}
 
-        if (modelvalue.HasKey("Id")) {
-            string modelId = modelvalue["Id"];
-            itemModels.Get(modelId, @model);
-        } else {
-            string modelHash = modelvalue["Hash"];
-            embeddedItems.Get(modelHash, @model);
-        }
+void OnRemoveBlock() {
+    print("removed block");
+}
 
-        auto posValue = itemValue["pos"];
-        float x = posValue["x"];
-        float y = posValue["y"];
-        float z = posValue["z"];
+void OnPlaceItem() {
+    print("placed item");
+}
 
-        float yaw = itemValue["yaw"];
-        float pitch = itemValue["pitch"];
-        float roll = itemValue["roll"];
+void OnRemoveItem() {
+    print("removed item");
+}
 
-        auto pivotPosValue = itemValue["pos"];
-        float pivotX = pivotPosValue["x"];
-        float pivotY = pivotPosValue["y"];
-        float pivotZ = pivotPosValue["z"];
+void Join() {
 
-        auto color = ParseColor(itemValue["color"]);
-        auto animOffset = CGameEditorPluginMap::EPhaseOffset::None;
+}
 
-        PlaceItem(fnPlaceItem, pfPlaceItem, editor, model, x, y, z, yaw, pitch, roll, pivotX, pivotY, pivotZ, color, animOffset);
+void LoadBlockInfos(dictionary@ blockInfos, const string&in folder) {
+    auto fids = Fids::GetGameFolder("GameData/Stadium/GameCtnBlockInfo/" + folder);
+
+    for (uint i = 0; i < fids.Leaves.Length; i++) {
+        auto fid = fids.Leaves[i];
+        auto blockInfo = cast<CGameCtnBlockInfo>(Fids::Preload(fid));
+        blockInfos[blockInfo.IdName] = @blockInfo;
     }
-
-    auto endTime = Time::Now;
-    
-    print("time: " + (endTime - startTime));
 }
 
 void PlaceBlock(
@@ -240,6 +139,10 @@ void PlaceFreeBlock(
     fnPlaceBlock.Call(pfPlaceBlock, editor, blockInfo, vec3(x, y, z), vec3(yaw, pitch, roll), uint8(color));
 }
 
+void RemoveBlock(Import::Function@ fnRemoveBlock, uint64 pfRemoveBlock, CGameCtnEditorCommon@ editor, CGameCtnBlock@ block) {
+    fnRemoveBlock.Call(pfRemoveBlock, editor, block);
+}
+
 void PlaceItem(
     Import::Function@ fnPlaceItem, 
     uint64 pfPlaceItem, 
@@ -258,6 +161,10 @@ void PlaceItem(
     CGameEditorPluginMap::EPhaseOffset animOffset
 ) {
     fnPlaceItem.Call(pfPlaceItem, editor, itemModel, vec3(x, y, z), vec3(yaw, pitch, roll), vec3(pivotX, pivotY, pivotZ), uint8(color), uint8(animOffset));
+}
+
+void RemoveItem(Import::Function@ fnRemoveItem, uint64 pfRemoveItem, CGameCtnEditorCommon@ editor, CGameCtnAnchoredObject@ item) {
+    fnRemoveItem.Call(pfRemoveItem, editor, item);
 }
 
 CGameCtnBlockInfo@ LoadBlockInfo(Import::Function@ fnLoadBlockInfo, uint64 pfLoadBlockInfo, CGameBlockItem@ blockItem) {

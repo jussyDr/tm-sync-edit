@@ -74,7 +74,30 @@ async fn handle_client(mut stream: Framed<TcpStream, LengthDelimitedCodec>) -> a
 
                             stream.send(frame.into()).await?;
                         }
-                        _ => {}
+                        Command::PlaceFreeBlock(free_block) => {
+                            let response = Command::RemoveFreeBlock(free_block);
+                            let frame = serde_json::to_vec(&response)?;
+
+                            stream.send(frame.into()).await?;
+                        }
+                        Command::RemoveFreeBlock(free_block) => {
+                            let response = Command::PlaceFreeBlock(free_block);
+                            let frame = serde_json::to_vec(&response)?;
+
+                            stream.send(frame.into()).await?;
+                        }
+                        Command::PlaceItem(item) => {
+                            let response = Command::RemoveItem(item);
+                            let frame = serde_json::to_vec(&response)?;
+
+                            stream.send(frame.into()).await?;
+                        }
+                        Command::RemoveItem(item) => {
+                            let response = Command::PlaceItem(item);
+                            let frame = serde_json::to_vec(&response)?;
+
+                            stream.send(frame.into()).await?;
+                        }
                     }
                 },
                 None => break,
