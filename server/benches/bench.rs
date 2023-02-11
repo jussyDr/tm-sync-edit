@@ -18,8 +18,7 @@ fn fill_map() {
                     is_ghost: false,
                     variant_index: 0,
                     color: Color::Default,
-                })
-                .unwrap();
+                });
             }
         }
     }

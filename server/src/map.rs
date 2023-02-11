@@ -177,17 +177,25 @@ fn rotate_unit_coord(coord: Vec3<u8>, dir: Direction, extent: Vec3<u8>) -> Vec3<
 }
 
 impl Map {
-    pub fn can_place_block(&mut self, block: &Block) -> Result<(), ()> {
-        let block_info = self.get_block_info(&block.model).ok_or(())?;
+    pub fn can_place_block(&mut self, block: &Block) -> bool {
+        let block_info = if let Some(block_info) = self.get_block_info(&block.model) {
+            block_info
+        } else {
+            return false;
+        };
 
         if !block.is_ghost {
             for other_block in &self.blocks {
                 if !other_block.is_ghost {
                     let other_block_info = self.get_block_info(&other_block.model).unwrap();
 
-                    let variant = block_info
-                        .variant(block.is_ground, block.variant_index)
-                        .ok_or(())?;
+                    let variant = if let Some(variant) =
+                        block_info.variant(block.is_ground, block.variant_index)
+                    {
+                        variant
+                    } else {
+                        return false;
+                    };
 
                     let other_variant = other_block_info
                         .variant(other_block.is_ground, other_block.variant_index)
@@ -207,7 +215,7 @@ impl Map {
 
                             if coord.y == other_coord.y {
                                 match (coord.x.cmp(&other_coord.x), coord.z.cmp(&other_coord.z)) {
-                                    (Ordering::Equal, Ordering::Equal) => return Err(()),
+                                    (Ordering::Equal, Ordering::Equal) => return false,
                                     (Ordering::Less, Ordering::Equal)
                                         if other_coord.x - coord.x == 1 =>
                                     {
@@ -216,7 +224,7 @@ impl Map {
                                             other_unit.clip(Direction::East - other_block.dir),
                                         ) {
                                             if clip.clips(other_clip) {
-                                                return Err(());
+                                                return false;
                                             }
                                         }
                                     }
@@ -228,7 +236,7 @@ impl Map {
                                             other_unit.clip(Direction::West - other_block.dir),
                                         ) {
                                             if clip.clips(other_clip) {
-                                                return Err(());
+                                                return false;
                                             }
                                         }
                                     }
@@ -240,7 +248,7 @@ impl Map {
                                             other_unit.clip(Direction::South - other_block.dir),
                                         ) {
                                             if clip.clips(other_clip) {
-                                                return Err(());
+                                                return false;
                                             }
                                         }
                                     }
@@ -252,7 +260,7 @@ impl Map {
                                             other_unit.clip(Direction::North - other_block.dir),
                                         ) {
                                             if clip.clips(other_clip) {
-                                                return Err(());
+                                                return false;
                                             }
                                         }
                                     }
@@ -265,48 +273,50 @@ impl Map {
             }
         }
 
-        Ok(())
+        true
     }
 
-    pub fn place_block(&mut self, block: Block) -> Result<(), ()> {
-        self.can_place_block(&block)?;
+    pub fn place_block(&mut self, block: Block) -> bool {
+        if !self.can_place_block(&block) {
+            return false;
+        }
 
         self.blocks.insert(block);
 
-        Ok(())
+        true
     }
 
     pub fn remove_block(&mut self, block: &Block) -> bool {
         self.blocks.remove(block)
     }
 
-    pub fn place_free_block(&mut self, free_block: FreeBlock) -> Result<(), ()> {
+    pub fn place_free_block(&mut self, free_block: FreeBlock) -> bool {
         if self.get_block_info(&free_block.model).is_none() {
-            return Err(());
+            return false;
         }
 
         self.free_blocks.insert(free_block);
 
-        Ok(())
+        true
     }
 
     pub fn remove_free_block(&mut self, free_block: &FreeBlock) -> bool {
         self.free_blocks.remove(free_block)
     }
 
-    pub fn place_item(&mut self, item: Item) -> Result<(), ()> {
+    pub fn place_item(&mut self, item: Item) -> bool {
         let known_item_model = match item.model {
             ModelRef::Id(ref id) => ITEM_MODEL_IDS.contains(id.as_ref()),
             ModelRef::Hash(ref hash) => self.embedded_items.contains_key(hash),
         };
 
         if !known_item_model {
-            return Err(());
+            return false;
         }
 
         self.items.insert(item);
 
-        Ok(())
+        true
     }
 
     pub fn remove_item(&mut self, item: &Item) -> bool {
@@ -464,8 +474,7 @@ mod tests {
             is_ghost: false,
             variant_index: 0,
             color: Color::Default,
-        })
-        .unwrap();
+        });
 
         for (coord, no_intersection_dir) in [
             (Vec3::new(coord.x, coord.y, coord.z - 2), Direction::North),
@@ -484,17 +493,15 @@ mod tests {
             ] {
                 println!("{coord:?} {dir:?}");
 
-                let can_place = map
-                    .can_place_block(&Block {
-                        model: ModelRef::Id(Cow::Borrowed("TrackWallCurve3")),
-                        coord,
-                        dir,
-                        is_ground: false,
-                        variant_index: 0,
-                        is_ghost: false,
-                        color: Color::Default,
-                    })
-                    .is_ok();
+                let can_place = map.can_place_block(&Block {
+                    model: ModelRef::Id(Cow::Borrowed("TrackWallCurve3")),
+                    coord,
+                    dir,
+                    is_ground: false,
+                    variant_index: 0,
+                    is_ghost: false,
+                    color: Color::Default,
+                });
 
                 assert_eq!(can_place, dir == no_intersection_dir);
             }
@@ -515,8 +522,7 @@ mod tests {
             is_ghost: false,
             variant_index: 0,
             color: Color::Default,
-        })
-        .unwrap();
+        });
 
         for (coord, no_clip_dir) in [
             (Vec3::new(coord.x - 1, coord.y, coord.z), Direction::North),
@@ -532,17 +538,15 @@ mod tests {
             ] {
                 println!("{coord:?} {dir:?}");
 
-                let can_place = map
-                    .can_place_block(&Block {
-                        model: ModelRef::Id(Cow::Borrowed("RoadTechBranchTShaped")),
-                        coord,
-                        dir,
-                        is_ground: false,
-                        variant_index: 0,
-                        is_ghost: false,
-                        color: Color::Default,
-                    })
-                    .is_ok();
+                let can_place = map.can_place_block(&Block {
+                    model: ModelRef::Id(Cow::Borrowed("RoadTechBranchTShaped")),
+                    coord,
+                    dir,
+                    is_ground: false,
+                    variant_index: 0,
+                    is_ghost: false,
+                    color: Color::Default,
+                });
 
                 assert_eq!(can_place, dir == no_clip_dir);
             }
