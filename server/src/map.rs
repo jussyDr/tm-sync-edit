@@ -1,6 +1,7 @@
 use crate::serde;
 use ::serde::ser::SerializeStruct;
 use ::serde::{Deserialize, Serialize, Serializer};
+use ahash::RandomState;
 use anyhow::anyhow;
 use flat_multimap::FlatMultiset;
 use gbx::map::{Color, Direction, PhaseOffset};
@@ -135,10 +136,10 @@ pub struct Item {
 #[allow(clippy::type_complexity)]
 #[derive(Default)]
 pub struct Map {
-    blocks: FlatMultiset<Block>,
-    units: HashMap<Vec3<u8>, UnitClips>,
-    free_blocks: FlatMultiset<FreeBlock>,
-    items: FlatMultiset<Item>,
+    blocks: FlatMultiset<Block, RandomState>,
+    units: HashMap<Vec3<u8>, UnitClips, RandomState>,
+    free_blocks: FlatMultiset<FreeBlock, RandomState>,
+    items: FlatMultiset<Item, RandomState>,
     embedded_blocks: HashMap<serde::Base64<[u8; 32]>, (&'static str, serde::Base64<Vec<u8>>)>,
     embedded_items: HashMap<serde::Base64<[u8; 32]>, serde::Base64<Vec<u8>>>,
 }
