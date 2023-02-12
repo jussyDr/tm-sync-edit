@@ -1,7 +1,6 @@
 use crate::serde;
 use ::serde::ser::SerializeStruct;
 use ::serde::{Deserialize, Serialize, Serializer};
-use ahash::RandomState;
 use anyhow::anyhow;
 use flat_multimap::FlatMultiset;
 use gbx::map::{Color, Direction, PhaseOffset};
@@ -134,19 +133,31 @@ pub struct Item {
 }
 
 #[allow(clippy::type_complexity)]
-#[derive(Default)]
 pub struct Map {
-    blocks: FlatMultiset<Block, RandomState>,
-    units: HashMap<Vec3<u8>, UnitClips, RandomState>,
-    free_blocks: FlatMultiset<FreeBlock, RandomState>,
-    items: FlatMultiset<Item, RandomState>,
+    size: Vec3<u8>,
+    blocks: FlatMultiset<Block, ahash::RandomState>,
+    units: HashMap<Vec3<u8>, UnitClips, ahash::RandomState>,
+    free_blocks: FlatMultiset<FreeBlock, ahash::RandomState>,
+    items: FlatMultiset<Item, ahash::RandomState>,
     embedded_blocks: HashMap<serde::Base64<[u8; 32]>, (&'static str, serde::Base64<Vec<u8>>)>,
     embedded_items: HashMap<serde::Base64<[u8; 32]>, serde::Base64<Vec<u8>>>,
 }
 
 impl Map {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            size: Vec3 {
+                x: 48,
+                y: 40,
+                z: 48,
+            },
+            blocks: FlatMultiset::with_hasher(ahash::RandomState::new()),
+            units: HashMap::with_hasher(ahash::RandomState::new()),
+            free_blocks: FlatMultiset::with_hasher(ahash::RandomState::new()),
+            items: FlatMultiset::with_hasher(ahash::RandomState::new()),
+            embedded_blocks: HashMap::new(),
+            embedded_items: HashMap::new(),
+        }
     }
 
     fn get_block_info(&self, model_ref: &ModelRef) -> Option<&'static BlockInfo> {
@@ -163,10 +174,34 @@ impl Map {
 
     pub fn can_place_clip(&self, clip: &BlockInfoClip, coord: Vec3<u8>, dir: Direction) -> bool {
         let other_coord = match dir {
-            Direction::North => coord + Vec3::new(0, 0, 1),
-            Direction::East => coord - Vec3::new(1, 0, 0),
-            Direction::South => coord - Vec3::new(0, 0, 1),
-            Direction::West => coord + Vec3::new(1, 0, 0),
+            Direction::North => {
+                if coord.z < self.size.z - 1 {
+                    coord + Vec3::new(0, 0, 1)
+                } else {
+                    return true;
+                }
+            }
+            Direction::East => {
+                if coord.x > 0 {
+                    coord - Vec3::new(1, 0, 0)
+                } else {
+                    return true;
+                }
+            }
+            Direction::South => {
+                if coord.z > 0 {
+                    coord - Vec3::new(0, 0, 1)
+                } else {
+                    return true;
+                }
+            }
+            Direction::West => {
+                if coord.x < self.size.x - 1 {
+                    coord + Vec3::new(1, 0, 0)
+                } else {
+                    return true;
+                }
+            }
         };
 
         if let Some(other_clip) = self
@@ -245,23 +280,31 @@ impl Map {
                 return false;
             };
 
-        if !self.can_place_block(&block, variant) {
+        let extent = block.coord + variant.extent;
+
+        if extent.x >= self.size.x || extent.y >= self.size.y || extent.z >= self.size.z {
             return false;
         }
 
-        for unit_info in &variant.units {
-            let coord =
-                block.coord + rotate_unit_offset(unit_info.offset, block.dir, variant.extent);
+        if !block.is_ghost {
+            if !self.can_place_block(&block, variant) {
+                return false;
+            }
 
-            self.units.insert(
-                coord,
-                UnitClips {
-                    clip_north: unit_info.clips.clip(Direction::North - block.dir).cloned(),
-                    clip_east: unit_info.clips.clip(Direction::East - block.dir).cloned(),
-                    clip_south: unit_info.clips.clip(Direction::South - block.dir).cloned(),
-                    clip_west: unit_info.clips.clip(Direction::West - block.dir).cloned(),
-                },
-            );
+            for unit_info in &variant.units {
+                let coord =
+                    block.coord + rotate_unit_offset(unit_info.offset, block.dir, variant.extent);
+
+                self.units.insert(
+                    coord,
+                    UnitClips {
+                        clip_north: unit_info.clips.clip(Direction::North - block.dir).cloned(),
+                        clip_east: unit_info.clips.clip(Direction::East - block.dir).cloned(),
+                        clip_south: unit_info.clips.clip(Direction::South - block.dir).cloned(),
+                        clip_west: unit_info.clips.clip(Direction::West - block.dir).cloned(),
+                    },
+                );
+            }
         }
 
         self.blocks.insert(block);
@@ -270,7 +313,26 @@ impl Map {
     }
 
     pub fn remove_block(&mut self, block: &Block) -> bool {
-        self.blocks.remove(block)
+        if self.blocks.remove(block) {
+            if !block.is_ghost {
+                let block_info = self.get_block_info(&block.model).unwrap();
+
+                let variant = block_info
+                    .variant(block.is_ground, block.variant_index)
+                    .unwrap();
+
+                for unit_info in &variant.units {
+                    let coord = block.coord
+                        + rotate_unit_offset(unit_info.offset, block.dir, variant.extent);
+
+                    self.units.remove(&coord);
+                }
+            }
+
+            true
+        } else {
+            false
+        }
     }
 
     pub fn place_free_block(&mut self, free_block: FreeBlock) -> bool {
@@ -426,12 +488,19 @@ impl Map {
     }
 }
 
+impl Default for Map {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Serialize for Map {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let mut map = serializer.serialize_struct("Map", 5)?;
+        let mut map = serializer.serialize_struct("Map", 6)?;
+        map.serialize_field("size", &self.size)?;
         map.serialize_field("blocks", &self.blocks)?;
         map.serialize_field("free_blocks", &self.free_blocks)?;
         map.serialize_field("items", &self.items)?;
@@ -562,5 +631,67 @@ mod tests {
                 assert_eq!(can_place, dir == no_clip_dir);
             }
         }
+    }
+
+    #[test]
+    fn place_out_of_bounds() {
+        let mut map = Map::new();
+
+        for coord in [
+            Vec3::new(48, 0, 0),
+            Vec3::new(0, 40, 0),
+            Vec3::new(0, 0, 48),
+        ] {
+            println!("{coord:?}");
+
+            let block = Block {
+                model: ModelRef::Id(Cow::Borrowed("PlatformBase")),
+                coord,
+                dir: Direction::North,
+                is_ground: false,
+                is_ghost: false,
+                variant_index: 0,
+                color: Color::Default,
+            };
+
+            assert!(!map.place_block(block))
+        }
+    }
+
+    #[test]
+    fn remove_place_block() {
+        let mut map = Map::new();
+
+        let block = Block {
+            model: ModelRef::Id(Cow::Borrowed("PlatformBase")),
+            coord: Vec3::new(20, 20, 20),
+            dir: Direction::North,
+            is_ground: false,
+            is_ghost: false,
+            variant_index: 0,
+            color: Color::Default,
+        };
+
+        assert!(map.place_block(block.clone()));
+        assert!(map.remove_block(&block));
+        assert!(map.place_block(block))
+    }
+
+    #[test]
+    fn place_equivalent_ghost_block() {
+        let mut map = Map::new();
+
+        let block = Block {
+            model: ModelRef::Id(Cow::Borrowed("PlatformBase")),
+            coord: Vec3::new(20, 20, 20),
+            dir: Direction::North,
+            is_ground: false,
+            is_ghost: true,
+            variant_index: 0,
+            color: Color::Default,
+        };
+
+        assert!(map.place_block(block.clone()));
+        assert!(map.place_block(block))
     }
 }

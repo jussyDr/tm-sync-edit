@@ -44,6 +44,13 @@ void Main() {
     Dev::Unhook(removeBlockHook);
     Dev::Unhook(placeItemHook);
     Dev::Unhook(removeItemHook);
+
+    auto editor = cast<CGameCtnEditorCommon>(GetApp().Editor);
+
+    CGameCtnBlockInfo@ blockInfo;
+    blockInfos.Get("RoadTechStraight", @blockInfo);
+
+    PlaceBlock(fnPlaceBlock, pfPlaceBlock, editor, blockInfo, 50, 20, 20, CGameEditorPluginMap::ECardinalDirections::North, false, false, CGameEditorPluginMap::EMapElemColor::Default);
 }
 
 void RenderInterface() {
