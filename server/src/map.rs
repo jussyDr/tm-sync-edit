@@ -1,5 +1,6 @@
 use crate::serde;
-use ::serde::{Deserialize, Serialize};
+use ::serde::ser::SerializeStruct;
+use ::serde::{Deserialize, Serialize, Serializer};
 use anyhow::anyhow;
 use flat_multimap::FlatMultiset;
 use gbx::map::{Color, Direction, PhaseOffset};
@@ -8,12 +9,11 @@ use lazy_static::lazy_static;
 use ordered_float::OrderedFloat;
 use sha2::{Digest, Sha256};
 use std::borrow::Cow;
-use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::io::{Cursor, Read};
 use zip::ZipArchive;
 
-#[derive(Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 enum BlockInfoClip {
     NonExclusive,
     ExclusiveSymmetric { id: String },
@@ -39,16 +39,15 @@ impl BlockInfoClip {
     }
 }
 
-#[derive(Deserialize)]
-struct BlockUnitInfo {
-    offset: Vec3<u8>,
+#[derive(Debug, Deserialize)]
+struct UnitClips {
     clip_north: Option<BlockInfoClip>,
     clip_east: Option<BlockInfoClip>,
     clip_south: Option<BlockInfoClip>,
     clip_west: Option<BlockInfoClip>,
 }
 
-impl BlockUnitInfo {
+impl UnitClips {
     fn clip(&self, dir: Direction) -> Option<&BlockInfoClip> {
         match dir {
             Direction::North => self.clip_north.as_ref(),
@@ -57,6 +56,12 @@ impl BlockUnitInfo {
             Direction::West => self.clip_west.as_ref(),
         }
     }
+}
+
+#[derive(Deserialize)]
+struct BlockUnitInfo {
+    offset: Vec3<u8>,
+    clips: UnitClips,
 }
 
 #[derive(Deserialize)]
@@ -128,9 +133,10 @@ pub struct Item {
 }
 
 #[allow(clippy::type_complexity)]
-#[derive(Default, Serialize)]
+#[derive(Default)]
 pub struct Map {
     blocks: FlatMultiset<Block>,
+    units: HashMap<Vec3<u8>, UnitClips>,
     free_blocks: FlatMultiset<FreeBlock>,
     items: FlatMultiset<Item>,
     embedded_blocks: HashMap<serde::Base64<[u8; 32]>, (&'static str, serde::Base64<Vec<u8>>)>,
@@ -142,7 +148,7 @@ impl Map {
         Self::default()
     }
 
-    fn get_block_info(&self, model_ref: &ModelRef) -> Option<&BlockInfo> {
+    fn get_block_info(&self, model_ref: &ModelRef) -> Option<&'static BlockInfo> {
         let block_info_id = match *model_ref {
             ModelRef::Id(ref id) => id.as_ref(),
             ModelRef::Hash(ref hash) => self
@@ -155,7 +161,7 @@ impl Map {
     }
 }
 
-fn rotate_unit_coord(coord: Vec3<u8>, dir: Direction, extent: Vec3<u8>) -> Vec3<u8> {
+fn rotate_unit_offset(coord: Vec3<u8>, dir: Direction, extent: Vec3<u8>) -> Vec3<u8> {
     match dir {
         Direction::North => coord,
         Direction::East => Vec3 {
@@ -184,88 +190,84 @@ impl Map {
             return false;
         };
 
-        if !block.is_ghost {
-            for other_block in &self.blocks {
-                if !other_block.is_ghost {
-                    let other_block_info = self.get_block_info(&other_block.model).unwrap();
+        let variant =
+            if let Some(variant) = block_info.variant(block.is_ground, block.variant_index) {
+                variant
+            } else {
+                return false;
+            };
 
-                    let variant = if let Some(variant) =
-                        block_info.variant(block.is_ground, block.variant_index)
-                    {
-                        variant
-                    } else {
-                        return false;
-                    };
+        for unit_info in &variant.units {
+            let coord =
+                block.coord + rotate_unit_offset(unit_info.offset, block.dir, variant.extent);
 
-                    let other_variant = other_block_info
-                        .variant(other_block.is_ground, other_block.variant_index)
-                        .unwrap();
+            if self.units.contains_key(&coord) {
+                return false;
+            }
 
-                    for unit in &variant.units {
-                        for other_unit in &other_variant.units {
-                            let coord = block.coord
-                                + rotate_unit_coord(unit.offset, block.dir, variant.extent);
+            let mut clips = vec![];
 
-                            let other_coord = other_block.coord
-                                + rotate_unit_coord(
-                                    other_unit.offset,
-                                    other_block.dir,
-                                    other_variant.extent,
-                                );
+            if let Some(clip) = &unit_info.clips.clip_north {
+                clips.push((Direction::North + block.dir, clip));
+            }
 
-                            if coord.y == other_coord.y {
-                                match (coord.x.cmp(&other_coord.x), coord.z.cmp(&other_coord.z)) {
-                                    (Ordering::Equal, Ordering::Equal) => return false,
-                                    (Ordering::Less, Ordering::Equal)
-                                        if other_coord.x - coord.x == 1 =>
-                                    {
-                                        if let (Some(clip), Some(other_clip)) = (
-                                            unit.clip(Direction::West - block.dir),
-                                            other_unit.clip(Direction::East - other_block.dir),
-                                        ) {
-                                            if clip.clips(other_clip) {
-                                                return false;
-                                            }
-                                        }
-                                    }
-                                    (Ordering::Greater, Ordering::Equal)
-                                        if coord.x - other_coord.x == 1 =>
-                                    {
-                                        if let (Some(clip), Some(other_clip)) = (
-                                            unit.clip(Direction::East - block.dir),
-                                            other_unit.clip(Direction::West - other_block.dir),
-                                        ) {
-                                            if clip.clips(other_clip) {
-                                                return false;
-                                            }
-                                        }
-                                    }
-                                    (Ordering::Equal, Ordering::Less)
-                                        if other_coord.x - coord.z == 1 =>
-                                    {
-                                        if let (Some(clip), Some(other_clip)) = (
-                                            unit.clip(Direction::North - block.dir),
-                                            other_unit.clip(Direction::South - other_block.dir),
-                                        ) {
-                                            if clip.clips(other_clip) {
-                                                return false;
-                                            }
-                                        }
-                                    }
-                                    (Ordering::Equal, Ordering::Greater)
-                                        if coord.z - other_coord.z == 1 =>
-                                    {
-                                        if let (Some(clip), Some(other_clip)) = (
-                                            unit.clip(Direction::South - block.dir),
-                                            other_unit.clip(Direction::North - other_block.dir),
-                                        ) {
-                                            if clip.clips(other_clip) {
-                                                return false;
-                                            }
-                                        }
-                                    }
-                                    _ => {}
-                                }
+            if let Some(clip) = &unit_info.clips.clip_east {
+                clips.push((Direction::East + block.dir, clip));
+            }
+
+            if let Some(clip) = &unit_info.clips.clip_south {
+                clips.push((Direction::South + block.dir, clip));
+            }
+
+            if let Some(clip) = &unit_info.clips.clip_west {
+                clips.push((Direction::West + block.dir, clip));
+            }
+
+            println!("{clips:?}");
+
+            for (dir, clip) in clips {
+                match dir {
+                    Direction::North => {
+                        if let Some(other_clip) = self
+                            .units
+                            .get(&(coord + Vec3::new(0, 0, 1)))
+                            .and_then(|clips| clips.clip_south.as_ref())
+                        {
+                            if clip.clips(other_clip) {
+                                return false;
+                            }
+                        }
+                    }
+                    Direction::East => {
+                        if let Some(other_clip) = self
+                            .units
+                            .get(&(coord - Vec3::new(1, 0, 0)))
+                            .and_then(|clips| clips.clip_west.as_ref())
+                        {
+                            if clip.clips(other_clip) {
+                                return false;
+                            }
+                        }
+                    }
+                    Direction::South => {
+                        if let Some(other_clip) = self
+                            .units
+                            .get(&(coord - Vec3::new(0, 0, 1)))
+                            .and_then(|clips| clips.clip_north.as_ref())
+                        {
+                            if clip.clips(other_clip) {
+                                return false;
+                            }
+                        }
+                    }
+                    Direction::West => {
+                        if let Some(other_clip) = self
+                            .units
+                            .get(&(coord + Vec3::new(1, 0, 0)))
+                            .and_then(|clips| clips.clip_east.as_ref())
+                        {
+                            if clip.clips(other_clip) {
+                                return false;
                             }
                         }
                     }
@@ -277,8 +279,107 @@ impl Map {
     }
 
     pub fn place_block(&mut self, block: Block) -> bool {
-        if !self.can_place_block(&block) {
+        let block_info = if let Some(block_info) = self.get_block_info(&block.model) {
+            block_info
+        } else {
             return false;
+        };
+
+        let variant =
+            if let Some(variant) = block_info.variant(block.is_ground, block.variant_index) {
+                variant
+            } else {
+                return false;
+            };
+
+        for unit_info in &variant.units {
+            let coord =
+                block.coord + rotate_unit_offset(unit_info.offset, block.dir, variant.extent);
+
+            if self.units.contains_key(&coord) {
+                return false;
+            }
+
+            let mut clips = vec![];
+
+            if let Some(clip) = &unit_info.clips.clip_north {
+                clips.push((Direction::North + block.dir, clip));
+            }
+
+            if let Some(clip) = &unit_info.clips.clip_east {
+                clips.push((Direction::East + block.dir, clip));
+            }
+
+            if let Some(clip) = &unit_info.clips.clip_south {
+                clips.push((Direction::South + block.dir, clip));
+            }
+
+            if let Some(clip) = &unit_info.clips.clip_west {
+                clips.push((Direction::West + block.dir, clip));
+            }
+
+            for (dir, clip) in clips {
+                match dir {
+                    Direction::North => {
+                        if let Some(other_clip) = self
+                            .units
+                            .get(&(coord + Vec3::new(0, 0, 1)))
+                            .and_then(|clips| clips.clip_south.as_ref())
+                        {
+                            if clip.clips(other_clip) {
+                                return false;
+                            }
+                        }
+                    }
+                    Direction::East => {
+                        if let Some(other_clip) = self
+                            .units
+                            .get(&(coord - Vec3::new(1, 0, 0)))
+                            .and_then(|clips| clips.clip_west.as_ref())
+                        {
+                            if clip.clips(other_clip) {
+                                return false;
+                            }
+                        }
+                    }
+                    Direction::South => {
+                        if let Some(other_clip) = self
+                            .units
+                            .get(&(coord - Vec3::new(0, 0, 1)))
+                            .and_then(|clips| clips.clip_north.as_ref())
+                        {
+                            if clip.clips(other_clip) {
+                                return false;
+                            }
+                        }
+                    }
+                    Direction::West => {
+                        if let Some(other_clip) = self
+                            .units
+                            .get(&(coord + Vec3::new(1, 0, 0)))
+                            .and_then(|clips| clips.clip_east.as_ref())
+                        {
+                            if clip.clips(other_clip) {
+                                return false;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        for unit in &variant.units {
+            let coord = block.coord + rotate_unit_offset(unit.offset, block.dir, variant.extent);
+
+            self.units.insert(
+                coord,
+                UnitClips {
+                    clip_north: unit.clips.clip(Direction::North - block.dir).cloned(),
+                    clip_east: unit.clips.clip(Direction::East - block.dir).cloned(),
+                    clip_south: unit.clips.clip(Direction::South - block.dir).cloned(),
+                    clip_west: unit.clips.clip(Direction::West - block.dir).cloned(),
+                },
+            );
         }
 
         self.blocks.insert(block);
@@ -329,8 +430,8 @@ impl Map {
     {
         let gbx_map = gbx::Map::reader().read_from(reader)?;
 
-        let mut embedded_blocks: HashMap<_, (&'static str, _)> = HashMap::new();
-        let mut embedded_items = HashMap::new();
+        let mut map = Map::new();
+
         let mut embedded_files = HashMap::new();
 
         if let Some(gbx_embedded_files) = gbx_map.embedded_files {
@@ -354,9 +455,10 @@ impl Map {
                         .get_key_value(block.archetype.as_str())
                         .ok_or_else(|| anyhow!("unknown block archetype"))?;
 
-                    embedded_blocks.insert(hash.into(), (archetype, bytes.into()));
+                    map.embedded_blocks
+                        .insert(hash.into(), (archetype, bytes.into()));
                 } else if path_lowercase.ends_with(".item.gbx") {
-                    embedded_items.insert(hash.into(), bytes.into());
+                    map.embedded_items.insert(hash.into(), bytes.into());
                 } else {
                     return Err(anyhow!("unknown embedded file extension: {path}"));
                 }
@@ -364,9 +466,6 @@ impl Map {
                 embedded_files.insert(path, hash);
             }
         }
-
-        let mut blocks = FlatMultiset::new();
-        let mut free_blocks = FlatMultiset::new();
 
         for gbx_block in gbx_map.blocks {
             let model_id = gbx_block.model_id();
@@ -383,7 +482,7 @@ impl Map {
 
             match gbx_block {
                 gbx::map::BlockType::Normal(gbx_block) => {
-                    blocks.insert(Block {
+                    map.place_block(Block {
                         model,
                         coord: gbx_block.coord,
                         dir: gbx_block.dir,
@@ -394,7 +493,7 @@ impl Map {
                     });
                 }
                 gbx::map::BlockType::Free(gbx_free_block) => {
-                    free_blocks.insert(FreeBlock {
+                    map.place_free_block(FreeBlock {
                         model,
                         pos: Vec3 {
                             x: gbx_free_block.pos.x.into(),
@@ -410,8 +509,6 @@ impl Map {
             }
         }
 
-        let mut items = FlatMultiset::new();
-
         for gbx_item in gbx_map.items {
             let model = ITEM_MODEL_IDS
                 .get(gbx_item.model_id.as_str())
@@ -423,7 +520,7 @@ impl Map {
                 })
                 .ok_or_else(|| anyhow!("unknown item model id: {}", gbx_item.model_id))?;
 
-            items.insert(Item {
+            map.place_item(Item {
                 model,
                 pos: Vec3 {
                     x: gbx_item.pos.x.into(),
@@ -443,13 +540,22 @@ impl Map {
             });
         }
 
-        Ok(Self {
-            blocks,
-            free_blocks,
-            items,
-            embedded_blocks,
-            embedded_items,
-        })
+        Ok(map)
+    }
+}
+
+impl Serialize for Map {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut map = serializer.serialize_struct("Map", 5)?;
+        map.serialize_field("blocks", &self.blocks)?;
+        map.serialize_field("free_blocks", &self.free_blocks)?;
+        map.serialize_field("items", &self.items)?;
+        map.serialize_field("embedded_blocks", &self.embedded_blocks)?;
+        map.serialize_field("embedded_items", &self.embedded_items)?;
+        map.end()
     }
 }
 

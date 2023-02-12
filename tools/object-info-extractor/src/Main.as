@@ -75,23 +75,27 @@ Json::Value SerializeBlockInfoVariant(CGameCtnBlockInfoVariant@ variant) {
 
         unitValue["offset"] = offsetValue;
 
+        auto clipsValue = Json::Object();
+
         uint j = 0;
 
         if (unit.ClipCount_North > 0) {
-            unitValue["clip_north"] = SerializeBlockInfoClip(unit.AllClips[j++]);
+            clipsValue["clip_north"] = SerializeBlockInfoClip(unit.AllClips[j++]);
         }
 
         if (unit.ClipCount_East > 0) {
-            unitValue["clip_east"] = SerializeBlockInfoClip(unit.AllClips[j++]);
+            clipsValue["clip_east"] = SerializeBlockInfoClip(unit.AllClips[j++]);
         }
 
         if (unit.ClipCount_South > 0) {
-            unitValue["clip_south"] = SerializeBlockInfoClip(unit.AllClips[j++]);
+            clipsValue["clip_south"] = SerializeBlockInfoClip(unit.AllClips[j++]);
         }
 
         if (unit.ClipCount_West > 0) {
-            unitValue["clip_west"] = SerializeBlockInfoClip(unit.AllClips[j++]);
+            clipsValue["clip_west"] = SerializeBlockInfoClip(unit.AllClips[j++]);
         }
+
+        unitValue["clips"] = clipsValue;
 
         unitsValue.Add(unitValue);
     }
