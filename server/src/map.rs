@@ -15,7 +15,7 @@ use std::io::{Cursor, Read};
 use zip::ZipArchive;
 
 #[derive(Clone, Debug, Deserialize)]
-enum BlockInfoClip {
+pub enum BlockInfoClip {
     NonExclusive,
     ExclusiveSymmetric { id: String },
     ExclusiveAsymmetric { id: String, asym_clip_id: String },
@@ -66,7 +66,7 @@ struct BlockUnitInfo {
 }
 
 #[derive(Deserialize)]
-struct BlockInfoVariant {
+pub struct BlockInfoVariant {
     extent: Vec3<u8>,
     units: Vec<BlockUnitInfo>,
 }
@@ -160,6 +160,27 @@ impl Map {
 
         BLOCK_INFOS.get(block_info_id)
     }
+
+    pub fn can_place_clip(&self, clip: &BlockInfoClip, coord: Vec3<u8>, dir: Direction) -> bool {
+        let other_coord = match dir {
+            Direction::North => coord + Vec3::new(0, 0, 1),
+            Direction::East => coord - Vec3::new(1, 0, 0),
+            Direction::South => coord - Vec3::new(0, 0, 1),
+            Direction::West => coord + Vec3::new(1, 0, 0),
+        };
+
+        if let Some(other_clip) = self
+            .units
+            .get(&other_coord)
+            .and_then(|clips| clips.clip(dir.opposite()))
+        {
+            if clip.clips(other_clip) {
+                return false;
+            }
+        }
+
+        true
+    }
 }
 
 fn rotate_unit_offset(coord: Vec3<u8>, dir: Direction, extent: Vec3<u8>) -> Vec3<u8> {
@@ -184,20 +205,7 @@ fn rotate_unit_offset(coord: Vec3<u8>, dir: Direction, extent: Vec3<u8>) -> Vec3
 }
 
 impl Map {
-    pub fn can_place_block(&mut self, block: &Block) -> bool {
-        let block_info = if let Some(block_info) = self.get_block_info(&block.model) {
-            block_info
-        } else {
-            return false;
-        };
-
-        let variant =
-            if let Some(variant) = block_info.variant(block.is_ground, block.variant_index) {
-                variant
-            } else {
-                return false;
-            };
-
+    pub fn can_place_block(&self, block: &Block, variant: &BlockInfoVariant) -> bool {
         for unit_info in &variant.units {
             let coord =
                 block.coord + rotate_unit_offset(unit_info.offset, block.dir, variant.extent);
@@ -206,71 +214,15 @@ impl Map {
                 return false;
             }
 
-            let mut clips = vec![];
-
-            if let Some(clip) = &unit_info.clips.clip_north {
-                clips.push((Direction::North + block.dir, clip));
-            }
-
-            if let Some(clip) = &unit_info.clips.clip_east {
-                clips.push((Direction::East + block.dir, clip));
-            }
-
-            if let Some(clip) = &unit_info.clips.clip_south {
-                clips.push((Direction::South + block.dir, clip));
-            }
-
-            if let Some(clip) = &unit_info.clips.clip_west {
-                clips.push((Direction::West + block.dir, clip));
-            }
-
-            println!("{clips:?}");
-
-            for (dir, clip) in clips {
-                match dir {
-                    Direction::North => {
-                        if let Some(other_clip) = self
-                            .units
-                            .get(&(coord + Vec3::new(0, 0, 1)))
-                            .and_then(|clips| clips.clip_south.as_ref())
-                        {
-                            if clip.clips(other_clip) {
-                                return false;
-                            }
-                        }
-                    }
-                    Direction::East => {
-                        if let Some(other_clip) = self
-                            .units
-                            .get(&(coord - Vec3::new(1, 0, 0)))
-                            .and_then(|clips| clips.clip_west.as_ref())
-                        {
-                            if clip.clips(other_clip) {
-                                return false;
-                            }
-                        }
-                    }
-                    Direction::South => {
-                        if let Some(other_clip) = self
-                            .units
-                            .get(&(coord - Vec3::new(0, 0, 1)))
-                            .and_then(|clips| clips.clip_north.as_ref())
-                        {
-                            if clip.clips(other_clip) {
-                                return false;
-                            }
-                        }
-                    }
-                    Direction::West => {
-                        if let Some(other_clip) = self
-                            .units
-                            .get(&(coord + Vec3::new(1, 0, 0)))
-                            .and_then(|clips| clips.clip_east.as_ref())
-                        {
-                            if clip.clips(other_clip) {
-                                return false;
-                            }
-                        }
+            for dir in [
+                Direction::North,
+                Direction::East,
+                Direction::South,
+                Direction::West,
+            ] {
+                if let Some(clip) = &unit_info.clips.clip(dir) {
+                    if !self.can_place_clip(clip, coord, dir + block.dir) {
+                        return false;
                     }
                 }
             }
@@ -293,92 +245,21 @@ impl Map {
                 return false;
             };
 
+        if !self.can_place_block(&block, variant) {
+            return false;
+        }
+
         for unit_info in &variant.units {
             let coord =
                 block.coord + rotate_unit_offset(unit_info.offset, block.dir, variant.extent);
 
-            if self.units.contains_key(&coord) {
-                return false;
-            }
-
-            let mut clips = vec![];
-
-            if let Some(clip) = &unit_info.clips.clip_north {
-                clips.push((Direction::North + block.dir, clip));
-            }
-
-            if let Some(clip) = &unit_info.clips.clip_east {
-                clips.push((Direction::East + block.dir, clip));
-            }
-
-            if let Some(clip) = &unit_info.clips.clip_south {
-                clips.push((Direction::South + block.dir, clip));
-            }
-
-            if let Some(clip) = &unit_info.clips.clip_west {
-                clips.push((Direction::West + block.dir, clip));
-            }
-
-            for (dir, clip) in clips {
-                match dir {
-                    Direction::North => {
-                        if let Some(other_clip) = self
-                            .units
-                            .get(&(coord + Vec3::new(0, 0, 1)))
-                            .and_then(|clips| clips.clip_south.as_ref())
-                        {
-                            if clip.clips(other_clip) {
-                                return false;
-                            }
-                        }
-                    }
-                    Direction::East => {
-                        if let Some(other_clip) = self
-                            .units
-                            .get(&(coord - Vec3::new(1, 0, 0)))
-                            .and_then(|clips| clips.clip_west.as_ref())
-                        {
-                            if clip.clips(other_clip) {
-                                return false;
-                            }
-                        }
-                    }
-                    Direction::South => {
-                        if let Some(other_clip) = self
-                            .units
-                            .get(&(coord - Vec3::new(0, 0, 1)))
-                            .and_then(|clips| clips.clip_north.as_ref())
-                        {
-                            if clip.clips(other_clip) {
-                                return false;
-                            }
-                        }
-                    }
-                    Direction::West => {
-                        if let Some(other_clip) = self
-                            .units
-                            .get(&(coord + Vec3::new(1, 0, 0)))
-                            .and_then(|clips| clips.clip_east.as_ref())
-                        {
-                            if clip.clips(other_clip) {
-                                return false;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        for unit in &variant.units {
-            let coord = block.coord + rotate_unit_offset(unit.offset, block.dir, variant.extent);
-
             self.units.insert(
                 coord,
                 UnitClips {
-                    clip_north: unit.clips.clip(Direction::North - block.dir).cloned(),
-                    clip_east: unit.clips.clip(Direction::East - block.dir).cloned(),
-                    clip_south: unit.clips.clip(Direction::South - block.dir).cloned(),
-                    clip_west: unit.clips.clip(Direction::West - block.dir).cloned(),
+                    clip_north: unit_info.clips.clip(Direction::North - block.dir).cloned(),
+                    clip_east: unit_info.clips.clip(Direction::East - block.dir).cloned(),
+                    clip_south: unit_info.clips.clip(Direction::South - block.dir).cloned(),
+                    clip_west: unit_info.clips.clip(Direction::West - block.dir).cloned(),
                 },
             );
         }
@@ -567,6 +448,23 @@ mod tests {
     use gbx::Vec3;
     use std::borrow::Cow;
 
+    fn can_place_block(map: &Map, block: &Block) -> bool {
+        let block_info = if let Some(block_info) = map.get_block_info(&block.model) {
+            block_info
+        } else {
+            return false;
+        };
+
+        let variant =
+            if let Some(variant) = block_info.variant(block.is_ground, block.variant_index) {
+                variant
+            } else {
+                return false;
+            };
+
+        map.can_place_block(block, variant)
+    }
+
     #[test]
     fn can_place_block_unit_intersection() {
         let mut map = Map::new();
@@ -600,15 +498,18 @@ mod tests {
             ] {
                 println!("{coord:?} {dir:?}");
 
-                let can_place = map.can_place_block(&Block {
-                    model: ModelRef::Id(Cow::Borrowed("TrackWallCurve3")),
-                    coord,
-                    dir,
-                    is_ground: false,
-                    variant_index: 0,
-                    is_ghost: false,
-                    color: Color::Default,
-                });
+                let can_place = can_place_block(
+                    &map,
+                    &Block {
+                        model: ModelRef::Id(Cow::Borrowed("TrackWallCurve3")),
+                        coord,
+                        dir,
+                        is_ground: false,
+                        variant_index: 0,
+                        is_ghost: false,
+                        color: Color::Default,
+                    },
+                );
 
                 assert_eq!(can_place, dir == no_intersection_dir);
             }
@@ -645,15 +546,18 @@ mod tests {
             ] {
                 println!("{coord:?} {dir:?}");
 
-                let can_place = map.can_place_block(&Block {
-                    model: ModelRef::Id(Cow::Borrowed("RoadTechBranchTShaped")),
-                    coord,
-                    dir,
-                    is_ground: false,
-                    variant_index: 0,
-                    is_ghost: false,
-                    color: Color::Default,
-                });
+                let can_place = can_place_block(
+                    &map,
+                    &Block {
+                        model: ModelRef::Id(Cow::Borrowed("RoadTechBranchTShaped")),
+                        coord,
+                        dir,
+                        is_ground: false,
+                        variant_index: 0,
+                        is_ghost: false,
+                        color: Color::Default,
+                    },
+                );
 
                 assert_eq!(can_place, dir == no_clip_dir);
             }

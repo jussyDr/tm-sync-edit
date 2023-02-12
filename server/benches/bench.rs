@@ -1,7 +1,6 @@
-use std::borrow::Cow;
-
 use gbx::map::{Color, Direction};
 use gbx::Vec3;
+use std::borrow::Cow;
 use tm_sync_edit_server::map::{Block, Map, ModelRef};
 
 fn fill_map() {
