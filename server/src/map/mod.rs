@@ -135,14 +135,19 @@ pub struct Item {
     anim_offset: PhaseOffset,
 }
 
-#[allow(clippy::type_complexity)]
+#[derive(Serialize)]
+struct EmbeddedBlock {
+    archetype_id: &'static str,
+    bytes: serde::Base64<Vec<u8>>,
+}
+
 pub struct Map {
     size: Vec3<u8>,
     blocks: FlatMultiset<Block, ahash::RandomState>,
     units: HashMap<Vec3<u8>, UnitClips, ahash::RandomState>,
     free_blocks: FlatMultiset<FreeBlock, ahash::RandomState>,
     items: FlatMultiset<Item, ahash::RandomState>,
-    embedded_blocks: HashMap<serde::Base64<[u8; 32]>, (&'static str, serde::Base64<Vec<u8>>)>,
+    embedded_blocks: HashMap<serde::Base64<[u8; 32]>, EmbeddedBlock>,
     embedded_items: HashMap<serde::Base64<[u8; 32]>, serde::Base64<Vec<u8>>>,
 }
 
@@ -169,7 +174,7 @@ impl Map {
             ModelRef::Hash(ref hash) => self
                 .embedded_blocks
                 .get(hash)
-                .map(|(archetype, _)| *archetype)?,
+                .map(|embedded_block| embedded_block.archetype_id)?,
         };
 
         BLOCK_INFOS.get(block_info_id)
@@ -398,12 +403,17 @@ impl Map {
                 if path_lowercase.ends_with(".block.gbx") {
                     let block = gbx::Block::reader().read_from(bytes.as_slice())?;
 
-                    let (archetype, _) = BLOCK_INFOS
+                    let (archetype_id, _) = BLOCK_INFOS
                         .get_key_value(block.archetype.as_str())
                         .ok_or_else(|| anyhow!("unknown block archetype"))?;
 
-                    map.embedded_blocks
-                        .insert(hash.into(), (archetype, bytes.into()));
+                    map.embedded_blocks.insert(
+                        hash.into(),
+                        EmbeddedBlock {
+                            archetype_id,
+                            bytes: bytes.into(),
+                        },
+                    );
                 } else if path_lowercase.ends_with(".item.gbx") {
                     map.embedded_items.insert(hash.into(), bytes.into());
                 } else {

@@ -1,10 +1,3 @@
-const string c_title = Icons::Syncthing + " Sync Edit";
-
-bool g_interfaceVisible = true;
-string g_host = "127.0.0.1";
-string g_port = "8369";
-bool g_disconnected = true;
-
 void Main() {
     auto pfPlaceBlock = Dev::FindPattern("48 89 5c 24 10 48 89 74 24 20 4c 89 44 24 18 55 57 41 55");
     auto pfRemoveBlock = Dev::FindPattern("48 89 5c 24 08 48 89 6c 24 10 48 89 74 24 18 57 48 83 ec 40 83 7c");
@@ -35,73 +28,68 @@ void Main() {
         itemModels[itemModel.IdName] = @itemModel;
     }
 
+    Net::Socket socket;
+    socket.Connect("127.0.0.1", 8369);
+
+    while (!socket.CanWrite()) {
+        yield();
+    }
+
     auto placeBlockHook = Dev::Hook(pfPlaceBlock, 0, "OnPlaceBlock");
     auto removeBlockHook = Dev::Hook(pfRemoveBlock, 0, "OnRemoveBlock");
     auto placeItemHook = Dev::Hook(pfPlaceItem, 0, "OnPlaceItem");
     auto removeItemHook = Dev::Hook(pfRemoveItem, 0, "OnRemoveItem");
 
+    while (!socket.CanRead()) {
+        yield();
+    }
+
     Dev::Unhook(placeBlockHook);
     Dev::Unhook(removeBlockHook);
     Dev::Unhook(placeItemHook);
     Dev::Unhook(removeItemHook);
-
-    auto editor = cast<CGameCtnEditorCommon>(GetApp().Editor);
-
-    CGameCtnBlockInfo@ blockInfo;
-    blockInfos.Get("RoadTechStraight", @blockInfo);
-
-    PlaceBlock(fnPlaceBlock, pfPlaceBlock, editor, blockInfo, 20, 20, 20, CGameEditorPluginMap::ECardinalDirections::North, false, false, CGameEditorPluginMap::EMapElemColor::Default);
-}
-
-void RenderInterface() {
-    if (Setting_InterfaceVisible) {
-        if (UI::Begin(c_title)) {
-            if (g_disconnected) {
-                g_host = UI::InputText("Host", g_host, UI::InputTextFlags::CharsNoBlank);
-                g_port = UI::InputText("Port", g_port, UI::InputTextFlags::CharsDecimal);
-
-                if (g_disconnected) {
-                    if (UI::Button("Join")) {
-                        startnew(Join);
-                    }
-                }
-
-                UI::Text("Disconnected");
-            }
-            
-            UI::End();
-        }
-    }
-}
-
-void RenderMenu() {
-    if (UI::MenuItem(c_title, "", Setting_InterfaceVisible)) {
-        Setting_InterfaceVisible = !Setting_InterfaceVisible;
-    }
 }
 
 void OnDestroyed() {
 
 }
 
-void OnPlaceBlock() {
+void OnPlaceBlock(CGameCtnBlockInfo@ rdx, uint64 r9, uint64 r11) {
+    auto rsp = r9 - 184;
+
+    if (r9 == r11 - 24) {
+        rsp = r9 - 168;
+    }
+
+    auto blockInfo = rdx;
+    auto coord = r9;
+    auto dir = Dev::ReadUInt32(rsp + 40);
+    auto color = Dev::ReadUInt8(rsp + 48);
+    auto isGhost = Dev::ReadUInt32(rsp + 80);
+    auto isGround = Dev::ReadUInt32(rsp + 104);
+    auto isFree = Dev::ReadUInt32(rsp + 136);
+    auto transform = Dev::ReadUInt32(rsp + 144);
+    
     print("placed block");
 }
 
-void OnRemoveBlock() {
+void OnRemoveBlock(CGameCtnBlock@ rdx) {
+    auto block = rdx;
+
     print("removed block");
 }
 
-void OnPlaceItem() {
+void OnPlaceItem(CGameItemModel@ rdx, uint64 r8) {
+    auto itemModel = rdx;
+    auto itemParams = r8;
+
     print("placed item");
 }
 
-void OnRemoveItem() {
+void OnRemoveItem(CGameCtnAnchoredObject@ rdx) {
+    auto item = rdx;
+
     print("removed item");
-}
-
-void Join() {
-
 }
 
 void LoadBlockInfos(dictionary@ blockInfos, const string&in folder) {
