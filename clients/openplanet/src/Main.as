@@ -50,7 +50,7 @@ void Main() {
     CGameCtnBlockInfo@ blockInfo;
     blockInfos.Get("RoadTechStraight", @blockInfo);
 
-    PlaceBlock(fnPlaceBlock, pfPlaceBlock, editor, blockInfo, 50, 20, 20, CGameEditorPluginMap::ECardinalDirections::North, false, false, CGameEditorPluginMap::EMapElemColor::Default);
+    PlaceBlock(fnPlaceBlock, pfPlaceBlock, editor, blockInfo, 20, 20, 20, CGameEditorPluginMap::ECardinalDirections::North, false, false, CGameEditorPluginMap::EMapElemColor::Default);
 }
 
 void RenderInterface() {
