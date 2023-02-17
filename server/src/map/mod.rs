@@ -96,13 +96,13 @@ lazy_static! {
         serde_json::from_str(include_str!("ItemModelIds.json")).unwrap();
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub enum ModelRef {
     Id(Cow<'static, str>),
     Hash(serde::Base64<[u8; 32]>),
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct Block {
     pub model: ModelRef,
     pub coord: Vec3<u8>,
@@ -113,7 +113,7 @@ pub struct Block {
     pub color: Color,
 }
 
-#[derive(PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct FreeBlock {
     model: ModelRef,
     pos: Vec3<OrderedFloat<f32>>,
@@ -123,7 +123,7 @@ pub struct FreeBlock {
     color: Color,
 }
 
-#[derive(PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct Item {
     model: ModelRef,
     pos: Vec3<OrderedFloat<f32>>,
@@ -142,7 +142,7 @@ struct EmbeddedBlock {
 }
 
 pub struct Map {
-    size: Vec3<u8>,
+    pub size: Vec3<u8>,
     blocks: FlatMultiset<Block, ahash::RandomState>,
     units: HashMap<Vec3<u8>, UnitClips, ahash::RandomState>,
     free_blocks: FlatMultiset<FreeBlock, ahash::RandomState>,

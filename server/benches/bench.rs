@@ -6,8 +6,12 @@ use tm_sync_edit_server::map::{Block, Map, ModelRef};
 fn fill_map() {
     let mut map = Map::new();
 
+    assert_eq!(map.size.x, 48);
+    assert_eq!(map.size.y, 40);
+    assert_eq!(map.size.z, 48);
+
     for x in 0..48 {
-        for y in 10..40 {
+        for y in 0..40 {
             for z in 0..48 {
                 map.place_block(Block {
                     model: ModelRef::Id(Cow::Borrowed("RoadTechBranchCross")),

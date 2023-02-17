@@ -4,8 +4,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::marker::PhantomData;
 
-#[derive(Clone, PartialEq, Eq, Hash)]
-#[repr(transparent)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Base64<B>(B);
 
 impl<B> From<B> for Base64<B> {

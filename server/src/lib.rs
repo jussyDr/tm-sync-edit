@@ -42,7 +42,7 @@ impl Server {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 enum Command {
     PlaceBlock(Block),
     RemoveBlock(Block),
@@ -58,6 +58,8 @@ async fn handle_client(mut stream: Framed<TcpStream, LengthDelimitedCodec>) -> a
             result = stream.try_next() => match result? {
                 Some(frame) => {
                     let command: Command = serde_json::from_slice(&frame)?;
+
+                    println!("{command:?}");
 
                     match command {
                         Command::PlaceBlock(block) => {
