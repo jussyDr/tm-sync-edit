@@ -2,8 +2,7 @@
 mod tests;
 
 use crate::serde;
-use ::serde::ser::SerializeStruct;
-use ::serde::{Deserialize, Serialize, Serializer};
+use ::serde::{Deserialize, Serialize};
 use anyhow::anyhow;
 use flat_multimap::FlatMultiset;
 use gbx::map::{Color, Direction, PhaseOffset};
@@ -141,9 +140,11 @@ struct EmbeddedBlock {
     bytes: serde::Base64<Vec<u8>>,
 }
 
+#[derive(Serialize)]
 pub struct Map {
     pub size: Vec3<u8>,
     blocks: FlatMultiset<Block, ahash::RandomState>,
+    #[serde(skip_serializing)]
     units: HashMap<Vec3<u8>, UnitClips, ahash::RandomState>,
     free_blocks: FlatMultiset<FreeBlock, ahash::RandomState>,
     items: FlatMultiset<Item, ahash::RandomState>,
@@ -504,21 +505,5 @@ impl Map {
 impl Default for Map {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl Serialize for Map {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut map = serializer.serialize_struct("Map", 6)?;
-        map.serialize_field("size", &self.size)?;
-        map.serialize_field("blocks", &self.blocks)?;
-        map.serialize_field("free_blocks", &self.free_blocks)?;
-        map.serialize_field("items", &self.items)?;
-        map.serialize_field("embedded_blocks", &self.embedded_blocks)?;
-        map.serialize_field("embedded_items", &self.embedded_items)?;
-        map.end()
     }
 }
