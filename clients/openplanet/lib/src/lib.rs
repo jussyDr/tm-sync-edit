@@ -44,7 +44,7 @@ unsafe extern "win64" fn PlaceBlock(
     is_ground: u32,
     is_ghost: u32,
     color: u8,
-) {
+) -> *const c_void {
     place_block_fn(
         editor,
         block_info,
@@ -66,7 +66,7 @@ unsafe extern "win64" fn PlaceBlock(
         null(),
         -1,
         0,
-    );
+    )
 }
 
 #[no_mangle]
@@ -77,7 +77,7 @@ unsafe extern "win64" fn PlaceFreeBlock(
     pos: Vec3<f32>,
     rot: Vec3<f32>,
     color: u8,
-) {
+) -> *const c_void {
     let coord = Vec3([-1, 0, -1]);
     let transform = Transform { pos, rot };
 
@@ -102,7 +102,7 @@ unsafe extern "win64" fn PlaceFreeBlock(
         &transform,
         -1,
         0,
-    );
+    )
 }
 
 type RemoveBlockFn = unsafe extern "win64" fn(
@@ -164,7 +164,7 @@ unsafe extern "win64" fn PlaceItem(
     pivot_pos: Vec3<f32>,
     color: u8,
     anim_offset: u8,
-) {
+) -> *const c_void {
     let params = ItemParams {
         coord: coord_from_pos(&pos),
         rot,
@@ -185,7 +185,11 @@ unsafe extern "win64" fn PlaceItem(
         unknown_10: -1,
     };
 
-    place_item_fn(editor, item_model, &params, &mut null());
+    let item = &mut null();
+
+    place_item_fn(editor, item_model, &params, item);
+
+    *item
 }
 
 type RemoveItemFn =

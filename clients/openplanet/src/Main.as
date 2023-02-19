@@ -179,6 +179,13 @@ void MainLoop() {
     g_status = "Connected";
     g_state = State::Connected;
 
+    auto library = Import::GetLibrary("SyncEdit.dll");
+
+    if (library is null) {
+        Error("Failed to find library 'SyncEdit.dll'");
+        return;
+    }
+
     auto pfPlaceBlock = Dev::FindPattern("48 89 5c 24 10 48 89 74 24 20 4c 89 44 24 18 55 57 41 55");
 
     if (pfPlaceBlock == 0) {
@@ -466,5 +473,102 @@ namespace Block {
 
     bool IsFree(CGameCtnBlock@ block) {
         return Flags(block) & 0x20 != 0;
+    }
+}
+
+namespace Editor {
+    CGameCtnBlock@ PlaceBlock(
+        CGameCtnEditorCommon@ editor, 
+        Import::Function@ placeBlockFunc,
+        uint64 pfPlaceBlock,
+        CGameCtnBlockInfo@ blockInfo,
+        uint8 x,
+        uint8 y,
+        uint8 z,
+        CGameEditorPluginMap::ECardinalDirections dir,
+        bool isGround,
+        bool isGhost,
+        CGameEditorPluginMap::EMapElemColor color
+    ) {
+        auto nod = placeBlockFunc.CallNod(
+            pfPlaceBlock,
+            editor,
+            blockInfo,
+            int3(x, y, z),
+            dir,
+            isGround, 
+            isGhost,
+            color
+        );
+
+        return cast<CGameCtnBlock>(nod);
+    }
+
+    CGameCtnBlock@ PlaceFreeBlock(
+        CGameCtnEditorCommon@ editor, 
+        Import::Function@ placeFreeBlockFunc,
+        uint64 pfPlaceBlock,
+        CGameCtnBlockInfo@ blockInfo,
+        vec3 pos,
+        float yaw,
+        float pitch,
+        float roll,
+        CGameEditorPluginMap::EMapElemColor color
+    ) {
+        auto nod = placeFreeBlockFunc.CallNod(
+            pfPlaceBlock,
+            editor,
+            blockInfo,
+            pos,
+            vec3(yaw, pitch, roll),
+            color
+        );
+
+        return cast<CGameCtnBlock>(nod);
+    }
+
+    void RemoveBlock(
+        CGameCtnEditorCommon@ editor, 
+        Import::Function@ removeBlockFunc,
+        uint64 pfRemoveBlock,
+        CGameCtnBlock@ block
+    ) {
+        removeBlockFunc.Call(pfRemoveBlock, editor, block);
+    }
+
+    CGameCtnAnchoredObject@ PlaceItem(
+        CGameCtnEditorCommon@ editor, 
+        Import::Function@ placeItemFunc,
+        uint64 pfPlaceItem,
+        CGameItemModel@ itemModel,
+        vec3 pos,
+        float yaw,
+        float pitch,
+        float roll,
+        vec3 pivotPos,
+        CGameEditorPluginMap::EMapElemColor color,
+        CGameEditorPluginMap::EPhaseOffset animOffset
+    ) {
+        auto nod = placeItemFunc.CallNod(
+            pfPlaceItem,
+            editor,
+            itemModel,
+            pos,
+            vec3(yaw, pitch, roll),
+            pivotPos,
+            color,
+            animOffset
+        );
+
+        return cast<CGameCtnAnchoredObject>(nod);
+    }
+
+    void RemoveItem(
+        CGameCtnEditorCommon@ editor, 
+        Import::Function@ removeItemFunc,
+        uint64 pfRemoveItem,
+        CGameCtnAnchoredObject@ item
+    ) {
+        removeItemFunc.Call(pfRemoveItem, editor, item);
     }
 }
