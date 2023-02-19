@@ -17,15 +17,18 @@ Dev::HookInfo@ g_hookRemoveBlock;
 Dev::HookInfo@ g_hookPlaceItem;
 Dev::HookInfo@ g_hookRemoveItem;
 
-uint g_numBlocksPlaced;
-uint g_numItemsPlaced;
+dictionary g_placedBlocks;
+dictionary g_placedFreeBlocks;
+dictionary g_placedItems;
+uint g_numNewBlocksPlaced;
+uint g_numNewItemsPlaced;
 
 void Main() {
     g_status = "Disconnected";
     g_state = State::Disconnected;
     g_stopped = false;
-    g_numBlocksPlaced = 0;
-    g_numItemsPlaced = 0;
+    g_numNewBlocksPlaced = 0;
+    g_numNewItemsPlaced = 0;
 }
 
 void RenderInterface() {
@@ -103,33 +106,36 @@ void OnDestroyed() {
 }
 
 void OnPlaceBlock() {
-    g_numBlocksPlaced++;
+    g_numNewBlocksPlaced++;
 }
 
 void OnRemoveBlock(CGameCtnBlock@ rdx) {
-    if (g_numBlocksPlaced > 0) {
-        g_numBlocksPlaced--;
+    if (g_numNewBlocksPlaced > 0) {
+        g_numNewBlocksPlaced--;
     } else {
         if (Block::IsFree(rdx)) {
             auto freeBlockValue = SerializeFreeBlock(rdx);
             auto freeBlockJson = Json::Write(freeBlockValue);
             SendCommand("RemoveFreeBlock", freeBlockJson);
+            g_placedFreeBlocks.Delete(freeBlockJson);
         } else {
             auto blockValue = SerializeBlock(rdx);
             auto blockJson = Json::Write(blockValue);
             SendCommand("RemoveBlock", blockJson);
+            g_placedBlocks.Delete(blockJson);
         }
     }
 }
 
 void OnPlaceItem() {
-    g_numItemsPlaced++;
+    g_numNewItemsPlaced++;
 }
 
 void OnRemoveItem(CGameCtnAnchoredObject@ rdx) {
     auto itemValue = SerializeItem(rdx);
     auto itemJson = Json::Write(itemValue);
     SendCommand("RemoveItem", itemJson);
+    g_placedItems.Delete(itemJson);
 }
 
 void Error(const string&in message) {
@@ -196,9 +202,6 @@ void MainLoop() {
         auto itemModel = cast<CGameItemModel>(nod);
         officialItemModels[itemModel.IdName] = @itemModel;
     }
-
-    dictionary placedBlocks;
-    dictionary placedItems;
 
     auto library = Import::GetLibrary("SyncEdit.dll");
 
@@ -324,31 +327,34 @@ void MainLoop() {
 
             auto blocks = editor.Challenge.Blocks;
 
-            while (g_numBlocksPlaced > 0) {
-                auto block = blocks[blocks.Length - g_numBlocksPlaced];
+            while (g_numNewBlocksPlaced > 0) {
+                auto block = blocks[blocks.Length - g_numNewBlocksPlaced];
 
                 if (Block::IsFree(block)) {
                     auto freeBlockValue = SerializeFreeBlock(block);
                     auto freeBlockJson = Json::Write(freeBlockValue);
                     SendCommand("PlaceFreeBlock", freeBlockJson);
+                    g_placedFreeBlocks[freeBlockJson] = @block;
                 } else {
                     auto blockValue = SerializeBlock(block);
                     auto blockJson = Json::Write(blockValue);
                     SendCommand("PlaceBlock", blockJson);
+                    g_placedBlocks[blockJson] = @block;
                 }
 
-                g_numBlocksPlaced--;
+                g_numNewBlocksPlaced--;
             }
 
             auto items = editor.Challenge.AnchoredObjects;
 
-            while (g_numItemsPlaced > 0) {
-                auto item = items[items.Length - g_numItemsPlaced];
+            while (g_numNewItemsPlaced > 0) {
+                auto item = items[items.Length - g_numNewItemsPlaced];
                 auto itemValue = SerializeItem(item);
                 auto itemJson = Json::Write(itemValue);
                 SendCommand("PlaceItem", itemJson);
+                g_placedItems[itemJson] = @item;
 
-                g_numItemsPlaced--;
+                g_numNewItemsPlaced--;
             }
         }
 
