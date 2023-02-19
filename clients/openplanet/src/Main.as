@@ -107,11 +107,12 @@ void OnPlaceBlock() {
     g_numBlocksPlaced++;
 }
 
-void OnRemoveBlock(CGameCtnBlock@ rdx) {
+void OnRemoveBlock(const CGameCtnBlock@ rdx) {
     if (g_numBlocksPlaced > 0) {
         g_numBlocksPlaced--;
     } else {
-        print("removed block");
+        auto blockValue = SerializeBlock(rdx);
+        SendCommand("PlaceBlock", blockValue);
     }
 }
 
@@ -119,8 +120,9 @@ void OnPlaceItem() {
     g_numItemsPlaced++;
 }
 
-void OnRemoveItem(CGameCtnAnchoredObject@ rdx) {
-    print("removed item");
+void OnRemoveItem(const CGameCtnAnchoredObject@ rdx) {
+    auto itemValue = SerializeItem(rdx);
+    SendCommand("RemoveItem", itemValue);
 }
 
 void Error(const string&in message) {
@@ -252,14 +254,22 @@ void MainLoop() {
                 return;
             }
 
+            auto blocks = editor.Challenge.Blocks;
+
             while (g_numBlocksPlaced > 0) {
-                print("placed block");
+                auto block = blocks[blocks.Length - g_numBlocksPlaced];
+                auto blockValue = SerializeBlock(block);
+                SendCommand("PlaceBlock", blockValue);
 
                 g_numBlocksPlaced--;
             }
 
+            auto items = editor.Challenge.AnchoredObjects;
+
             while (g_numItemsPlaced > 0) {
-                print("placed item");
+                auto item = items[items.Length - g_numItemsPlaced];
+                auto itemValue = SerializeItem(item);
+                SendCommand("PlaceItem", itemValue);
 
                 g_numItemsPlaced--;
             }
@@ -306,4 +316,25 @@ void MainLoop() {
             }
         }
     }
+}
+
+void SendCommand(const string&in name, const Json::Value@ value) {
+    auto commandValue = Json::Object();
+    commandValue[name] = value;
+
+    auto json = Json::Write(commandValue);
+
+    g_socket.Write(json);
+}
+
+const Json::Value@ SerializeBlock(const CGameCtnBlock@ block) {
+    auto blockValue = Json::Object();
+
+    return blockValue;
+}
+
+const Json::Value@ SerializeItem(const CGameCtnAnchoredObject@ item) {
+    auto itemValue = Json::Object();
+
+    return itemValue;
 }
