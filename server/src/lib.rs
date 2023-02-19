@@ -44,13 +44,13 @@ impl Server {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-enum Command<'a> {
-    PlaceBlock(&'a str),
-    RemoveBlock(&'a str),
-    PlaceFreeBlock(&'a str),
-    RemoveFreeBlock(&'a str),
-    PlaceItem(&'a str),
-    RemoveItem(&'a str),
+enum Command {
+    PlaceBlock(String),
+    RemoveBlock(String),
+    PlaceFreeBlock(String),
+    RemoveFreeBlock(String),
+    PlaceItem(String),
+    RemoveItem(String),
 }
 
 async fn handle_client(mut stream: Framed<TcpStream, LengthDelimitedCodec>) -> anyhow::Result<()> {
@@ -62,7 +62,7 @@ async fn handle_client(mut stream: Framed<TcpStream, LengthDelimitedCodec>) -> a
 
                     match command {
                         Command::PlaceBlock(block_json) => {
-                            let _block: Block = serde_json::from_str(block_json)?;
+                            let _block: Block = serde_json::from_str(&block_json)?;
 
                             let response = Command::RemoveBlock(block_json);
                             let frame = serde_json::to_vec(&response)?;
@@ -70,7 +70,7 @@ async fn handle_client(mut stream: Framed<TcpStream, LengthDelimitedCodec>) -> a
                             stream.send(frame.into()).await?;
                         }
                         Command::RemoveBlock(block_json) => {
-                            let _block: Block = serde_json::from_str(block_json)?;
+                            let _block: Block = serde_json::from_str(&block_json)?;
 
                             let response = Command::PlaceBlock(block_json);
                             let frame = serde_json::to_vec(&response)?;
@@ -78,7 +78,7 @@ async fn handle_client(mut stream: Framed<TcpStream, LengthDelimitedCodec>) -> a
                             stream.send(frame.into()).await?;
                         }
                         Command::PlaceFreeBlock(free_block_json) => {
-                            let _free_block: FreeBlock = serde_json::from_str(free_block_json)?;
+                            let _free_block: FreeBlock = serde_json::from_str(&free_block_json)?;
 
                             let response = Command::RemoveFreeBlock(free_block_json);
                             let frame = serde_json::to_vec(&response)?;
@@ -86,7 +86,7 @@ async fn handle_client(mut stream: Framed<TcpStream, LengthDelimitedCodec>) -> a
                             stream.send(frame.into()).await?;
                         }
                         Command::RemoveFreeBlock(free_block_json) => {
-                            let _free_block: FreeBlock = serde_json::from_str(free_block_json)?;
+                            let _free_block: FreeBlock = serde_json::from_str(&free_block_json)?;
 
                             let response = Command::PlaceFreeBlock(free_block_json);
                             let frame = serde_json::to_vec(&response)?;
@@ -94,7 +94,7 @@ async fn handle_client(mut stream: Framed<TcpStream, LengthDelimitedCodec>) -> a
                             stream.send(frame.into()).await?;
                         }
                         Command::PlaceItem(item_json) => {
-                            let _item: Item = serde_json::from_str(item_json)?;
+                            let _item: Item = serde_json::from_str(&item_json)?;
 
                             let response = Command::RemoveItem(item_json);
                             let frame = serde_json::to_vec(&response)?;
@@ -102,7 +102,7 @@ async fn handle_client(mut stream: Framed<TcpStream, LengthDelimitedCodec>) -> a
                             stream.send(frame.into()).await?;
                         }
                         Command::RemoveItem(item_json) => {
-                            let _item: Item = serde_json::from_str(item_json)?;
+                            let _item: Item = serde_json::from_str(&item_json)?;
 
                             let response = Command::PlaceItem(item_json);
                             let frame = serde_json::to_vec(&response)?;
