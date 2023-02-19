@@ -107,12 +107,19 @@ void OnPlaceBlock() {
     g_numBlocksPlaced++;
 }
 
-void OnRemoveBlock(const CGameCtnBlock@ rdx) {
+void OnRemoveBlock(CGameCtnBlock@ rdx) {
     if (g_numBlocksPlaced > 0) {
         g_numBlocksPlaced--;
     } else {
-        auto blockValue = SerializeBlock(rdx);
-        SendCommand("PlaceBlock", blockValue);
+        auto pBlock = Dev::ForceCast<uint64>(rdx).Get();
+
+        if (Dev::ReadUInt8(pBlock + 135) & 0x20 == 0) {
+            auto blockValue = SerializeBlock(rdx);
+            SendCommand("RemoveBlock", blockValue);
+        } else {
+            auto freeBlockValue = SerializeFreeBlock(rdx);
+            SendCommand("RemoveFreeBlock", freeBlockValue);
+        }
     }
 }
 
@@ -120,7 +127,7 @@ void OnPlaceItem() {
     g_numItemsPlaced++;
 }
 
-void OnRemoveItem(const CGameCtnAnchoredObject@ rdx) {
+void OnRemoveItem(CGameCtnAnchoredObject@ rdx) {
     auto itemValue = SerializeItem(rdx);
     SendCommand("RemoveItem", itemValue);
 }
@@ -258,8 +265,15 @@ void MainLoop() {
 
             while (g_numBlocksPlaced > 0) {
                 auto block = blocks[blocks.Length - g_numBlocksPlaced];
-                auto blockValue = SerializeBlock(block);
-                SendCommand("PlaceBlock", blockValue);
+                auto pBlock = Dev::ForceCast<uint64>(block).Get();
+
+                if (Dev::ReadUInt8(pBlock + 135) & 0x20 == 0) {
+                    auto blockValue = SerializeBlock(block);
+                    SendCommand("PlaceBlock", blockValue);
+                } else {
+                    auto freeBlockValue = SerializeFreeBlock(block);
+                    SendCommand("PlaceFreeBlock", freeBlockValue);
+                }
 
                 g_numBlocksPlaced--;
             }
@@ -323,18 +337,127 @@ void SendCommand(const string&in name, const Json::Value@ value) {
     commandValue[name] = value;
 
     auto json = Json::Write(commandValue);
-
     g_socket.Write(json);
 }
 
-const Json::Value@ SerializeBlock(const CGameCtnBlock@ block) {
+const Json::Value@ SerializeBlock(CGameCtnBlock@ block) {
+    auto pBlock = Dev::ForceCast<uint64>(block).Get();
+    
+    auto modelValue = Json::Object();
+    modelValue["Id"] = block.BlockInfo.IdName;
+
+    auto coordValue = Json::Object();
+    coordValue["x"] = block.CoordX;
+    coordValue["y"] = block.CoordY;
+    coordValue["z"] = block.CoordZ;
+
     auto blockValue = Json::Object();
+    blockValue["model"] = modelValue;
+    blockValue["coord"] = coordValue;
+    blockValue["dir"] = SerializeDir(block.Dir);
+    blockValue["is_ground"] = block.IsGround;
+    blockValue["variant_index"] = 0;
+    blockValue["is_ghost"] = Dev::ReadUInt8(pBlock + 135) & 0x10 != 0;
+    blockValue["color"] = SerializeColor(CGameEditorPluginMap::EMapElemColor(block.MapElemColor));
 
     return blockValue;
 }
 
-const Json::Value@ SerializeItem(const CGameCtnAnchoredObject@ item) {
+const Json::Value@ SerializeFreeBlock(CGameCtnBlock@ block) {
+    auto pBlock = Dev::ForceCast<uint64>(block).Get();
+    
+    auto modelValue = Json::Object();
+    modelValue["Id"] = block.BlockInfo.IdName;
+
+    auto blockValue = Json::Object();
+    blockValue["model"] = modelValue;
+    blockValue["pos"] = SerializeVec3(Dev::ReadVec3(pBlock + 108));
+    blockValue["yaw"] = Dev::ReadFloat(pBlock + 120);
+    blockValue["pitch"] = Dev::ReadFloat(pBlock + 124);
+    blockValue["roll"] = Dev::ReadFloat(pBlock + 128);
+    blockValue["color"] = SerializeColor(CGameEditorPluginMap::EMapElemColor(block.MapElemColor));
+
+    return blockValue;
+}
+
+const Json::Value@ SerializeItem(CGameCtnAnchoredObject@ item) {
+    auto pItem = Dev::ForceCast<uint64>(item).Get();
+
+    auto modelValue = Json::Object();
+    modelValue["Id"] = item.ItemModel.IdName;
+
     auto itemValue = Json::Object();
+    itemValue["model"] = modelValue;
+    itemValue["pos"] = SerializeVec3(item.AbsolutePositionInMap);
+    itemValue["yaw"] = item.Yaw;
+    itemValue["pitch"] = item.Pitch;
+    itemValue["roll"] = item.Roll;
+    itemValue["pivot_pos"] = SerializeVec3(Dev::ReadVec3(pItem + 116));
+    itemValue["color"] = SerializeColor(CGameEditorPluginMap::EMapElemColor(item.MapElemColor));
+    itemValue["anim_offset"] = SerializePhaseOffset(CGameEditorPluginMap::EPhaseOffset(item.AnimPhaseOffset));
 
     return itemValue;
+}
+
+const Json::Value@ SerializeDir(CGameEditorPluginMap::ECardinalDirections dir) {
+    if (dir == CGameEditorPluginMap::ECardinalDirections::North) {
+        return "North";
+    } else if (dir == CGameEditorPluginMap::ECardinalDirections::East) {
+        return "East";
+    } else if (dir == CGameEditorPluginMap::ECardinalDirections::South) {
+        return "South";
+    } else if (dir == CGameEditorPluginMap::ECardinalDirections::West) {
+        return "West";
+    }
+
+    return null;
+}
+
+const Json::Value@ SerializeColor(CGameEditorPluginMap::EMapElemColor color) {
+    if (color == CGameEditorPluginMap::EMapElemColor::Default) {
+        return "Default";
+    } else if (color == CGameEditorPluginMap::EMapElemColor::White) {
+        return "White";
+    } else if (color == CGameEditorPluginMap::EMapElemColor::Green) {
+        return "Green";
+    } else if (color == CGameEditorPluginMap::EMapElemColor::Blue) {
+        return "Blue";
+    } else if (color == CGameEditorPluginMap::EMapElemColor::Red) {
+        return "Red";
+    } else if (color == CGameEditorPluginMap::EMapElemColor::Black) {
+        return "Black";
+    }
+
+    return null;
+}
+
+const Json::Value@ SerializePhaseOffset(CGameEditorPluginMap::EPhaseOffset offset) {
+    if (offset == CGameEditorPluginMap::EPhaseOffset::None) {
+        return "None";
+    } else if (offset == CGameEditorPluginMap::EPhaseOffset::One8th) {
+        return "One8th";
+    } else if (offset == CGameEditorPluginMap::EPhaseOffset::Two8th) {
+        return "Two8th";
+    } else if (offset == CGameEditorPluginMap::EPhaseOffset::Three8th) {
+        return "Three8th";
+    } else if (offset == CGameEditorPluginMap::EPhaseOffset::Four8th) {
+        return "Four8th";
+    } else if (offset == CGameEditorPluginMap::EPhaseOffset::Five8th) {
+        return "Five8th";
+    } else if (offset == CGameEditorPluginMap::EPhaseOffset::Six8th) {
+        return "Six8th";
+    } else if (offset == CGameEditorPluginMap::EPhaseOffset::Seven8th) {
+        return "Seven8th";
+    }
+
+    return null;
+}
+
+const Json::Value@ SerializeVec3(const vec3&in vec) {
+    auto vecValue = Json::Object();
+    vecValue["x"] = vec.x;
+    vecValue["y"] = vec.y;
+    vecValue["z"] = vec.z;
+
+    return vecValue;
 }
