@@ -6,13 +6,12 @@ enum State {
     Connected,
 }
 
-bool g_interfaceVisible;
 string g_status;
 
 State g_state;
 bool g_stopped;
-Net::Socket@ g_socket;
 
+Net::Socket@ g_socket;
 Dev::HookInfo@ g_hookPlaceBlock;
 Dev::HookInfo@ g_hookRemoveBlock;
 Dev::HookInfo@ g_hookPlaceItem;
@@ -30,7 +29,7 @@ void Main() {
 }
 
 void RenderInterface() {
-    if (UI::Begin(c_title)) {
+    if (Setting_InterfaceVisible && UI::Begin(c_title)) {
         if (g_state == State::Disconnected) {
             Setting_Host = UI::InputText("Host", Setting_Host, UI::InputTextFlags::CharsNoBlank);
             Setting_Port = UI::InputText("Port", Setting_Port, UI::InputTextFlags::CharsDecimal);
@@ -61,8 +60,8 @@ void RenderInterface() {
 }
 
 void RenderMenu() {
-    if (UI::MenuItem(c_title, "", g_interfaceVisible)) {
-        g_interfaceVisible = !g_interfaceVisible;
+    if (UI::MenuItem(c_title, "", Setting_InterfaceVisible)) {
+        Setting_InterfaceVisible = !Setting_InterfaceVisible;
     }
 }
 
@@ -113,10 +112,12 @@ void OnRemoveBlock(CGameCtnBlock@ rdx) {
     } else {
         if (Block::IsFree(rdx)) {
             auto freeBlockValue = SerializeFreeBlock(rdx);
-            SendCommand("RemoveFreeBlock", freeBlockValue);
+            auto freeBlockJson = Json::Write(freeBlockValue);
+            SendCommand("RemoveFreeBlock", freeBlockJson);
         } else {
             auto blockValue = SerializeBlock(rdx);
-            SendCommand("RemoveBlock", blockValue);
+            auto blockJson = Json::Write(blockValue);
+            SendCommand("RemoveBlock", blockJson);
         }
     }
 }
@@ -127,7 +128,8 @@ void OnPlaceItem() {
 
 void OnRemoveItem(CGameCtnAnchoredObject@ rdx) {
     auto itemValue = SerializeItem(rdx);
-    SendCommand("RemoveItem", itemValue);
+    auto itemJson = Json::Write(itemValue);
+    SendCommand("RemoveItem", itemJson);
 }
 
 void Error(const string&in message) {
@@ -179,10 +181,64 @@ void MainLoop() {
     g_status = "Connected";
     g_state = State::Connected;
 
+    dictionary officialBlockInfos;
+
+    LoadOfficialBlockInfos(officialBlockInfos, "GameCtnBlockInfoClassic");
+    LoadOfficialBlockInfos(officialBlockInfos, "GameCtnBlockInfoClassic/Deprecated");
+    LoadOfficialBlockInfos(officialBlockInfos, "GameCtnBlockInfoPillar");
+
+    dictionary officialItemModels;
+    auto officialItemModelFids = Fids::GetGameFolder("GameData/Stadium/Items");
+
+    for (uint i = 0; i < officialItemModelFids.Leaves.Length; i++) {
+        auto fid = officialItemModelFids.Leaves[i];
+        auto nod = Fids::Preload(fid);
+        auto itemModel = cast<CGameItemModel>(nod);
+        officialItemModels[itemModel.IdName] = @itemModel;
+    }
+
+    dictionary placedBlocks;
+    dictionary placedItems;
+
     auto library = Import::GetLibrary("SyncEdit.dll");
 
     if (library is null) {
         Error("Failed to find library 'SyncEdit.dll'");
+        return;
+    }
+
+    auto placeBlockFunc = library.GetFunction("PlaceBlock");
+
+    if (placeBlockFunc is null) {
+        Error("Failed to find library function 'PlaceBlock'");
+        return;
+    }
+
+    auto placeFreeBlockFunc = library.GetFunction("PlaceFreeBlock");
+
+    if (placeFreeBlockFunc is null) {
+        Error("Failed to find library function 'PlaceFreeBlock'");
+        return;
+    }
+
+    auto removeBlockFunc = library.GetFunction("RemoveBlock");
+
+    if (removeBlockFunc is null) {
+        Error("Failed to find library function 'RemoveBlock'");
+        return;
+    }
+
+    auto placeItemFunc = library.GetFunction("PlaceItem");
+
+    if (placeItemFunc is null) {
+        Error("Failed to find library function 'PlaceItem'");
+        return;
+    }
+
+    auto removeItemFunc = library.GetFunction("RemoveItem");
+
+    if (removeItemFunc is null) {
+        Error("Failed to find library function 'RemoveItem'");
         return;
     }
 
@@ -273,10 +329,12 @@ void MainLoop() {
 
                 if (Block::IsFree(block)) {
                     auto freeBlockValue = SerializeFreeBlock(block);
-                    SendCommand("PlaceFreeBlock", freeBlockValue);
+                    auto freeBlockJson = Json::Write(freeBlockValue);
+                    SendCommand("PlaceFreeBlock", freeBlockJson);
                 } else {
                     auto blockValue = SerializeBlock(block);
-                    SendCommand("PlaceBlock", blockValue);
+                    auto blockJson = Json::Write(blockValue);
+                    SendCommand("PlaceBlock", blockJson);
                 }
 
                 g_numBlocksPlaced--;
@@ -287,7 +345,8 @@ void MainLoop() {
             while (g_numItemsPlaced > 0) {
                 auto item = items[items.Length - g_numItemsPlaced];
                 auto itemValue = SerializeItem(item);
-                SendCommand("PlaceItem", itemValue);
+                auto itemJson = Json::Write(itemValue);
+                SendCommand("PlaceItem", itemJson);
 
                 g_numItemsPlaced--;
             }
@@ -462,6 +521,71 @@ const Json::Value@ SerializeVec3(const vec3&in vec) {
     vecValue["z"] = vec.z;
 
     return vecValue;
+}
+
+CGameEditorPluginMap::ECardinalDirections DeserializeDir(const Json::Value@ dirValue) {
+    if (dirValue == "North") {
+        return CGameEditorPluginMap::ECardinalDirections::North;
+    } else if (dirValue == "East") {
+        return CGameEditorPluginMap::ECardinalDirections::East;
+    } else if (dirValue == "South") {
+        return CGameEditorPluginMap::ECardinalDirections::South;
+    } else if (dirValue == "West") {
+        return CGameEditorPluginMap::ECardinalDirections::West;
+    }
+
+    return CGameEditorPluginMap::ECardinalDirections::North;
+}
+
+CGameEditorPluginMap::EMapElemColor DeserializeColor(const Json::Value@ colorValue) {
+    if (colorValue == "Default") {
+        return CGameEditorPluginMap::EMapElemColor::Default;
+    } else if (colorValue == "White") {
+        return CGameEditorPluginMap::EMapElemColor::White;
+    } else if (colorValue == "Green") {
+        return CGameEditorPluginMap::EMapElemColor::Green;
+    } else if (colorValue == "Blue") {
+        return CGameEditorPluginMap::EMapElemColor::Blue;
+    } else if (colorValue == "Red") {
+        return CGameEditorPluginMap::EMapElemColor::Red;
+    } else if (colorValue == "Black") {
+        return CGameEditorPluginMap::EMapElemColor::Black;
+    }
+
+    return CGameEditorPluginMap::EMapElemColor::Default;
+}
+
+CGameEditorPluginMap::EPhaseOffset DeserializePhaseOffset(const Json::Value@ offsetValue) {
+    if (offsetValue == "None") {
+        return CGameEditorPluginMap::EPhaseOffset::None;
+    } else if (offsetValue == "One8th") {
+        return CGameEditorPluginMap::EPhaseOffset::One8th;
+    } else if (offsetValue == "Two8th") {
+        return CGameEditorPluginMap::EPhaseOffset::Two8th;
+    } else if (offsetValue == "Three8th") {
+        return CGameEditorPluginMap::EPhaseOffset::Three8th;
+    } else if (offsetValue == "Four8th") {
+        return CGameEditorPluginMap::EPhaseOffset::Four8th;
+    } else if (offsetValue == "Five8th") {
+        return CGameEditorPluginMap::EPhaseOffset::Five8th;
+    } else if (offsetValue == "Six8th") {
+        return CGameEditorPluginMap::EPhaseOffset::Six8th;
+    } else if (offsetValue == "Seven8th") {
+        return CGameEditorPluginMap::EPhaseOffset::Seven8th;
+    }
+
+    return CGameEditorPluginMap::EPhaseOffset::None;
+}
+
+void LoadOfficialBlockInfos(dictionary@ blockInfos, const string&in folder) {
+    auto fids = Fids::GetGameFolder("GameData/Stadium/GameCtnBlockInfo/" + folder);
+
+    for (uint i = 0; i < fids.Leaves.Length; i++) {
+        auto fid = fids.Leaves[i];
+        auto nod = Fids::Preload(fid);
+        auto blockInfo = cast<CGameCtnBlockInfo>(nod);
+        blockInfos[blockInfo.IdName] = @blockInfo;
+    }
 }
 
 namespace Block {

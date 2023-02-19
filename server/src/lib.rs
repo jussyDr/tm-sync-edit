@@ -4,11 +4,12 @@ mod serde;
 
 use ::serde::{Deserialize, Serialize};
 use futures_util::{SinkExt, TryStreamExt};
-use map::{Block, FreeBlock, Item};
 use std::io::Result;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
+
+use crate::map::{Block, FreeBlock, Item};
 
 pub struct Server;
 
@@ -43,13 +44,13 @@ impl Server {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-enum Command {
-    PlaceBlock(Block),
-    RemoveBlock(Block),
-    PlaceFreeBlock(FreeBlock),
-    RemoveFreeBlock(FreeBlock),
-    PlaceItem(Item),
-    RemoveItem(Item),
+enum Command<'a> {
+    PlaceBlock(&'a str),
+    RemoveBlock(&'a str),
+    PlaceFreeBlock(&'a str),
+    RemoveFreeBlock(&'a str),
+    PlaceItem(&'a str),
+    RemoveItem(&'a str),
 }
 
 async fn handle_client(mut stream: Framed<TcpStream, LengthDelimitedCodec>) -> anyhow::Result<()> {
@@ -59,41 +60,51 @@ async fn handle_client(mut stream: Framed<TcpStream, LengthDelimitedCodec>) -> a
                 Some(frame) => {
                     let command: Command = serde_json::from_slice(&frame)?;
 
-                    println!("{command:?}");
-
                     match command {
-                        Command::PlaceBlock(block) => {
-                            let response = Command::RemoveBlock(block);
+                        Command::PlaceBlock(block_json) => {
+                            let _block: Block = serde_json::from_str(block_json)?;
+
+                            let response = Command::RemoveBlock(block_json);
                             let frame = serde_json::to_vec(&response)?;
 
                             stream.send(frame.into()).await?;
                         }
-                        Command::RemoveBlock(block) => {
-                            let response = Command::PlaceBlock(block);
+                        Command::RemoveBlock(block_json) => {
+                            let _block: Block = serde_json::from_str(block_json)?;
+
+                            let response = Command::PlaceBlock(block_json);
                             let frame = serde_json::to_vec(&response)?;
 
                             stream.send(frame.into()).await?;
                         }
-                        Command::PlaceFreeBlock(free_block) => {
-                            let response = Command::RemoveFreeBlock(free_block);
+                        Command::PlaceFreeBlock(free_block_json) => {
+                            let _free_block: FreeBlock = serde_json::from_str(free_block_json)?;
+
+                            let response = Command::RemoveFreeBlock(free_block_json);
                             let frame = serde_json::to_vec(&response)?;
 
                             stream.send(frame.into()).await?;
                         }
-                        Command::RemoveFreeBlock(free_block) => {
-                            let response = Command::PlaceFreeBlock(free_block);
+                        Command::RemoveFreeBlock(free_block_json) => {
+                            let _free_block: FreeBlock = serde_json::from_str(free_block_json)?;
+
+                            let response = Command::PlaceFreeBlock(free_block_json);
                             let frame = serde_json::to_vec(&response)?;
 
                             stream.send(frame.into()).await?;
                         }
-                        Command::PlaceItem(item) => {
-                            let response = Command::RemoveItem(item);
+                        Command::PlaceItem(item_json) => {
+                            let _item: Item = serde_json::from_str(item_json)?;
+
+                            let response = Command::RemoveItem(item_json);
                             let frame = serde_json::to_vec(&response)?;
 
                             stream.send(frame.into()).await?;
                         }
-                        Command::RemoveItem(item) => {
-                            let response = Command::PlaceItem(item);
+                        Command::RemoveItem(item_json) => {
+                            let _item: Item = serde_json::from_str(item_json)?;
+
+                            let response = Command::PlaceItem(item_json);
                             let frame = serde_json::to_vec(&response)?;
 
                             stream.send(frame.into()).await?;
