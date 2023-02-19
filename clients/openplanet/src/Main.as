@@ -111,14 +111,12 @@ void OnRemoveBlock(CGameCtnBlock@ rdx) {
     if (g_numBlocksPlaced > 0) {
         g_numBlocksPlaced--;
     } else {
-        auto pBlock = Dev::ForceCast<uint64>(rdx).Get();
-
-        if (Dev::ReadUInt8(pBlock + 135) & 0x20 == 0) {
-            auto blockValue = SerializeBlock(rdx);
-            SendCommand("RemoveBlock", blockValue);
-        } else {
+        if (Block::IsFree(rdx)) {
             auto freeBlockValue = SerializeFreeBlock(rdx);
             SendCommand("RemoveFreeBlock", freeBlockValue);
+        } else {
+            auto blockValue = SerializeBlock(rdx);
+            SendCommand("RemoveBlock", blockValue);
         }
     }
 }
@@ -265,14 +263,13 @@ void MainLoop() {
 
             while (g_numBlocksPlaced > 0) {
                 auto block = blocks[blocks.Length - g_numBlocksPlaced];
-                auto pBlock = Dev::ForceCast<uint64>(block).Get();
 
-                if (Dev::ReadUInt8(pBlock + 135) & 0x20 == 0) {
-                    auto blockValue = SerializeBlock(block);
-                    SendCommand("PlaceBlock", blockValue);
-                } else {
+                if (Block::IsFree(block)) {
                     auto freeBlockValue = SerializeFreeBlock(block);
                     SendCommand("PlaceFreeBlock", freeBlockValue);
+                } else {
+                    auto blockValue = SerializeBlock(block);
+                    SendCommand("PlaceBlock", blockValue);
                 }
 
                 g_numBlocksPlaced--;
@@ -341,8 +338,6 @@ void SendCommand(const string&in name, const Json::Value@ value) {
 }
 
 const Json::Value@ SerializeBlock(CGameCtnBlock@ block) {
-    auto pBlock = Dev::ForceCast<uint64>(block).Get();
-    
     auto modelValue = Json::Object();
     modelValue["Id"] = block.BlockInfo.IdName;
 
@@ -357,7 +352,7 @@ const Json::Value@ SerializeBlock(CGameCtnBlock@ block) {
     blockValue["dir"] = SerializeDir(block.Dir);
     blockValue["is_ground"] = block.IsGround;
     blockValue["variant_index"] = 0;
-    blockValue["is_ghost"] = Dev::ReadUInt8(pBlock + 135) & 0x10 != 0;
+    blockValue["is_ghost"] = Block::Flags(block) & 0x10 != 0;
     blockValue["color"] = SerializeColor(CGameEditorPluginMap::EMapElemColor(block.MapElemColor));
 
     return blockValue;
@@ -460,4 +455,16 @@ const Json::Value@ SerializeVec3(const vec3&in vec) {
     vecValue["z"] = vec.z;
 
     return vecValue;
+}
+
+namespace Block {
+    uint8 Flags(CGameCtnBlock@ block) {
+        auto pBlock = Dev::ForceCast<uint64>(block).Get();
+
+        return Dev::ReadUInt8(pBlock + 135);
+    } 
+
+    bool IsFree(CGameCtnBlock@ block) {
+        return Flags(block) & 0x20 != 0;
+    }
 }
