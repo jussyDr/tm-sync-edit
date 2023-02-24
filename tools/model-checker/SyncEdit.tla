@@ -53,7 +53,6 @@ begin
                                 times[1] := times[1] + 1;
                                 await \A out_client \in Clients: (out_client # client) => (Len(out_channels[out_client]) < MaxChannelSize);
                                 out_channels := Broadcast(out_channels, [i |-> Head(in_channels[client]).i, v |-> Head(in_channels[client]).v, t |-> times[1]], client, 1);
-                                in_channels[client] := Tail(in_channels[client]);
                             end if;
                         else
                             if states[1][Head(in_channels[client]).i] > 0 then
@@ -61,10 +60,10 @@ begin
                                 times[1] := times[1] + 1;
                                 await \A out_client \in Clients: (out_client # client) => (Len(out_channels[out_client]) < MaxChannelSize);
                                 out_channels := Broadcast(out_channels, [i |-> Head(in_channels[client]).i, v |-> Head(in_channels[client]).v, t |-> times[1]], client, 1);
-                                in_channels[client] := Tail(in_channels[client]);
                             end if;
                         end if; 
                     end if;
+                    in_channels[client] := Tail(in_channels[client]);
                 end if;
             end with;
         end while;
@@ -98,7 +97,7 @@ end process
 
 end algorithm *)
 
-\* BEGIN TRANSLATION (chksum(pcal) = "78e2ffb8" /\ chksum(tla) = "335644df")
+\* BEGIN TRANSLATION (chksum(pcal) = "e8c8b48b" /\ chksum(tla) = "4af941b8")
 \* Label Run of process Server at line 45 col 9 changed to Run_
 VARIABLES states, times, in_channels, out_channels
 
@@ -141,26 +140,22 @@ Server == /\ \E client \in Clients: Len(in_channels[client]) > 0
                                                         /\ times' = [times EXCEPT ![1] = times[1] + 1]
                                                         /\ \A out_client \in Clients: (out_client # client) => (Len(out_channels[out_client]) < MaxChannelSize)
                                                         /\ out_channels' = Broadcast(out_channels, [i |-> Head(in_channels[client]).i, v |-> Head(in_channels[client]).v, t |-> times'[1]], client, 1)
-                                                        /\ in_channels' = [in_channels EXCEPT ![client] = Tail(in_channels[client])]
                                                    ELSE /\ TRUE
                                                         /\ UNCHANGED << states, 
                                                                         times, 
-                                                                        in_channels, 
                                                                         out_channels >>
                                         ELSE /\ IF states[1][Head(in_channels[client]).i] > 0
                                                    THEN /\ states' = [states EXCEPT ![1][Head(in_channels[client]).i] = 0]
                                                         /\ times' = [times EXCEPT ![1] = times[1] + 1]
                                                         /\ \A out_client \in Clients: (out_client # client) => (Len(out_channels[out_client]) < MaxChannelSize)
                                                         /\ out_channels' = Broadcast(out_channels, [i |-> Head(in_channels[client]).i, v |-> Head(in_channels[client]).v, t |-> times'[1]], client, 1)
-                                                        /\ in_channels' = [in_channels EXCEPT ![client] = Tail(in_channels[client])]
                                                    ELSE /\ TRUE
                                                         /\ UNCHANGED << states, 
                                                                         times, 
-                                                                        in_channels, 
                                                                         out_channels >>
                              ELSE /\ TRUE
-                                  /\ UNCHANGED << states, times, in_channels, 
-                                                  out_channels >>
+                                  /\ UNCHANGED << states, times, out_channels >>
+                       /\ in_channels' = [in_channels EXCEPT ![client] = Tail(in_channels[client])]
                   ELSE /\ TRUE
                        /\ UNCHANGED << states, times, in_channels, 
                                        out_channels >>
