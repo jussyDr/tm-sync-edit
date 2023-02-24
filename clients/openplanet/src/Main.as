@@ -412,6 +412,9 @@ void MainLoop() {
                 bool isGhost = blockValue["is_ghost"];
                 auto color = DeserializeColor(blockValue["color"]);
 
+Editor::PlaceBlock(editor, placeBlockFunc, pfPlaceBlock, blockInfo, x, y, z, dir, isGround, isGhost, color);
+
+
                 auto block = Editor::PlaceBlock(editor, placeBlockFunc, pfPlaceBlock, blockInfo, x, y, z, dir, isGround, isGhost, color);
 
                 g_placedBlocks[blockJson] = @block;
