@@ -1,16 +1,13 @@
 ---- MODULE SyncEdit ----
 EXTENDS Integers, FiniteSets, Sequences
 CONSTANTS Clients, MaxChannelSize, NumValues, MaxValue
-RECURSIVE Broadcast(_, _, _, _)
+RECURSIVE Broadcast(_, _)
 
-Broadcast(channels, command, exclude, i) ==
+Broadcast(channels, command) ==
     IF channels = <<>> THEN
         <<>>
     ELSE
-        IF i # exclude THEN
-            <<Append(Head(channels), command)>> \o Broadcast(Tail(channels), command, exclude, i + 1)
-        ELSE
-            <<Head(channels)>> \o Broadcast(Tail(channels), command, exclude, i + 1)
+        <<Append(Head(channels), command)>> \o Broadcast(Tail(channels), command)
 
 (* --algorithm sync_edit
 
@@ -45,14 +42,14 @@ begin
                     if Head(in_channels[client]).v > 0 then
                         if states[1][Head(in_channels[client]).i] = 0 then
                             states[1][Head(in_channels[client]).i] := Head(in_channels[client]).v;
-                            await \A out_client \in Clients: (out_client # client) => (Len(out_channels[out_client]) < MaxChannelSize);
-                            out_channels := Broadcast(out_channels, [i |-> Head(in_channels[client]).i, v |-> Head(in_channels[client]).v], client, 1);
+                            await \A out_client \in Clients: (Len(out_channels[out_client]) < MaxChannelSize);
+                            out_channels := Broadcast(out_channels, [i |-> Head(in_channels[client]).i, v |-> Head(in_channels[client]).v]);
                         end if;
                     else
                         if states[1][Head(in_channels[client]).i] > 0 then
                             states[1][Head(in_channels[client]).i] := 0;
-                            await \A out_client \in Clients: (out_client # client) => (Len(out_channels[out_client]) < MaxChannelSize);
-                            out_channels := Broadcast(out_channels, [i |-> Head(in_channels[client]).i, v |-> Head(in_channels[client]).v], client, 1);
+                            await \A out_client \in Clients: (Len(out_channels[out_client]) < MaxChannelSize);
+                            out_channels := Broadcast(out_channels, [i |-> Head(in_channels[client]).i, v |-> Head(in_channels[client]).v]);
                         end if;
                     end if; 
                     in_channels[client] := Tail(in_channels[client]);
@@ -88,8 +85,8 @@ end process
 
 end algorithm *)
 
-\* BEGIN TRANSLATION (chksum(pcal) = "af09c979" /\ chksum(tla) = "f78aa69c")
-\* Label Run of process Server at line 41 col 9 changed to Run_
+\* BEGIN TRANSLATION (chksum(pcal) = "5b9efc1b" /\ chksum(tla) = "42762477")
+\* Label Run of process Server at line 38 col 9 changed to Run_
 VARIABLES states, in_channels, out_channels
 
 (* define statement *)
@@ -123,15 +120,15 @@ Server == /\ \E client \in Clients: Len(in_channels[client]) > 0
                   THEN /\ IF Head(in_channels[client]).v > 0
                              THEN /\ IF states[1][Head(in_channels[client]).i] = 0
                                         THEN /\ states' = [states EXCEPT ![1][Head(in_channels[client]).i] = Head(in_channels[client]).v]
-                                             /\ \A out_client \in Clients: (out_client # client) => (Len(out_channels[out_client]) < MaxChannelSize)
-                                             /\ out_channels' = Broadcast(out_channels, [i |-> Head(in_channels[client]).i, v |-> Head(in_channels[client]).v], client, 1)
+                                             /\ \A out_client \in Clients: (Len(out_channels[out_client]) < MaxChannelSize)
+                                             /\ out_channels' = Broadcast(out_channels, [i |-> Head(in_channels[client]).i, v |-> Head(in_channels[client]).v])
                                         ELSE /\ TRUE
                                              /\ UNCHANGED << states, 
                                                              out_channels >>
                              ELSE /\ IF states[1][Head(in_channels[client]).i] > 0
                                         THEN /\ states' = [states EXCEPT ![1][Head(in_channels[client]).i] = 0]
-                                             /\ \A out_client \in Clients: (out_client # client) => (Len(out_channels[out_client]) < MaxChannelSize)
-                                             /\ out_channels' = Broadcast(out_channels, [i |-> Head(in_channels[client]).i, v |-> Head(in_channels[client]).v], client, 1)
+                                             /\ \A out_client \in Clients: (Len(out_channels[out_client]) < MaxChannelSize)
+                                             /\ out_channels' = Broadcast(out_channels, [i |-> Head(in_channels[client]).i, v |-> Head(in_channels[client]).v])
                                         ELSE /\ TRUE
                                              /\ UNCHANGED << states, 
                                                              out_channels >>
