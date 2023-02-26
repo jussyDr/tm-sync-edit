@@ -359,6 +359,7 @@ void MainLoop() {
 
             while (g_numNewItemsPlaced > 0) {
                 auto item = items[items.Length - g_numNewItemsPlaced];
+                print(item.ItemModel.IdName);
                 auto itemValue = SerializeItem(item);
                 auto itemJson = Json::Write(itemValue);
                 SendCommand("PlaceItem", itemJson);
@@ -411,9 +412,6 @@ void MainLoop() {
                 bool isGround = blockValue["is_ground"];
                 bool isGhost = blockValue["is_ghost"];
                 auto color = DeserializeColor(blockValue["color"]);
-
-Editor::PlaceBlock(editor, placeBlockFunc, pfPlaceBlock, blockInfo, x, y, z, dir, isGround, isGhost, color);
-
 
                 auto block = Editor::PlaceBlock(editor, placeBlockFunc, pfPlaceBlock, blockInfo, x, y, z, dir, isGround, isGhost, color);
 
