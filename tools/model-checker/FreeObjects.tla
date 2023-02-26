@@ -42,11 +42,11 @@ MultisetSetCount(set, value, count) ==
         ELSE
             Append(MultisetSetCount(Tail(set), value, count), Head(set))
 
-Broadcast(channels, command) ==
+Broadcast(channels, message) ==
     IF channels = <<>> THEN
         <<>>
     ELSE
-        <<Append(Head(channels), command)>> \o Broadcast(Tail(channels), command)
+        <<Append(Head(channels), message)>> \o Broadcast(Tail(channels), message)
 
 (* --algorithm free_objects
 

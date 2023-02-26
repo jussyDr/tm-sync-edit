@@ -3,11 +3,11 @@ EXTENDS Integers, FiniteSets, Sequences
 CONSTANTS Clients, MaxChannelSize, NumValues, MaxValue
 RECURSIVE Broadcast(_, _)
 
-Broadcast(channels, command) ==
+Broadcast(channels, message) ==
     IF channels = <<>> THEN
         <<>>
     ELSE
-        <<Append(Head(channels), command)>> \o Broadcast(Tail(channels), command)
+        <<Append(Head(channels), message)>> \o Broadcast(Tail(channels), message)
 
 (* --algorithm blocks
 
@@ -41,9 +41,14 @@ begin
                 if Len(in_channels[client]) > 0 then
                     if Head(in_channels[client]).v > 0 then
                         if states[1][Head(in_channels[client]).i] = 0 then
-                            states[1][Head(in_channels[client]).i] := Head(in_channels[client]).v;
-                            await \A out_client \in Clients: Len(out_channels[out_client]) < MaxChannelSize;
-                            out_channels := Broadcast(out_channels, Head(in_channels[client]));
+                            either
+                                states[1][Head(in_channels[client]).i] := Head(in_channels[client]).v;
+                                await \A out_client \in Clients: Len(out_channels[out_client]) < MaxChannelSize;
+                                out_channels := Broadcast(out_channels, Head(in_channels[client]));
+                            or
+                                await Len(out_channels[client]) < MaxChannelSize;
+                                out_channels[client] := Append(out_channels[client], [i |-> Head(in_channels[client]).i, v |-> -Head(in_channels[client]).v]);
+                            end either;
                         end if;
                     else
                         if states[1][Head(in_channels[client]).i] = -Head(in_channels[client]).v then
@@ -91,7 +96,7 @@ end process
 
 end algorithm *)
 
-\* BEGIN TRANSLATION (chksum(pcal) = "171dc3b0" /\ chksum(tla) = "52e5a3dc")
+\* BEGIN TRANSLATION (chksum(pcal) = "be0f193e" /\ chksum(tla) = "68dcbf9a")
 \* Label Run of process Server at line 38 col 9 changed to Run_
 VARIABLES states, in_channels, out_channels
 
@@ -125,9 +130,12 @@ Server == /\ \E client \in Clients: Len(in_channels[client]) > 0
                IF Len(in_channels[client]) > 0
                   THEN /\ IF Head(in_channels[client]).v > 0
                              THEN /\ IF states[1][Head(in_channels[client]).i] = 0
-                                        THEN /\ states' = [states EXCEPT ![1][Head(in_channels[client]).i] = Head(in_channels[client]).v]
-                                             /\ \A out_client \in Clients: Len(out_channels[out_client]) < MaxChannelSize
-                                             /\ out_channels' = Broadcast(out_channels, Head(in_channels[client]))
+                                        THEN /\ \/ /\ states' = [states EXCEPT ![1][Head(in_channels[client]).i] = Head(in_channels[client]).v]
+                                                   /\ \A out_client \in Clients: Len(out_channels[out_client]) < MaxChannelSize
+                                                   /\ out_channels' = Broadcast(out_channels, Head(in_channels[client]))
+                                                \/ /\ Len(out_channels[client]) < MaxChannelSize
+                                                   /\ out_channels' = [out_channels EXCEPT ![client] = Append(out_channels[client], [i |-> Head(in_channels[client]).i, v |-> -Head(in_channels[client]).v])]
+                                                   /\ UNCHANGED states
                                         ELSE /\ TRUE
                                              /\ UNCHANGED << states, 
                                                              out_channels >>
