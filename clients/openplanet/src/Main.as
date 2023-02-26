@@ -462,10 +462,11 @@ void MainLoop() {
                 float pitch = itemValue["pitch"];
                 float roll = itemValue["roll"];
                 auto pivotPos = DeserializeVec3(itemValue["pivot_pos"]);
+                uint8 variantIndex = itemValue["variant_index"];
                 auto color = DeserializeColor(itemValue["color"]);
                 auto animOffset = DeserializePhaseOffset(itemValue["anim_offset"]);
 
-                auto item = Editor::PlaceItem(editor, placeItemFunc, pfPlaceItem, itemModel, pos, yaw, pitch, roll, pivotPos, color, animOffset);
+                auto item = Editor::PlaceItem(editor, placeItemFunc, pfPlaceItem, itemModel, pos, yaw, pitch, roll, pivotPos, variantIndex, color, animOffset);
 
                 g_placedItems[itemJson] = @item;
             } else if (commandValue.HasKey("RemoveItem")) {
@@ -543,6 +544,7 @@ const Json::Value@ SerializeItem(CGameCtnAnchoredObject@ item) {
     itemValue["pitch"] = item.Pitch;
     itemValue["roll"] = item.Roll;
     itemValue["pivot_pos"] = SerializeVec3(Dev::ReadVec3(pItem + 116));
+    itemValue["variant_index"] = item.IVariant;
     itemValue["color"] = SerializeColor(CGameEditorPluginMap::EMapElemColor(item.MapElemColor));
     itemValue["anim_offset"] = SerializePhaseOffset(CGameEditorPluginMap::EPhaseOffset(item.AnimPhaseOffset));
 
@@ -708,7 +710,7 @@ namespace Editor {
         uint8 z,
         CGameEditorPluginMap::ECardinalDirections dir,
         bool isGround,
-        uint8 variant_index,
+        uint8 variantIndex,
         bool isGhost,
         CGameEditorPluginMap::EMapElemColor color
     ) {
@@ -719,7 +721,7 @@ namespace Editor {
             int3(x, y, z),
             uint(dir),
             isGround, 
-            uint(variant_index),
+            uint(variantIndex),
             isGhost,
             uint8(color)
         );
@@ -769,6 +771,7 @@ namespace Editor {
         float pitch,
         float roll,
         vec3 pivotPos,
+        uint8 variantIndex,
         CGameEditorPluginMap::EMapElemColor color,
         CGameEditorPluginMap::EPhaseOffset animOffset
     ) {
@@ -779,6 +782,7 @@ namespace Editor {
             pos,
             vec3(yaw, pitch, roll),
             pivotPos,
+            variantIndex,
             uint8(color),
             uint8(animOffset)
         );

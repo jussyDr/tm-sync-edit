@@ -130,6 +130,7 @@ pub struct Item {
     pitch: OrderedFloat<f32>,
     roll: OrderedFloat<f32>,
     pivot_pos: Vec3<OrderedFloat<f32>>,
+    variant_index: u8,
     color: Color,
     anim_offset: PhaseOffset,
 }
@@ -493,6 +494,7 @@ impl Map {
                     y: gbx_item.pivot_pos.y.into(),
                     z: gbx_item.pivot_pos.z.into(),
                 },
+                variant_index: gbx_item.variant_index,
                 color: gbx_item.color,
                 anim_offset: gbx_item.anim_offset,
             });
