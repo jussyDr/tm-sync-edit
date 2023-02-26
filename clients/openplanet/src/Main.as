@@ -359,7 +359,6 @@ void MainLoop() {
 
             while (g_numNewItemsPlaced > 0) {
                 auto item = items[items.Length - g_numNewItemsPlaced];
-                print(item.ItemModel.IdName);
                 auto itemValue = SerializeItem(item);
                 auto itemJson = Json::Write(itemValue);
                 SendCommand("PlaceItem", itemJson);
@@ -410,10 +409,11 @@ void MainLoop() {
                 uint8 z = coordValue["z"];
                 auto dir = DeserializeDir(blockValue["dir"]);
                 bool isGround = blockValue["is_ground"];
+                uint8 variantIndex = blockValue["variant_index"];
                 bool isGhost = blockValue["is_ghost"];
                 auto color = DeserializeColor(blockValue["color"]);
 
-                auto block = Editor::PlaceBlock(editor, placeBlockFunc, pfPlaceBlock, blockInfo, x, y, z, dir, isGround, isGhost, color);
+                auto block = Editor::PlaceBlock(editor, placeBlockFunc, pfPlaceBlock, blockInfo, x, y, z, dir, isGround, variantIndex, isGhost, color);
 
                 g_placedBlocks[blockJson] = @block;
             } else if (commandValue.HasKey("RemoveBlock")) {
@@ -506,7 +506,7 @@ const Json::Value@ SerializeBlock(CGameCtnBlock@ block) {
     blockValue["coord"] = coordValue;
     blockValue["dir"] = SerializeDir(block.Dir);
     blockValue["is_ground"] = block.IsGround;
-    blockValue["variant_index"] = 0;
+    blockValue["variant_index"] = block.BlockInfoVariantIndex;
     blockValue["is_ghost"] = Block::Flags(block) & 0x10 != 0;
     blockValue["color"] = SerializeColor(CGameEditorPluginMap::EMapElemColor(block.MapElemColor));
 
@@ -708,6 +708,7 @@ namespace Editor {
         uint8 z,
         CGameEditorPluginMap::ECardinalDirections dir,
         bool isGround,
+        uint8 variant_index,
         bool isGhost,
         CGameEditorPluginMap::EMapElemColor color
     ) {
@@ -718,6 +719,7 @@ namespace Editor {
             int3(x, y, z),
             uint(dir),
             isGround, 
+            uint(variant_index),
             isGhost,
             uint8(color)
         );
