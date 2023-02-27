@@ -1,4 +1,4 @@
-use super::{Block, Map, ModelRef};
+use super::{Block, Map, ModelRef, PlaceBlockResult};
 use gbx::map::{Color, Direction};
 use gbx::Vec3;
 use std::borrow::Cow;
@@ -139,7 +139,7 @@ fn place_out_of_bounds() {
             color: Color::Default,
         };
 
-        assert!(!map.place_block(block))
+        assert_ne!(map.place_block(block), PlaceBlockResult::Ok);
     }
 }
 
@@ -157,9 +157,9 @@ fn remove_place_block() {
         color: Color::Default,
     };
 
-    assert!(map.place_block(block.clone()));
+    assert_eq!(map.place_block(block.clone()), PlaceBlockResult::Ok);
     assert!(map.remove_block(&block));
-    assert!(map.place_block(block))
+    assert_eq!(map.place_block(block), PlaceBlockResult::Ok)
 }
 
 #[test]
@@ -176,6 +176,6 @@ fn place_equivalent_ghost_block() {
         color: Color::Default,
     };
 
-    assert!(map.place_block(block.clone()));
-    assert!(map.place_block(block))
+    assert_eq!(map.place_block(block.clone()), PlaceBlockResult::Ok);
+    assert_eq!(map.place_block(block), PlaceBlockResult::Ok)
 }

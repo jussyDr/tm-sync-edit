@@ -4,9 +4,9 @@ mod tests;
 use crate::serde;
 use ::serde::{Deserialize, Serialize};
 use anyhow::anyhow;
-use flat_multimap::FlatMultiset;
 use gbx::map::{Color, Direction, PhaseOffset};
 use gbx::Vec3;
+use hashbag::HashBag;
 use lazy_static::lazy_static;
 use ordered_float::OrderedFloat;
 use sha2::{Digest, Sha256};
@@ -141,14 +141,21 @@ struct EmbeddedBlock {
     bytes: serde::Base64<Vec<u8>>,
 }
 
+#[derive(PartialEq, Debug)]
+pub enum PlaceBlockResult {
+    Ok,
+    Failed,
+    Occupied,
+}
+
 #[derive(Serialize)]
 pub struct Map {
     pub size: Vec3<u8>,
-    blocks: FlatMultiset<Block, ahash::RandomState>,
+    blocks: HashBag<Block, ahash::RandomState>,
     #[serde(skip_serializing)]
     units: HashMap<Vec3<u8>, UnitClips, ahash::RandomState>,
-    free_blocks: FlatMultiset<FreeBlock, ahash::RandomState>,
-    items: FlatMultiset<Item, ahash::RandomState>,
+    free_blocks: HashBag<FreeBlock, ahash::RandomState>,
+    items: HashBag<Item, ahash::RandomState>,
     embedded_blocks: HashMap<serde::Base64<[u8; 32]>, EmbeddedBlock>,
     embedded_items: HashMap<serde::Base64<[u8; 32]>, serde::Base64<Vec<u8>>>,
 }
@@ -161,10 +168,10 @@ impl Map {
                 y: 40,
                 z: 48,
             },
-            blocks: FlatMultiset::with_hasher(ahash::RandomState::new()),
+            blocks: HashBag::with_hasher(ahash::RandomState::new()),
             units: HashMap::with_hasher(ahash::RandomState::new()),
-            free_blocks: FlatMultiset::with_hasher(ahash::RandomState::new()),
-            items: FlatMultiset::with_hasher(ahash::RandomState::new()),
+            free_blocks: HashBag::with_hasher(ahash::RandomState::new()),
+            items: HashBag::with_hasher(ahash::RandomState::new()),
             embedded_blocks: HashMap::new(),
             embedded_items: HashMap::new(),
         }
@@ -276,24 +283,24 @@ impl Map {
         true
     }
 
-    pub fn place_block(&mut self, block: Block) -> bool {
+    pub fn place_block(&mut self, block: Block) -> PlaceBlockResult {
         let block_info = if let Some(block_info) = self.get_block_info(&block.model) {
             block_info
         } else {
-            return false;
+            return PlaceBlockResult::Failed;
         };
 
         let variant =
             if let Some(variant) = block_info.variant(block.is_ground, block.variant_index) {
                 variant
             } else {
-                return false;
+                return PlaceBlockResult::Failed;
             };
 
         let extent = block.coord + variant.extent;
 
         if extent.x >= self.size.x || extent.y >= self.size.y || extent.z >= self.size.z {
-            return false;
+            return PlaceBlockResult::Failed;
         }
 
         if !block.is_ghost {
@@ -319,11 +326,11 @@ impl Map {
 
         self.blocks.insert(block);
 
-        true
+        PlaceBlockResult::Ok
     }
 
     pub fn remove_block(&mut self, block: &Block) -> bool {
-        if self.blocks.remove(block) {
+        if self.blocks.remove(block) > 0 {
             if !block.is_ghost {
                 let block_info = self.get_block_info(&block.model).unwrap();
 
@@ -356,7 +363,7 @@ impl Map {
     }
 
     pub fn remove_free_block(&mut self, free_block: &FreeBlock) -> bool {
-        self.free_blocks.remove(free_block)
+        self.free_blocks.remove(free_block) > 0
     }
 
     pub fn place_item(&mut self, item: Item) -> bool {
@@ -375,7 +382,7 @@ impl Map {
     }
 
     pub fn remove_item(&mut self, item: &Item) -> bool {
-        self.items.remove(item)
+        self.items.remove(item) > 0
     }
 
     pub fn load<R>(reader: R) -> anyhow::Result<Self>
