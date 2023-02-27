@@ -108,7 +108,6 @@ pub struct Block {
     pub dir: Direction,
     pub is_ground: bool,
     pub variant_index: u8,
-    pub is_ghost: bool,
     pub color: Color,
 }
 
@@ -142,8 +141,7 @@ struct EmbeddedBlock {
 }
 
 #[derive(PartialEq, Debug)]
-pub enum PlaceBlockResult {
-    Ok,
+pub enum PlaceBlockError {
     Failed,
     Occupied,
 }
@@ -151,9 +149,10 @@ pub enum PlaceBlockResult {
 #[derive(Serialize)]
 pub struct Map {
     pub size: Vec3<u8>,
-    blocks: HashBag<Block, ahash::RandomState>,
+    blocks: HashSet<Block, ahash::RandomState>,
     #[serde(skip_serializing)]
     units: HashMap<Vec3<u8>, UnitClips, ahash::RandomState>,
+    ghost_blocks: HashBag<Block, ahash::RandomState>,
     free_blocks: HashBag<FreeBlock, ahash::RandomState>,
     items: HashBag<Item, ahash::RandomState>,
     embedded_blocks: HashMap<serde::Base64<[u8; 32]>, EmbeddedBlock>,
@@ -168,8 +167,9 @@ impl Map {
                 y: 40,
                 z: 48,
             },
-            blocks: HashBag::with_hasher(ahash::RandomState::new()),
+            blocks: HashSet::with_hasher(ahash::RandomState::new()),
             units: HashMap::with_hasher(ahash::RandomState::new()),
+            ghost_blocks: HashBag::with_hasher(ahash::RandomState::new()),
             free_blocks: HashBag::with_hasher(ahash::RandomState::new()),
             items: HashBag::with_hasher(ahash::RandomState::new()),
             embedded_blocks: HashMap::new(),
@@ -187,6 +187,24 @@ impl Map {
         };
 
         BLOCK_INFOS.get(block_info_id)
+    }
+
+    fn get_block_info_variant(
+        &self,
+        model_ref: &ModelRef,
+        is_ground: bool,
+        variant_index: u8,
+    ) -> Option<&'static BlockInfoVariant> {
+        self.get_block_info(model_ref)?
+            .variant(is_ground, variant_index)
+    }
+
+    fn block_out_of_bounds(&self, coord: Vec3<u8>, extent: Vec3<u8>) -> bool {
+        let actual_extent = coord + extent;
+
+        actual_extent.x >= self.size.x
+            || actual_extent.y >= self.size.y
+            || actual_extent.z >= self.size.z
     }
 
     pub fn can_place_clip(&self, clip: &BlockInfoClip, coord: Vec3<u8>, dir: Direction) -> bool {
@@ -257,14 +275,23 @@ fn rotate_unit_offset(coord: Vec3<u8>, dir: Direction, extent: Vec3<u8>) -> Vec3
 }
 
 impl Map {
-    pub fn can_place_block(&self, block: &Block, variant: &BlockInfoVariant) -> bool {
+    pub fn can_place_block(
+        &self,
+        block: &Block,
+        variant: &BlockInfoVariant,
+    ) -> Result<(), PlaceBlockError> {
         for unit_info in &variant.units {
             let coord =
                 block.coord + rotate_unit_offset(unit_info.offset, block.dir, variant.extent);
 
             if self.units.contains_key(&coord) {
-                return false;
+                return Err(PlaceBlockError::Occupied);
             }
+        }
+
+        for unit_info in &variant.units {
+            let coord =
+                block.coord + rotate_unit_offset(unit_info.offset, block.dir, variant.extent);
 
             for dir in [
                 Direction::North,
@@ -274,82 +301,87 @@ impl Map {
             ] {
                 if let Some(clip) = &unit_info.clips.clip(dir) {
                     if !self.can_place_clip(clip, coord, dir + block.dir) {
-                        return false;
+                        return Err(PlaceBlockError::Failed);
                     }
                 }
             }
         }
 
-        true
+        Ok(())
     }
 
-    pub fn place_block(&mut self, block: Block) -> PlaceBlockResult {
-        let block_info = if let Some(block_info) = self.get_block_info(&block.model) {
-            block_info
-        } else {
-            return PlaceBlockResult::Failed;
-        };
+    pub fn place_block(&mut self, block: Block) -> Result<(), PlaceBlockError> {
+        let variant = self
+            .get_block_info_variant(&block.model, block.is_ground, block.variant_index)
+            .ok_or(PlaceBlockError::Failed)?;
 
-        let variant =
-            if let Some(variant) = block_info.variant(block.is_ground, block.variant_index) {
-                variant
-            } else {
-                return PlaceBlockResult::Failed;
-            };
-
-        let extent = block.coord + variant.extent;
-
-        if extent.x >= self.size.x || extent.y >= self.size.y || extent.z >= self.size.z {
-            return PlaceBlockResult::Failed;
+        if self.block_out_of_bounds(block.coord, variant.extent) {
+            return Err(PlaceBlockError::Failed);
         }
 
-        if !block.is_ghost {
-            if !self.can_place_block(&block, variant) {
-                return false;
-            }
+        self.can_place_block(&block, variant)?;
+
+        for unit_info in &variant.units {
+            let coord =
+                block.coord + rotate_unit_offset(unit_info.offset, block.dir, variant.extent);
+
+            self.units.insert(
+                coord,
+                UnitClips {
+                    clip_north: unit_info.clips.clip(Direction::North - block.dir).cloned(),
+                    clip_east: unit_info.clips.clip(Direction::East - block.dir).cloned(),
+                    clip_south: unit_info.clips.clip(Direction::South - block.dir).cloned(),
+                    clip_west: unit_info.clips.clip(Direction::West - block.dir).cloned(),
+                },
+            );
+        }
+
+        self.blocks.insert(block);
+
+        Ok(())
+    }
+
+    pub fn remove_block(&mut self, block: &Block) -> bool {
+        if self.blocks.remove(block) {
+            let block_info = self.get_block_info(&block.model).unwrap();
+
+            let variant = block_info
+                .variant(block.is_ground, block.variant_index)
+                .unwrap();
 
             for unit_info in &variant.units {
                 let coord =
                     block.coord + rotate_unit_offset(unit_info.offset, block.dir, variant.extent);
 
-                self.units.insert(
-                    coord,
-                    UnitClips {
-                        clip_north: unit_info.clips.clip(Direction::North - block.dir).cloned(),
-                        clip_east: unit_info.clips.clip(Direction::East - block.dir).cloned(),
-                        clip_south: unit_info.clips.clip(Direction::South - block.dir).cloned(),
-                        clip_west: unit_info.clips.clip(Direction::West - block.dir).cloned(),
-                    },
-                );
-            }
-        }
-
-        self.blocks.insert(block);
-
-        PlaceBlockResult::Ok
-    }
-
-    pub fn remove_block(&mut self, block: &Block) -> bool {
-        if self.blocks.remove(block) > 0 {
-            if !block.is_ghost {
-                let block_info = self.get_block_info(&block.model).unwrap();
-
-                let variant = block_info
-                    .variant(block.is_ground, block.variant_index)
-                    .unwrap();
-
-                for unit_info in &variant.units {
-                    let coord = block.coord
-                        + rotate_unit_offset(unit_info.offset, block.dir, variant.extent);
-
-                    self.units.remove(&coord);
-                }
+                self.units.remove(&coord);
             }
 
             true
         } else {
             false
         }
+    }
+
+    pub fn place_ghost_block(&mut self, block: Block) -> bool {
+        let variant = if let Some(variant) =
+            self.get_block_info_variant(&block.model, block.is_ground, block.variant_index)
+        {
+            variant
+        } else {
+            return false;
+        };
+
+        if self.block_out_of_bounds(block.coord, variant.extent) {
+            return false;
+        }
+
+        self.ghost_blocks.insert(block);
+
+        true
+    }
+
+    pub fn remove_ghost_block(&mut self, block: &Block) -> bool {
+        self.ghost_blocks.remove(block) > 0
     }
 
     pub fn place_free_block(&mut self, free_block: FreeBlock) -> bool {
@@ -448,15 +480,26 @@ impl Map {
 
             match gbx_block {
                 gbx::map::BlockType::Normal(gbx_block) => {
-                    map.place_block(Block {
-                        model,
-                        coord: gbx_block.coord,
-                        dir: gbx_block.dir,
-                        is_ground: gbx_block.is_ground,
-                        variant_index: gbx_block.variant_index,
-                        is_ghost: gbx_block.is_ghost,
-                        color: gbx_block.color,
-                    });
+                    if gbx_block.is_ghost {
+                        map.place_ghost_block(Block {
+                            model,
+                            coord: gbx_block.coord,
+                            dir: gbx_block.dir,
+                            is_ground: gbx_block.is_ground,
+                            variant_index: gbx_block.variant_index,
+                            color: gbx_block.color,
+                        });
+                    } else {
+                        map.place_block(Block {
+                            model,
+                            coord: gbx_block.coord,
+                            dir: gbx_block.dir,
+                            is_ground: gbx_block.is_ground,
+                            variant_index: gbx_block.variant_index,
+                            color: gbx_block.color,
+                        })
+                        .unwrap();
+                    }
                 }
                 gbx::map::BlockType::Free(gbx_free_block) => {
                     map.place_free_block(FreeBlock {

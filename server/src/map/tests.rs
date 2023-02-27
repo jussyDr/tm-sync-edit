@@ -1,4 +1,4 @@
-use super::{Block, Map, ModelRef, PlaceBlockResult};
+use super::{Block, Map, ModelRef};
 use gbx::map::{Color, Direction};
 use gbx::Vec3;
 use std::borrow::Cow;
@@ -16,7 +16,7 @@ fn can_place_block(map: &Map, block: &Block) -> bool {
         return false;
     };
 
-    map.can_place_block(block, variant)
+    map.can_place_block(block, variant).is_ok()
 }
 
 #[test]
@@ -30,10 +30,10 @@ fn can_place_block_unit_intersection() {
         coord,
         dir: Direction::North,
         is_ground: false,
-        is_ghost: false,
         variant_index: 0,
         color: Color::Default,
-    });
+    })
+    .unwrap();
 
     for (coord, no_intersection_dir) in [
         (Vec3::new(coord.x, coord.y, coord.z - 2), Direction::North),
@@ -60,7 +60,6 @@ fn can_place_block_unit_intersection() {
                     dir,
                     is_ground: false,
                     variant_index: 0,
-                    is_ghost: false,
                     color: Color::Default,
                 },
             );
@@ -81,10 +80,10 @@ fn can_place_block_clipping() {
         coord,
         dir: Direction::North,
         is_ground: false,
-        is_ghost: false,
         variant_index: 0,
         color: Color::Default,
-    });
+    })
+    .unwrap();
 
     for (coord, no_clip_dir) in [
         (Vec3::new(coord.x - 1, coord.y, coord.z), Direction::North),
@@ -108,7 +107,6 @@ fn can_place_block_clipping() {
                     dir,
                     is_ground: false,
                     variant_index: 0,
-                    is_ghost: false,
                     color: Color::Default,
                 },
             );
@@ -134,12 +132,11 @@ fn place_out_of_bounds() {
             coord,
             dir: Direction::North,
             is_ground: false,
-            is_ghost: false,
             variant_index: 0,
             color: Color::Default,
         };
 
-        assert_ne!(map.place_block(block), PlaceBlockResult::Ok);
+        assert!(map.place_block(block).is_err());
     }
 }
 
@@ -152,14 +149,13 @@ fn remove_place_block() {
         coord: Vec3::new(20, 20, 20),
         dir: Direction::North,
         is_ground: false,
-        is_ghost: false,
         variant_index: 0,
         color: Color::Default,
     };
 
-    assert_eq!(map.place_block(block.clone()), PlaceBlockResult::Ok);
+    assert!(map.place_block(block.clone()).is_ok());
     assert!(map.remove_block(&block));
-    assert_eq!(map.place_block(block), PlaceBlockResult::Ok)
+    assert!(map.place_block(block).is_ok())
 }
 
 #[test]
@@ -171,11 +167,10 @@ fn place_equivalent_ghost_block() {
         coord: Vec3::new(20, 20, 20),
         dir: Direction::North,
         is_ground: false,
-        is_ghost: true,
         variant_index: 0,
         color: Color::Default,
     };
 
-    assert_eq!(map.place_block(block.clone()), PlaceBlockResult::Ok);
-    assert_eq!(map.place_block(block), PlaceBlockResult::Ok)
+    assert!(map.place_ghost_block(block.clone()));
+    assert!(map.place_ghost_block(block))
 }

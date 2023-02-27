@@ -5,7 +5,7 @@ mod serde;
 use ::serde::{Deserialize, Serialize};
 use bytes::Bytes;
 use futures_util::{SinkExt, TryStreamExt};
-use map::{Block, FreeBlock, Item, Map, PlaceBlockResult};
+use map::{Block, FreeBlock, Item, Map, PlaceBlockError};
 use std::collections::HashMap;
 use std::io::Result;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
@@ -55,6 +55,8 @@ impl Server {
 enum Command {
     PlaceBlock(String),
     RemoveBlock(String),
+    PlaceGhostBlock(String),
+    RemoveGhostBlock(String),
     PlaceFreeBlock(String),
     RemoveFreeBlock(String),
     PlaceItem(String),
@@ -97,45 +99,7 @@ async fn handle_client(
                     let command: Command = serde_json::from_slice(&frame)?;
 
                     match command {
-                        Command::PlaceBlock(block_json) => {
-                            let block: Block = serde_json::from_str(&block_json)?;
-
-                            let mut server = server.lock().await;
-
-                            match server.map.place_block(block) {
-                                PlaceBlockResult::Ok => {
-                                    for client in server.clients.values() {
-                                        client.send(Bytes::clone(&frame))?;
-                                    }
-                                },
-                                PlaceBlockResult::Failed => {
-                                    let response = Command::RemoveBlock(block_json);
-                                    let frame = serde_json::to_vec(&response)?;
-
-                                    stream.send(frame.into()).await?;
-                                },
-                                PlaceBlockResult::Occupied => {}
-                            }
-                        }
-                        Command::RemoveBlock(block_json) => {
-                            let block: Block = serde_json::from_str(&block_json)?;
-
-                            let mut server = server.lock().await;
-
-                            if server.map.remove_block(&block) {
-                                for client in server.clients.values() {
-                                    client.send(Bytes::clone(&frame))?;
-                                }
-                            }
-                        }
-                        Command::PlaceFreeBlock(free_block_json) => {
-                        }
-                        Command::RemoveFreeBlock(free_block_json) => {
-                        }
-                        Command::PlaceItem(item_json) => {
-                        }
-                        Command::RemoveItem(item_json) => {
-                        }
+                        _ => {}
                     }
                 },
                 None => break,
