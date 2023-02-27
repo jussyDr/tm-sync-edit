@@ -81,20 +81,30 @@ process Server = 1
 begin
     Run:
         while TRUE do
+            (* wait for a message from any of the clients *)
             await \E client \in Clients: Len(in_channels[client]) > 0;
+
             with client \in Clients do
                 if Len(in_channels[client]) > 0 then
-                    if Head(in_channels[client]) > 0 then
-                        states[1] := MultisetInsert(states[1], Head(in_channels[client]));
-                        await \A out_client \in Clients: Len(out_channels[out_client]) < MaxChannelSize;
-                        out_channels := Broadcast(out_channels, <<Head(in_channels[client]), MultisetCount(states[1], Head(in_channels[client]))>>);
-                    else
-                        if MultisetCount(states[1], -Head(in_channels[client])) > 0 then
+                    if Head(in_channels[client]) > 0 
+                    then (* received a message to place an object *)
+                        either
+                            states[1] := MultisetInsert(states[1], Head(in_channels[client]));
+                            await \A out_client \in Clients: Len(out_channels[out_client]) < MaxChannelSize;
+                            out_channels := Broadcast(out_channels, <<Head(in_channels[client]), MultisetCount(states[1], Head(in_channels[client]))>>);
+                        or (* case in which the object could not be placed (e.g. if it has a unknown model variant) *)
+                            await Len(out_channels[client]) < MaxChannelSize;
+                            out_channels[client] := Append(out_channels[client], <<Head(in_channels[client]), MultisetCount(states[1], Head(in_channels[client]))>>);
+                        end either;
+                    else (* received a message to remove an object *)
+                        if MultisetCount(states[1], -Head(in_channels[client])) > 0 
+                        then (* the object we want to remove actually exists *)
                             states[1] := MultisetRemove(states[1], -Head(in_channels[client]));
                             await \A out_client \in Clients: Len(out_channels[out_client]) < MaxChannelSize;
                             out_channels := Broadcast(out_channels, <<-Head(in_channels[client]), MultisetCount(states[1], -Head(in_channels[client]))>>);
                         end if;
                     end if; 
+
                     in_channels[client] := Tail(in_channels[client]);
                 end if;
             end with;
@@ -105,22 +115,24 @@ process Client \in Clients
 begin
     Run:
         while TRUE do
-            either
+            either (* send a message to the server *)
                 await Len(in_channels[self]) < MaxChannelSize;
-                either
+
+                either (* send a message to place an object *)
                     with value \in 1..MaxValue do 
                         in_channels[self] := Append(in_channels[self], value);
                         states[1 + self] := MultisetInsert(states[1 + self], value);
                     end with;
-                or
+                or (* send a message to remove an object *)
                     with value \in 1..MaxValue do
-                        if MultisetCount(states[1 + self], value) > 0 then
+                        if MultisetCount(states[1 + self], value) > 0 
+                        then (* the object we want to remove actually exists *)
                             in_channels[self] := Append(in_channels[self], -value);
                             states[1 + self] := MultisetRemove(states[1 + self], value);
                         end if;
                     end with;
                 end either; 
-            or
+            or (* receive a message from the server *)
                 await Len(out_channels[self]) > 0;
                 states[1 + self] := MultisetSetCount(states[1 + self], Head(out_channels[self])[1], Head(out_channels[self])[2]);
                 out_channels[self] := Tail(out_channels[self]);
@@ -130,7 +142,7 @@ end process
 
 end algorithm *)
 
-\* BEGIN TRANSLATION (chksum(pcal) = "fea3f636" /\ chksum(tla) = "2b14196a")
+\* BEGIN TRANSLATION (chksum(pcal) = "dffa1295" /\ chksum(tla) = "d15b21ec")
 \* Label Run of process Server at line 83 col 9 changed to Run_
 VARIABLES states, in_channels, out_channels
 
@@ -169,9 +181,12 @@ Server == /\ \E client \in Clients: Len(in_channels[client]) > 0
           /\ \E client \in Clients:
                IF Len(in_channels[client]) > 0
                   THEN /\ IF Head(in_channels[client]) > 0
-                             THEN /\ states' = [states EXCEPT ![1] = MultisetInsert(states[1], Head(in_channels[client]))]
-                                  /\ \A out_client \in Clients: Len(out_channels[out_client]) < MaxChannelSize
-                                  /\ out_channels' = Broadcast(out_channels, <<Head(in_channels[client]), MultisetCount(states'[1], Head(in_channels[client]))>>)
+                             THEN /\ \/ /\ states' = [states EXCEPT ![1] = MultisetInsert(states[1], Head(in_channels[client]))]
+                                        /\ \A out_client \in Clients: Len(out_channels[out_client]) < MaxChannelSize
+                                        /\ out_channels' = Broadcast(out_channels, <<Head(in_channels[client]), MultisetCount(states'[1], Head(in_channels[client]))>>)
+                                     \/ /\ Len(out_channels[client]) < MaxChannelSize
+                                        /\ out_channels' = [out_channels EXCEPT ![client] = Append(out_channels[client], <<Head(in_channels[client]), MultisetCount(states[1], Head(in_channels[client]))>>)]
+                                        /\ UNCHANGED states
                              ELSE /\ IF MultisetCount(states[1], -Head(in_channels[client])) > 0
                                         THEN /\ states' = [states EXCEPT ![1] = MultisetRemove(states[1], -Head(in_channels[client]))]
                                              /\ \A out_client \in Clients: Len(out_channels[out_client]) < MaxChannelSize

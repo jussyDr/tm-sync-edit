@@ -36,27 +36,33 @@ process Server = 1
 begin
     Run:
         while TRUE do
+            (* wait for a message from any of the clients *)
             await \E client \in Clients: Len(in_channels[client]) > 0;
+
             with client \in Clients do
                 if Len(in_channels[client]) > 0 then
-                    if Head(in_channels[client]).v > 0 then
-                        if states[1][Head(in_channels[client]).i] = 0 then
+                    if Head(in_channels[client]).v > 0 
+                    then (* received a message to place a block *)
+                        if states[1][Head(in_channels[client]).i] = 0 
+                        then (* the coordinate is not already occupied by another block *)
                             either
                                 states[1][Head(in_channels[client]).i] := Head(in_channels[client]).v;
                                 await \A out_client \in Clients: Len(out_channels[out_client]) < MaxChannelSize;
                                 out_channels := Broadcast(out_channels, Head(in_channels[client]));
-                            or
+                            or (* case in which the object could not be placed (e.g. if it is out of bounds or has a unknown model variant) *)
                                 await Len(out_channels[client]) < MaxChannelSize;
                                 out_channels[client] := Append(out_channels[client], [i |-> Head(in_channels[client]).i, v |-> -Head(in_channels[client]).v]);
                             end either;
                         end if;
-                    else
-                        if states[1][Head(in_channels[client]).i] = -Head(in_channels[client]).v then
+                    else (* received a message to remove a block *)
+                        if states[1][Head(in_channels[client]).i] = -Head(in_channels[client]).v 
+                        then (* the block we want to remove actually exists *)
                             states[1][Head(in_channels[client]).i] := 0;
                             await \A out_client \in Clients: Len(out_channels[out_client]) < MaxChannelSize;
                             out_channels := Broadcast(out_channels, Head(in_channels[client]));
                         end if;
                     end if; 
+
                     in_channels[client] := Tail(in_channels[client]);
                 end if;
             end with;
@@ -67,21 +73,24 @@ process Client \in Clients
 begin
     Run:
         while TRUE do
-            either
+            either (* send a message to the server *)
                 await Len(in_channels[self]) < MaxChannelSize;
+
                 with index \in 1..NumValues do
-                    if states[1 + self][index] = 0 then
+                    if states[1 + self][index] = 0 
+                    then (* send a message to place a block *)
                         with value \in 1..MaxValue do 
                             in_channels[self] := Append(in_channels[self], [i |-> index, v |-> value]);
                             states[1 + self][index] := value;
                         end with;
-                    else
+                    else (* send a message to remove a block *)
                         in_channels[self] := Append(in_channels[self], [i |-> index, v |-> -states[1 + self][index]]);
                         states[1 + self][index] := 0;
                     end if;
                 end with;
-            or
+            or (* receive a message from the server *)
                 await Len(out_channels[self]) > 0;
+
                 if Head(out_channels[self]).v > 0 then
                     states[1 + self][Head(out_channels[self]).i] := Head(out_channels[self]).v;
                 else
@@ -89,6 +98,7 @@ begin
                         states[1 + self][Head(out_channels[self]).i] := 0;
                     end if;
                 end if;
+
                 out_channels[self] := Tail(out_channels[self]);
             end either;
         end while;
