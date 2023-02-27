@@ -20,8 +20,9 @@ Dev::HookInfo@ g_hookRemoveItem;
 bool g_disableHookCallbacks = false;
 
 dictionary g_placedBlocks;
-dictionary g_placedFreeBlocks;
-dictionary g_placedItems;
+NodMultimap g_placedGhostBlocks;
+NodMultimap g_placedFreeBlocks;
+NodMultimap g_placedItems;
 uint g_numNewBlocksPlaced;
 uint g_numNewItemsPlaced;
 
@@ -122,12 +123,18 @@ void OnRemoveBlock(CGameCtnBlock@ rdx) {
                 auto freeBlockValue = SerializeFreeBlock(rdx);
                 auto freeBlockJson = Json::Write(freeBlockValue);
                 SendCommand("RemoveFreeBlock", freeBlockJson);
-                g_placedFreeBlocks.Delete(freeBlockJson);
+                g_placedFreeBlocks.Remove(freeBlockJson);
             } else {
                 auto blockValue = SerializeBlock(rdx);
                 auto blockJson = Json::Write(blockValue);
-                SendCommand("RemoveBlock", blockJson);
-                g_placedBlocks.Delete(blockJson);
+
+                if (Block::IsGhost(rdx)) {
+                    SendCommand("RemoveGhostBlock", blockJson);
+                    g_placedGhostBlocks.Remove(blockJson);
+                } else {
+                    SendCommand("RemoveBlock", blockJson);
+                    g_placedBlocks.Delete(blockJson);
+                }
             }
         }
     }
@@ -144,7 +151,7 @@ void OnRemoveItem(CGameCtnAnchoredObject@ rdx) {
         auto itemValue = SerializeItem(rdx);
         auto itemJson = Json::Write(itemValue);
         SendCommand("RemoveItem", itemJson);
-        g_placedItems.Delete(itemJson);
+        g_placedItems.Remove(itemJson);
     }
 }
 
@@ -344,12 +351,18 @@ void MainLoop() {
                     auto freeBlockValue = SerializeFreeBlock(block);
                     auto freeBlockJson = Json::Write(freeBlockValue);
                     SendCommand("PlaceFreeBlock", freeBlockJson);
-                    g_placedFreeBlocks[freeBlockJson] = @block;
+                    g_placedFreeBlocks.Insert(freeBlockJson, block);
                 } else {
                     auto blockValue = SerializeBlock(block);
                     auto blockJson = Json::Write(blockValue);
-                    SendCommand("PlaceBlock", blockJson);
-                    g_placedBlocks[blockJson] = @block;
+
+                    if (Block::IsGhost(block)) {
+                        SendCommand("PlaceGhostBlock", blockJson);
+                        g_placedGhostBlocks.Insert(blockJson, block);
+                    } else {
+                        SendCommand("PlaceBlock", blockJson);
+                        g_placedBlocks[blockJson] = @block;
+                    }
                 }
 
                 g_numNewBlocksPlaced--;
@@ -362,7 +375,7 @@ void MainLoop() {
                 auto itemValue = SerializeItem(item);
                 auto itemJson = Json::Write(itemValue);
                 SendCommand("PlaceItem", itemJson);
-                g_placedItems[itemJson] = @item;
+                g_placedItems.Insert(itemJson, item);
 
                 g_numNewItemsPlaced--;
             }
@@ -410,10 +423,9 @@ void MainLoop() {
                 auto dir = DeserializeDir(blockValue["dir"]);
                 bool isGround = blockValue["is_ground"];
                 uint8 variantIndex = blockValue["variant_index"];
-                bool isGhost = blockValue["is_ghost"];
                 auto color = DeserializeColor(blockValue["color"]);
 
-                auto block = Editor::PlaceBlock(editor, placeBlockFunc, pfPlaceBlock, blockInfo, x, y, z, dir, isGround, variantIndex, isGhost, color);
+                auto block = Editor::PlaceBlock(editor, placeBlockFunc, pfPlaceBlock, blockInfo, x, y, z, dir, isGround, variantIndex, false, color);
 
                 g_placedBlocks[blockJson] = @block;
             } else if (commandValue.HasKey("RemoveBlock")) {
@@ -421,10 +433,34 @@ void MainLoop() {
 
                 CGameCtnBlock@ block;
                 g_placedBlocks.Get(blockJson, @block);
+                g_placedBlocks.Delete(blockJson);
 
                 Editor::RemoveBlock(editor, removeBlockFunc, pfRemoveBlock, block);
+            } else if (commandValue.HasKey("PlaceGhostBlock")) {
+                string blockJson = commandValue["PlaceGhostBlock"];
+                auto blockValue = Json::Parse(blockJson);
+                auto modelValue = blockValue["model"];
+                string modelId = modelValue["Id"];
+                CGameCtnBlockInfo@ blockInfo;
+                officialBlockInfos.Get(modelId, @blockInfo);
+                auto coordValue = blockValue["coord"];
+                uint8 x = coordValue["x"];
+                uint8 y = coordValue["y"];
+                uint8 z = coordValue["z"];
+                auto dir = DeserializeDir(blockValue["dir"]);
+                bool isGround = blockValue["is_ground"];
+                uint8 variantIndex = blockValue["variant_index"];
+                auto color = DeserializeColor(blockValue["color"]);
 
-                g_placedBlocks.Delete(blockJson);
+                auto block = Editor::PlaceBlock(editor, placeBlockFunc, pfPlaceBlock, blockInfo, x, y, z, dir, isGround, variantIndex, true, color);
+
+                g_placedGhostBlocks.Insert(blockJson, block);
+            } else if (commandValue.HasKey("RemoveGhostBlock")) {
+                string blockJson = commandValue["RemoveGhostBlock"];
+
+                auto block = cast<CGameCtnBlock>(g_placedGhostBlocks.Remove(blockJson));
+
+                Editor::RemoveBlock(editor, removeBlockFunc, pfRemoveBlock, block);
             } else if (commandValue.HasKey("PlaceFreeBlock")) {
                 string freeBlockJson = commandValue["PlaceFreeBlock"];
                 auto freeBlockValue = Json::Parse(freeBlockJson);
@@ -440,16 +476,13 @@ void MainLoop() {
 
                 auto freeBlock = Editor::PlaceFreeBlock(editor, placeFreeBlockFunc, pfPlaceBlock, blockInfo, pos, yaw, pitch, roll, color);
 
-                g_placedFreeBlocks[freeBlockJson] = @freeBlock;
+                g_placedFreeBlocks.Insert(freeBlockJson, freeBlock);
             } else if (commandValue.HasKey("RemoveFreeBlock")) {
                 string freeBlockJson = commandValue["RemoveFreeBlock"];
 
-                CGameCtnBlock@ freeBlock;
-                g_placedFreeBlocks.Get(freeBlockJson, @freeBlock);
+                auto freeBlock = cast<CGameCtnBlock>(g_placedFreeBlocks.Remove(freeBlockJson));
 
                 Editor::RemoveBlock(editor, removeBlockFunc, pfRemoveBlock, freeBlock);
-
-                g_placedFreeBlocks.Delete(freeBlockJson);
             } else if (commandValue.HasKey("PlaceItem")) {
                 string itemJson = commandValue["PlaceItem"];
                 auto itemValue = Json::Parse(itemJson);
@@ -468,16 +501,13 @@ void MainLoop() {
 
                 auto item = Editor::PlaceItem(editor, placeItemFunc, pfPlaceItem, itemModel, pos, yaw, pitch, roll, pivotPos, variantIndex, color, animOffset);
 
-                g_placedItems[itemJson] = @item;
+                g_placedItems.Insert(itemJson, item);
             } else if (commandValue.HasKey("RemoveItem")) {
                 string itemJson = commandValue["RemoveItem"];
                 
-                CGameCtnAnchoredObject@ item;
-                g_placedItems.Get(itemJson, @item);
+                auto item = cast<CGameCtnAnchoredObject>(g_placedItems.Remove(itemJson));
 
                 Editor::RemoveItem(editor, removeItemFunc, pfRemoveItem, item);
-
-                g_placedItems.Delete(itemJson);
             }
         }
 
@@ -508,7 +538,6 @@ const Json::Value@ SerializeBlock(CGameCtnBlock@ block) {
     blockValue["dir"] = SerializeDir(block.Dir);
     blockValue["is_ground"] = block.IsGround;
     blockValue["variant_index"] = block.BlockInfoVariantIndex;
-    blockValue["is_ghost"] = Block::Flags(block) & 0x10 != 0;
     blockValue["color"] = SerializeColor(CGameEditorPluginMap::EMapElemColor(block.MapElemColor));
 
     return blockValue;
@@ -694,6 +723,10 @@ namespace Block {
         return Dev::ReadUInt8(pBlock + 135);
     } 
 
+    bool IsGhost(CGameCtnBlock@ block) {
+        return Flags(block) & 0x10 != 0;
+    }
+
     bool IsFree(CGameCtnBlock@ block) {
         return Flags(block) & 0x20 != 0;
     }
@@ -797,5 +830,45 @@ namespace Editor {
         CGameCtnAnchoredObject@ item
     ) {
         removeItemFunc.Call(pfRemoveItem, editor, item);
+    }
+}
+
+class NodMultimap {
+    dictionary m_map;
+
+    uint Exists(const string&in key) {
+        if (m_map.Exists(key)) {
+            array<CMwNod@> list;
+            m_map.Get(key, list);
+            
+            return list.Length;
+        }
+
+        return 0;
+    }
+
+    void Insert(const string&in key, CMwNod@ nod) {
+        if (m_map.Exists(key)) {
+            array<CMwNod@>@ list;
+            m_map.Get(key, @list);
+            list.InsertLast(nod);
+        } else {
+            array<CMwNod@>@ list = { nod };
+            m_map[key] = @list;
+        }
+    }
+
+    CMwNod@ Remove(const string&in key) {
+        if (m_map.Exists(key)) {
+            array<CMwNod@>@ list;
+            m_map.Get(key, @list);
+
+            auto nod = list[list.Length - 1];
+            list.RemoveLast();
+            
+            return nod;
+        }
+            
+        return null;
     }
 }

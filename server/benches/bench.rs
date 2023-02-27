@@ -18,10 +18,10 @@ fn fill_map() {
                     coord: Vec3 { x, y, z },
                     dir: Direction::North,
                     is_ground: false,
-                    is_ghost: false,
                     variant_index: 0,
                     color: Color::Default,
-                });
+                })
+                .unwrap();
             }
         }
     }
