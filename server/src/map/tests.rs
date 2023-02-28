@@ -171,6 +171,6 @@ fn place_equivalent_ghost_block() {
         color: Color::Default,
     };
 
-    assert!(map.place_ghost_block(block.clone()));
-    assert!(map.place_ghost_block(block))
+    assert_eq!(map.place_ghost_block(block.clone()), (true, 1));
+    assert_eq!(map.place_ghost_block(block), (true, 2))
 }

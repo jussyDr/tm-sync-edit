@@ -362,59 +362,77 @@ impl Map {
         }
     }
 
-    pub fn place_ghost_block(&mut self, block: Block) -> bool {
+    pub fn place_ghost_block(&mut self, block: Block) -> (bool, usize) {
         let variant = if let Some(variant) =
             self.get_block_info_variant(&block.model, block.is_ground, block.variant_index)
         {
             variant
         } else {
-            return false;
+            return (false, self.ghost_blocks.contains(&block));
         };
 
         if self.block_out_of_bounds(block.coord, variant.extent) {
-            return false;
+            return (false, self.ghost_blocks.contains(&block));
         }
 
-        self.ghost_blocks.insert(block);
+        let duplicates = self.ghost_blocks.insert(block);
 
-        true
+        (true, duplicates + 1)
     }
 
-    pub fn remove_ghost_block(&mut self, block: &Block) -> bool {
-        self.ghost_blocks.remove(block) > 0
+    pub fn remove_ghost_block(&mut self, block: &Block) -> (bool, usize) {
+        let duplicates = self.ghost_blocks.remove(block);
+
+        if duplicates > 0 {
+            (true, duplicates - 1)
+        } else {
+            (false, duplicates)
+        }
     }
 
-    pub fn place_free_block(&mut self, free_block: FreeBlock) -> bool {
+    pub fn place_free_block(&mut self, free_block: FreeBlock) -> (bool, usize) {
         if self.get_block_info(&free_block.model).is_none() {
-            return false;
+            return (false, self.free_blocks.contains(&free_block));
         }
 
-        self.free_blocks.insert(free_block);
+        let duplicates = self.free_blocks.insert(free_block);
 
-        true
+        (true, duplicates + 1)
     }
 
-    pub fn remove_free_block(&mut self, free_block: &FreeBlock) -> bool {
-        self.free_blocks.remove(free_block) > 0
+    pub fn remove_free_block(&mut self, free_block: &FreeBlock) -> (bool, usize) {
+        let duplicates = self.free_blocks.remove(free_block);
+
+        if duplicates > 0 {
+            (true, duplicates - 1)
+        } else {
+            (false, duplicates)
+        }
     }
 
-    pub fn place_item(&mut self, item: Item) -> bool {
+    pub fn place_item(&mut self, item: Item) -> (bool, usize) {
         let known_item_model = match item.model {
             ModelRef::Id(ref id) => ITEM_MODEL_IDS.contains(id.as_ref()),
             ModelRef::Hash(ref hash) => self.embedded_items.contains_key(hash),
         };
 
         if !known_item_model {
-            return false;
+            return (false, self.items.contains(&item));
         }
 
-        self.items.insert(item);
+        let duplicates = self.items.insert(item);
 
-        true
+        (true, duplicates + 1)
     }
 
-    pub fn remove_item(&mut self, item: &Item) -> bool {
-        self.items.remove(item) > 0
+    pub fn remove_item(&mut self, item: &Item) -> (bool, usize) {
+        let duplicates = self.items.remove(item);
+
+        if duplicates > 0 {
+            (true, duplicates - 1)
+        } else {
+            (false, duplicates)
+        }
     }
 
     pub fn load<R>(reader: R) -> anyhow::Result<Self>
