@@ -433,9 +433,12 @@ void MainLoop() {
 
                 CGameCtnBlock@ block;
                 g_placedBlocks.Get(blockJson, @block);
-                g_placedBlocks.Delete(blockJson);
 
-                Editor::RemoveBlock(editor, removeBlockFunc, pfRemoveBlock, block);
+                if (block !is null) {
+                    g_placedBlocks.Delete(blockJson);
+
+                    Editor::RemoveBlock(editor, removeBlockFunc, pfRemoveBlock, block);
+                }
             } else if (commandValue.HasKey("SetGhostBlockCount")) {
                 auto value = commandValue["SetGhostBlockCount"];
                 string blockJson = value["block_json"];
