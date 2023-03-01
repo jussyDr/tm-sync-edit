@@ -123,14 +123,14 @@ void OnRemoveBlock(CGameCtnBlock@ rdx) {
                 auto freeBlockValue = SerializeFreeBlock(rdx);
                 auto freeBlockJson = Json::Write(freeBlockValue);
                 SendCommand("RemoveFreeBlock", freeBlockJson);
-                g_placedFreeBlocks.Remove(freeBlockJson);
+                g_placedFreeBlocks.RemoveValue(freeBlockJson, rdx);
             } else {
                 auto blockValue = SerializeBlock(rdx);
                 auto blockJson = Json::Write(blockValue);
 
                 if (Block::IsGhost(rdx)) {
                     SendCommand("RemoveGhostBlock", blockJson);
-                    g_placedGhostBlocks.Remove(blockJson);
+                    g_placedGhostBlocks.RemoveValue(blockJson, rdx);
                 } else {
                     SendCommand("RemoveBlock", blockJson);
                     g_placedBlocks.Delete(blockJson);
@@ -151,7 +151,7 @@ void OnRemoveItem(CGameCtnAnchoredObject@ rdx) {
         auto itemValue = SerializeItem(rdx);
         auto itemJson = Json::Write(itemValue);
         SendCommand("RemoveItem", itemJson);
-        g_placedItems.Remove(itemJson);
+        g_placedItems.RemoveValue(itemJson, rdx);
     }
 }
 
@@ -915,5 +915,18 @@ class NodMultimap {
         }
             
         return null;
+    }
+
+    void RemoveValue(const string&in key, CMwNod@ nod) {
+        if (m_map.Exists(key)) {
+            array<CMwNod@>@ list;
+            m_map.Get(key, @list);
+
+            auto index = list.FindByRef(nod);
+
+            if (index >= 0) {
+                list.RemoveAt(index);
+            }
+        }
     }
 }
