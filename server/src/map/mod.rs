@@ -375,18 +375,18 @@ impl Map {
             return (false, self.ghost_blocks.contains(&block));
         }
 
-        let duplicates = self.ghost_blocks.insert(block);
+        let count = self.ghost_blocks.insert(block);
 
-        (true, duplicates + 1)
+        (true, count + 1)
     }
 
     pub fn remove_ghost_block(&mut self, block: &Block) -> (bool, usize) {
-        let duplicates = self.ghost_blocks.remove(block);
+        let count = self.ghost_blocks.remove(block);
 
-        if duplicates > 0 {
-            (true, duplicates - 1)
+        if count > 0 {
+            (true, count - 1)
         } else {
-            (false, duplicates)
+            (false, count)
         }
     }
 
@@ -395,18 +395,18 @@ impl Map {
             return (false, self.free_blocks.contains(&free_block));
         }
 
-        let duplicates = self.free_blocks.insert(free_block);
+        let count = self.free_blocks.insert(free_block);
 
-        (true, duplicates + 1)
+        (true, count + 1)
     }
 
     pub fn remove_free_block(&mut self, free_block: &FreeBlock) -> (bool, usize) {
-        let duplicates = self.free_blocks.remove(free_block);
+        let count = self.free_blocks.remove(free_block);
 
-        if duplicates > 0 {
-            (true, duplicates - 1)
+        if count > 0 {
+            (true, count - 1)
         } else {
-            (false, duplicates)
+            (false, count)
         }
     }
 
@@ -420,18 +420,18 @@ impl Map {
             return (false, self.items.contains(&item));
         }
 
-        let duplicates = self.items.insert(item);
+        let count = self.items.insert(item);
 
-        (true, duplicates + 1)
+        (true, count + 1)
     }
 
     pub fn remove_item(&mut self, item: &Item) -> (bool, usize) {
-        let duplicates = self.items.remove(item);
+        let count = self.items.remove(item);
 
-        if duplicates > 0 {
-            (true, duplicates - 1)
+        if count > 0 {
+            (true, count - 1)
         } else {
-            (false, duplicates)
+            (false, count)
         }
     }
 

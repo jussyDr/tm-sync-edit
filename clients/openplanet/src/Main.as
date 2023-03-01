@@ -436,78 +436,120 @@ void MainLoop() {
                 g_placedBlocks.Delete(blockJson);
 
                 Editor::RemoveBlock(editor, removeBlockFunc, pfRemoveBlock, block);
-            } else if (commandValue.HasKey("PlaceGhostBlock")) {
-                string blockJson = commandValue["PlaceGhostBlock"];
-                auto blockValue = Json::Parse(blockJson);
-                auto modelValue = blockValue["model"];
-                string modelId = modelValue["Id"];
-                CGameCtnBlockInfo@ blockInfo;
-                officialBlockInfos.Get(modelId, @blockInfo);
-                auto coordValue = blockValue["coord"];
-                uint8 x = coordValue["x"];
-                uint8 y = coordValue["y"];
-                uint8 z = coordValue["z"];
-                auto dir = DeserializeDir(blockValue["dir"]);
-                bool isGround = blockValue["is_ground"];
-                uint8 variantIndex = blockValue["variant_index"];
-                auto color = DeserializeColor(blockValue["color"]);
+            } else if (commandValue.HasKey("SetGhostBlockCount")) {
+                auto value = commandValue["SetGhostBlockCount"];
+                string blockJson = value["block_json"];
+                uint newCount = value["count"];
 
-                auto block = Editor::PlaceBlock(editor, placeBlockFunc, pfPlaceBlock, blockInfo, x, y, z, dir, isGround, variantIndex, true, color);
+                auto count = g_placedGhostBlocks.Exists(blockJson);
 
-                g_placedGhostBlocks.Insert(blockJson, block);
-            } else if (commandValue.HasKey("RemoveGhostBlock")) {
-                string blockJson = commandValue["RemoveGhostBlock"];
+                if (count < newCount) {
+                    auto blockValue = Json::Parse(blockJson);
+                    auto modelValue = blockValue["model"];
+                    string modelId = modelValue["Id"];
+                    CGameCtnBlockInfo@ blockInfo;
+                    officialBlockInfos.Get(modelId, @blockInfo);
+                    auto coordValue = blockValue["coord"];
+                    uint8 x = coordValue["x"];
+                    uint8 y = coordValue["y"];
+                    uint8 z = coordValue["z"];
+                    auto dir = DeserializeDir(blockValue["dir"]);
+                    bool isGround = blockValue["is_ground"];
+                    uint8 variantIndex = blockValue["variant_index"];
+                    auto color = DeserializeColor(blockValue["color"]);
 
-                auto block = cast<CGameCtnBlock>(g_placedGhostBlocks.Remove(blockJson));
+                    do {
+                        auto block = Editor::PlaceBlock(editor, placeBlockFunc, pfPlaceBlock, blockInfo, x, y, z, dir, isGround, variantIndex, true, color);
 
-                Editor::RemoveBlock(editor, removeBlockFunc, pfRemoveBlock, block);
-            } else if (commandValue.HasKey("PlaceFreeBlock")) {
-                string freeBlockJson = commandValue["PlaceFreeBlock"];
-                auto freeBlockValue = Json::Parse(freeBlockJson);
-                auto modelValue = freeBlockValue["model"];
-                string modelId = modelValue["Id"];
-                CGameCtnBlockInfo@ blockInfo;
-                officialBlockInfos.Get(modelId, @blockInfo);
-                auto pos = DeserializeVec3(freeBlockValue["pos"]);
-                float yaw = freeBlockValue["yaw"];
-                float pitch = freeBlockValue["pitch"];
-                float roll = freeBlockValue["roll"];
-                auto color = DeserializeColor(freeBlockValue["color"]);
+                        g_placedGhostBlocks.Insert(blockJson, block);
 
-                auto freeBlock = Editor::PlaceFreeBlock(editor, placeFreeBlockFunc, pfPlaceBlock, blockInfo, pos, yaw, pitch, roll, color);
+                        count++;
+                    } while (count < newCount);
+                } else {
+                    while (count > newCount) {
+                        auto nod = g_placedGhostBlocks.Remove(blockJson);
+                        auto block = cast<CGameCtnBlock>(nod);
 
-                g_placedFreeBlocks.Insert(freeBlockJson, freeBlock);
-            } else if (commandValue.HasKey("RemoveFreeBlock")) {
-                string freeBlockJson = commandValue["RemoveFreeBlock"];
+                        Editor::RemoveBlock(editor, removeBlockFunc, pfRemoveBlock, block);
 
-                auto freeBlock = cast<CGameCtnBlock>(g_placedFreeBlocks.Remove(freeBlockJson));
+                        count--;
+                    }
+                }
+            } else if (commandValue.HasKey("SetFreeBlockCount")) {
+                auto value = commandValue["SetFreeBlockCount"];
+                string freeBlockJson = value["free_block_json"];
+                uint newCount = value["count"];
 
-                Editor::RemoveBlock(editor, removeBlockFunc, pfRemoveBlock, freeBlock);
-            } else if (commandValue.HasKey("PlaceItem")) {
-                string itemJson = commandValue["PlaceItem"];
-                auto itemValue = Json::Parse(itemJson);
-                auto modelValue = itemValue["model"];
-                string modelId = modelValue["Id"];
-                CGameItemModel@ itemModel;
-                officialItemModels.Get(modelId, @itemModel);
-                auto pos = DeserializeVec3(itemValue["pos"]);
-                float yaw = itemValue["yaw"];
-                float pitch = itemValue["pitch"];
-                float roll = itemValue["roll"];
-                auto pivotPos = DeserializeVec3(itemValue["pivot_pos"]);
-                uint8 variantIndex = itemValue["variant_index"];
-                auto color = DeserializeColor(itemValue["color"]);
-                auto animOffset = DeserializePhaseOffset(itemValue["anim_offset"]);
+                auto count = g_placedFreeBlocks.Exists(freeBlockJson);
 
-                auto item = Editor::PlaceItem(editor, placeItemFunc, pfPlaceItem, itemModel, pos, yaw, pitch, roll, pivotPos, variantIndex, color, animOffset);
+                if (count < newCount) {
+                    auto freeBlockValue = Json::Parse(freeBlockJson);
+                    auto modelValue = freeBlockValue["model"];
+                    string modelId = modelValue["Id"];
+                    CGameCtnBlockInfo@ blockInfo;
+                    officialBlockInfos.Get(modelId, @blockInfo);
+                    auto pos = DeserializeVec3(freeBlockValue["pos"]);
+                    float yaw = freeBlockValue["yaw"];
+                    float pitch = freeBlockValue["pitch"];
+                    float roll = freeBlockValue["roll"];
+                    auto color = DeserializeColor(freeBlockValue["color"]);
 
-                g_placedItems.Insert(itemJson, item);
-            } else if (commandValue.HasKey("RemoveItem")) {
-                string itemJson = commandValue["RemoveItem"];
-                
-                auto item = cast<CGameCtnAnchoredObject>(g_placedItems.Remove(itemJson));
+                    do {
+                        auto block = Editor::PlaceFreeBlock(editor, placeFreeBlockFunc, pfPlaceBlock, blockInfo, pos, yaw, pitch, roll, color);
 
-                Editor::RemoveItem(editor, removeItemFunc, pfRemoveItem, item);
+                        g_placedFreeBlocks.Insert(freeBlockJson, block);
+
+                        count++;
+                    } while (count < newCount);
+                } else {
+                    while (count > newCount) {
+                        auto nod = g_placedFreeBlocks.Remove(freeBlockJson);
+                        auto block = cast<CGameCtnBlock>(nod);
+
+                        Editor::RemoveBlock(editor, removeBlockFunc, pfRemoveBlock, block);
+
+                        count--;
+                    }
+                }
+            } else if (commandValue.HasKey("SetItemCount")) {
+                auto value = commandValue["SetItemCount"];
+                string itemJson = value["item_json"];
+                uint newCount = value["count"];
+
+                auto count = g_placedItems.Exists(itemJson);
+
+                if (count < newCount) {
+                    auto itemValue = Json::Parse(itemJson);
+                    auto modelValue = itemValue["model"];
+                    string modelId = modelValue["Id"];
+                    CGameItemModel@ itemModel;
+                    officialItemModels.Get(modelId, @itemModel);
+                    auto pos = DeserializeVec3(itemValue["pos"]);
+                    float yaw = itemValue["yaw"];
+                    float pitch = itemValue["pitch"];
+                    float roll = itemValue["roll"];
+                    auto pivotPos = DeserializeVec3(itemValue["pivot_pos"]);
+                    uint8 variantIndex = itemValue["variant_index"];
+                    auto color = DeserializeColor(itemValue["color"]);
+                    auto animOffset = DeserializePhaseOffset(itemValue["anim_offset"]);
+
+                    do {
+                        auto item = Editor::PlaceItem(editor, placeItemFunc, pfPlaceItem, itemModel, pos, yaw, pitch, roll, pivotPos, variantIndex, color, animOffset);
+
+                        g_placedItems.Insert(itemJson, item);
+
+                        count++;
+                    } while (count < newCount);
+                } else {
+                    while (count > newCount) {
+                        auto nod = g_placedItems.Remove(itemJson);
+                        auto item = cast<CGameCtnAnchoredObject>(nod);
+
+                        Editor::RemoveItem(editor, removeItemFunc, pfRemoveItem, item);
+
+                        count--;
+                    }
+                }
             }
         }
 

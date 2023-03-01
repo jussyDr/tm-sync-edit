@@ -51,8 +51,8 @@ impl Server {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-enum Command {
+#[derive(Debug, Deserialize)]
+enum ClientCommand {
     PlaceBlock(String),
     RemoveBlock(String),
     PlaceGhostBlock(String),
@@ -61,6 +61,24 @@ enum Command {
     RemoveFreeBlock(String),
     PlaceItem(String),
     RemoveItem(String),
+}
+
+#[derive(Serialize)]
+enum ServerCommand {
+    PlaceBlock(String),
+    RemoveBlock(String),
+    SetGhostBlockCount {
+        block_json: String,
+        count: usize,
+    },
+    SetFreeBlockCount {
+        free_block_json: String,
+        count: usize,
+    },
+    SetItemCount {
+        item_json: String,
+        count: usize,
+    },
 }
 
 async fn handle_connection(
@@ -96,50 +114,53 @@ async fn handle_client(
             result = stream.try_next() => match result? {
                 Some(frame) => {
                     let frame = frame.freeze();
-                    let command: Command = serde_json::from_slice(&frame)?;
+                    let command: ClientCommand = serde_json::from_slice(&frame)?;
 
                     match command {
-                        Command::PlaceBlock(block_json) => {
+                        ClientCommand::PlaceBlock(block_json) => {
                             let block: Block = serde_json::from_str(&block_json)?;
 
                             let mut server = server.lock().await;
 
                             match server.map.place_block(block) {
                                 Ok(()) => {
+                                    let command = ServerCommand::PlaceBlock(block_json);
+                                    let frame: Bytes = serde_json::to_vec(&command)?.into();
+
                                     for client in server.clients.values() {
                                         client.send(Bytes::clone(&frame))?;
                                     }
                                 }
                                 Err(PlaceBlockError::Failed) => {
-                                    let response = Command::RemoveBlock(block_json);
-                                    let frame = serde_json::to_vec(&response)?;
+                                    let command = ServerCommand::RemoveBlock(block_json);
+                                    let frame = serde_json::to_vec(&command)?;
                                     stream.send(frame.into()).await?;
                                 }
                                 Err(PlaceBlockError::Occupied) => {}
                             }
                         }
-                        Command::RemoveBlock(block_json) => {
+                        ClientCommand::RemoveBlock(block_json) => {
                             let block: Block = serde_json::from_str(&block_json)?;
 
                             let mut server = server.lock().await;
 
                             if server.map.remove_block(&block) {
+                                let command = ServerCommand::RemoveBlock(block_json);
+                                let frame: Bytes = serde_json::to_vec(&command)?.into();
+
                                 for client in server.clients.values() {
                                     client.send(Bytes::clone(&frame))?;
                                 }
                             }
                         }
-                        Command::PlaceGhostBlock(block_json) => {
+                        ClientCommand::PlaceGhostBlock(block_json) => {
                             let block: Block = serde_json::from_str(&block_json)?;
 
                             let mut server = server.lock().await;
-                            let (ok, duplicates) = server.map.place_ghost_block(block);
+                            let (ok, count) = server.map.place_ghost_block(block);
 
-                            let mut response = serde_json::Map::new();
-                            response.insert(String::from("PlaceGhostBlock"), serde_json::Value::String(block_json));
-                            response.insert(String::from("duplicates"), serde_json::Value::Number(duplicates.into()));
-
-                            let frame: Bytes = serde_json::to_vec(&response)?.into();
+                            let command = ServerCommand::SetGhostBlockCount { block_json, count };
+                            let frame: Bytes = serde_json::to_vec(&command)?.into();
 
                             if ok {
                                 for client in server.clients.values() {
@@ -149,33 +170,29 @@ async fn handle_client(
                                 stream.send(frame).await?;
                             }
                         }
-                        Command::RemoveGhostBlock(block_json) => {
+                        ClientCommand::RemoveGhostBlock(block_json) => {
                             let block: Block = serde_json::from_str(&block_json)?;
 
                             let mut server = server.lock().await;
-                            let (ok, duplicates) = server.map.remove_ghost_block(&block);
+                            let (ok, count) = server.map.remove_ghost_block(&block);
 
                             if ok {
-                                let mut response = serde_json::Map::new();
-                                response.insert(String::from("RemoveGhostBlock"), serde_json::Value::String(block_json));
-                                response.insert(String::from("duplicates"), serde_json::Value::Number(duplicates.into()));
+                                let command = ServerCommand::SetGhostBlockCount { block_json, count };
+                                let frame: Bytes = serde_json::to_vec(&command)?.into();
 
                                 for client in server.clients.values() {
                                     client.send(Bytes::clone(&frame))?;
                                 }
                             }
                         }
-                        Command::PlaceFreeBlock(free_block_json) => {
+                        ClientCommand::PlaceFreeBlock(free_block_json) => {
                             let free_block: FreeBlock = serde_json::from_str(&free_block_json)?;
 
                             let mut server = server.lock().await;
-                            let (ok, duplicates) = server.map.place_free_block(free_block);
+                            let (ok, count) = server.map.place_free_block(free_block);
 
-                            let mut response = serde_json::Map::new();
-                            response.insert(String::from("PlaceFreeBlock"), serde_json::Value::String(free_block_json));
-                            response.insert(String::from("duplicates"), serde_json::Value::Number(duplicates.into()));
-
-                            let frame: Bytes = serde_json::to_vec(&response)?.into();
+                            let command = ServerCommand::SetFreeBlockCount { free_block_json, count };
+                            let frame: Bytes = serde_json::to_vec(&command)?.into();
 
                             if ok {
                                 for client in server.clients.values() {
@@ -185,33 +202,29 @@ async fn handle_client(
                                 stream.send(frame).await?;
                             }
                         }
-                        Command::RemoveFreeBlock(free_block_json) => {
+                        ClientCommand::RemoveFreeBlock(free_block_json) => {
                             let free_block: FreeBlock = serde_json::from_str(&free_block_json)?;
 
                             let mut server = server.lock().await;
-                            let (ok, duplicates) = server.map.remove_free_block(&free_block);
+                            let (ok, count) = server.map.remove_free_block(&free_block);
 
                             if ok {
-                                let mut response = serde_json::Map::new();
-                                response.insert(String::from("RemoveFreeBlock"), serde_json::Value::String(free_block_json));
-                                response.insert(String::from("duplicates"), serde_json::Value::Number(duplicates.into()));
+                                let command = ServerCommand::SetFreeBlockCount { free_block_json, count };
+                                let frame: Bytes = serde_json::to_vec(&command)?.into();
 
                                 for client in server.clients.values() {
                                     client.send(Bytes::clone(&frame))?;
                                 }
                             }
                         }
-                        Command::PlaceItem(item_json) => {
+                        ClientCommand::PlaceItem(item_json) => {
                             let item: Item = serde_json::from_str(&item_json)?;
 
                             let mut server = server.lock().await;
-                            let (ok, duplicates) = server.map.place_item(item);
+                            let (ok, count) = server.map.place_item(item);
 
-                            let mut response = serde_json::Map::new();
-                            response.insert(String::from("PlaceItem"), serde_json::Value::String(item_json));
-                            response.insert(String::from("duplicates"), serde_json::Value::Number(duplicates.into()));
-
-                            let frame: Bytes = serde_json::to_vec(&response)?.into();
+                            let command = ServerCommand::SetItemCount { item_json, count };
+                            let frame: Bytes = serde_json::to_vec(&command)?.into();
 
                             if ok {
                                 for client in server.clients.values() {
@@ -221,16 +234,15 @@ async fn handle_client(
                                 stream.send(frame).await?;
                             }
                         }
-                        Command::RemoveItem(item_json) => {
+                        ClientCommand::RemoveItem(item_json) => {
                             let item: Item = serde_json::from_str(&item_json)?;
 
                             let mut server = server.lock().await;
-                            let (ok, duplicates) = server.map.remove_item(&item);
+                            let (ok, count) = server.map.remove_item(&item);
 
                             if ok {
-                                let mut response = serde_json::Map::new();
-                                response.insert(String::from("RemoveItem"), serde_json::Value::String(item_json));
-                                response.insert(String::from("duplicates"), serde_json::Value::Number(duplicates.into()));
+                                let command = ServerCommand::SetItemCount { item_json, count };
+                                let frame: Bytes = serde_json::to_vec(&command)?.into();
 
                                 for client in server.clients.values() {
                                     client.send(Bytes::clone(&frame))?;
