@@ -1,0 +1,10 @@
+[package]
+name = "tm-sync-edit-client-ffi"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+tm-sync-edit-client = { path = "../" }
