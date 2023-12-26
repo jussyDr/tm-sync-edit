@@ -16,7 +16,7 @@ Copy-Item -Path $SourceFiles -Destination $TargetFolder -Recurse -Include @("inf
 
 cargo build -p "tm-sync-edit-client-lib" --release
 
-$LibraryPath = $SourceFolder + "\..\target\release\tm_sync_edit_client_lib.dll"
+$LibraryPath = $SourceFolder + "\..\..\target\release\tm_sync_edit_client_lib.dll"
 $LibraryFolder = $OpenplanetFolder + "\lib"
 $LibDest = $LibraryFolder + "\SyncEdit.dll"
 
