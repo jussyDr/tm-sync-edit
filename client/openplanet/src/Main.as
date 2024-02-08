@@ -1,20 +1,18 @@
 const string c_title = Icons::Syncthing + " Sync Edit";
 
-Import::Library@ g_library;
-Import::Function@ g_libraryUpdate;
-
 [Setting hidden]
 bool Setting_WindowEnabled = true;
 
-void Main() {
-    @g_library = Import::GetLibrary("SyncEdit.dll");
+[Setting hidden]
+string Setting_Host = "0.0.0.0";
 
-    if (g_library == null) {
-        return;
-    }
+[Setting hidden]
+string Setting_Port = "8369";
 
-    @g_libraryUpdate = g_library.GetFunction("update");
-}
+Import::Library@ g_library = null;
+Import::Function@ g_libraryJoin = null;
+
+void Main() {}
 
 void RenderMenu() {
     if (UI::MenuItem(c_title, "", Setting_WindowEnabled)) {
@@ -27,24 +25,29 @@ void RenderInterface() {
         return;
     }
 
-    bool open;
-
-    if (!UI::Begin(c_title, open)) {
+    if (!UI::Begin(c_title, Setting_WindowEnabled)) {
         return;
     }
 
-    Setting_WindowEnabled = open;
+    Setting_Host = UI::InputText("Host", Setting_Host, UI::InputTextFlags::CharsNoBlank);
+    Setting_Port = UI::InputText("Port", Setting_Port, UI::InputTextFlags::CharsDecimal);
+
+    if (UI::Button("Join")) {
+        @g_library = Import::GetLibrary("SyncEdit.dll");
+
+        if (g_library != null) {
+            @g_libraryJoin = g_library.GetFunction("Join");
+        }
+
+        if (g_libraryJoin != null) {
+            uint16 port = Text::ParseUInt(Setting_Port);
+            g_libraryJoin.Call(Setting_Host, port);
+        }
+    }
 
     UI::End();
 }
 
-void Update(float dt) {
-    if (@g_libraryUpdate != null) {
-        g_libraryUpdate.Call();
-    }
-}
+void Update(float dt) {}
 
-void OnDestroyed() {
-    @g_libraryUpdate = null;
-    @g_library = null;
-}
+void OnDestroyed() {}
