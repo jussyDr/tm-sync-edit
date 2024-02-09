@@ -1,3 +1,7 @@
+//! Safe abstractions over specific OS functionality.
+
+pub mod executable_page;
+
 use std::{
     ffi::OsString,
     io,

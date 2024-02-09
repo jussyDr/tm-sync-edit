@@ -95,3 +95,7 @@ fn find_unique_pattern(memory: &[u8], pattern: &[u8]) -> Option<usize> {
 
     pattern_offset
 }
+
+struct Hook<'a> {
+    trampoline: &'a [u8],
+}
