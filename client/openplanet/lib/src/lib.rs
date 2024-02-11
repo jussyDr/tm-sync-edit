@@ -1,7 +1,7 @@
+mod os;
+
 use std::{
     ffi::c_void,
-    io::{Error, Result},
-    iter,
     mem::{size_of, MaybeUninit},
     panic,
     ptr::{self, null, NonNull},
@@ -9,10 +9,10 @@ use std::{
     sync::Mutex,
 };
 
+use os::{message_box, DllCallReason, MessageBoxType};
 use windows_sys::Win32::{
     Foundation::{BOOL, FALSE, TRUE},
     System::{
-        Diagnostics::Debug::WriteProcessMemory,
         LibraryLoader::GetModuleHandleW,
         Memory::{
             VirtualAlloc, VirtualFree, VirtualProtectEx, MEM_COMMIT, MEM_DECOMMIT, MEM_RELEASE,
@@ -20,15 +20,11 @@ use windows_sys::Win32::{
         },
         ProcessStatus::{GetModuleInformation, MODULEINFO},
         SystemInformation::GetSystemInfo,
-        SystemServices::{
-            DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH, DLL_THREAD_ATTACH, DLL_THREAD_DETACH,
-        },
         Threading::{
             GetCurrentProcessId, OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_OPERATION,
             PROCESS_VM_READ, PROCESS_VM_WRITE,
         },
     },
-    UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_ICONINFORMATION},
 };
 
 static STATE: Mutex<Option<State>> = Mutex::new(None);
@@ -37,15 +33,6 @@ struct State {
     current_process: isize,
     ptr: isize,
     executable_page: ExecutablePage,
-}
-
-#[allow(dead_code)]
-#[repr(u32)]
-enum DllCallReason {
-    ProcessAttach = DLL_PROCESS_ATTACH,
-    ProcessDetach = DLL_PROCESS_DETACH,
-    ThreadAttach = DLL_THREAD_ATTACH,
-    ThreadDetach = DLL_THREAD_DETACH,
 }
 
 #[no_mangle]
@@ -161,16 +148,8 @@ extern "system" fn Init() {
 
     hook[2..10].copy_from_slice(&(executable_page as usize).to_le_bytes());
 
-    let mut n_written = MaybeUninit::uninit();
-
     unsafe {
-        WriteProcessMemory(
-            current_process,
-            ptr as *const c_void,
-            hook.as_ptr() as *const c_void,
-            hook.len(),
-            n_written.as_mut_ptr(),
-        );
+        ptr::copy_nonoverlapping(hook.as_ptr(), ptr as *mut u8, hook.len());
     }
 
     let executable_page = ExecutablePage {
@@ -197,16 +176,8 @@ extern "system" fn Destroy() {
             0x49, 0x8b, 0xe3, 0x41, 0x5f, 0x41, 0x5e, 0x41, 0x5d, 0x5f, 0x5d, 0xc3,
         ];
 
-        let mut n_written = MaybeUninit::uninit();
-
         unsafe {
-            WriteProcessMemory(
-                state.current_process,
-                state.ptr as *const c_void,
-                code.as_ptr() as *const c_void,
-                code.len(),
-                n_written.as_mut_ptr(),
-            );
+            ptr::copy_nonoverlapping(code.as_ptr(), state.ptr as *mut u8, code.len());
         }
 
         unsafe {
@@ -235,25 +206,6 @@ struct ExecutablePage {
 unsafe impl Send for ExecutablePage {}
 
 unsafe impl Sync for ExecutablePage {}
-
-#[repr(u32)]
-enum MessageBoxType {
-    Error = MB_ICONERROR,
-    Info = MB_ICONINFORMATION,
-}
-
-fn message_box(caption: &str, text: &str, ty: MessageBoxType) -> Result<()> {
-    let caption: Vec<_> = caption.encode_utf16().chain(iter::once(0)).collect();
-    let text: Vec<_> = text.encode_utf16().chain(iter::once(0)).collect();
-
-    let result = unsafe { MessageBoxW(0, text.as_ptr(), caption.as_ptr(), ty as u32) };
-
-    if result == 0 {
-        return Err(Error::last_os_error());
-    }
-
-    Ok(())
-}
 
 fn find_pattern(memory: &[u8], pattern: &[u8]) -> Option<usize> {
     for offset in 0..memory.len() - pattern.len() {
