@@ -4,25 +4,21 @@ use std::{
     ffi::c_void,
     mem::{size_of, MaybeUninit},
     panic,
-    ptr::{self, null, NonNull},
+    ptr::{self, null},
     slice,
     sync::Mutex,
 };
 
-use os::{message_box, DllCallReason, MessageBoxType};
+use os::{message_box, DllCallReason, ExecutablePage, MessageBoxType};
 use windows_sys::Win32::{
     Foundation::{BOOL, FALSE, TRUE},
     System::{
         LibraryLoader::GetModuleHandleW,
-        Memory::{
-            VirtualAlloc, VirtualFree, VirtualProtectEx, MEM_COMMIT, MEM_DECOMMIT, MEM_RELEASE,
-            MEM_RESERVE, PAGE_EXECUTE_READWRITE,
-        },
+        Memory::{VirtualProtectEx, PAGE_EXECUTE_READWRITE},
         ProcessStatus::{GetModuleInformation, MODULEINFO},
-        SystemInformation::GetSystemInfo,
         Threading::{
             GetCurrentProcessId, OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_OPERATION,
-            PROCESS_VM_READ, PROCESS_VM_WRITE,
+            PROCESS_VM_READ,
         },
     },
 };
@@ -63,7 +59,7 @@ extern "system" fn Init() {
 
     let current_process = unsafe {
         OpenProcess(
-            PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_QUERY_INFORMATION,
+            PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_QUERY_INFORMATION,
             FALSE,
             current_process_id,
         )
@@ -100,20 +96,7 @@ extern "system" fn Init() {
     )
     .unwrap();
 
-    let mut system_info = MaybeUninit::uninit();
-
-    unsafe { GetSystemInfo(system_info.as_mut_ptr()) };
-
-    let system_info = unsafe { system_info.assume_init() };
-
-    let executable_page = unsafe {
-        VirtualAlloc(
-            null(),
-            system_info.dwPageSize as usize,
-            MEM_COMMIT | MEM_RESERVE,
-            PAGE_EXECUTE_READWRITE,
-        )
-    };
+    let mut executable_page = ExecutablePage::new().unwrap();
 
     let mut trampoline = [
         0x49, 0x8b, 0xe3, 0x41, 0x5f, 0x41, 0x5e, 0x41, 0x5d, 0x5f, 0x5d, 0x50, 0x48, 0x89, 0xc1,
@@ -122,13 +105,7 @@ extern "system" fn Init() {
 
     trampoline[17..25].copy_from_slice(&(callback as usize).to_le_bytes());
 
-    unsafe {
-        ptr::copy_nonoverlapping(
-            trampoline.as_ptr(),
-            executable_page as *mut u8,
-            trampoline.len(),
-        )
-    };
+    let executable_trampoline = executable_page.alloc(&trampoline).unwrap();
 
     let ptr = unsafe { exe_module_memory.as_ptr().add(offset + 16) };
 
@@ -146,16 +123,11 @@ extern "system" fn Init() {
 
     let mut hook = [0x48, 0xb9, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xe1];
 
-    hook[2..10].copy_from_slice(&(executable_page as usize).to_le_bytes());
+    hook[2..10].copy_from_slice(&(executable_trampoline.as_ptr() as usize).to_le_bytes());
 
     unsafe {
         ptr::copy_nonoverlapping(hook.as_ptr(), ptr as *mut u8, hook.len());
     }
-
-    let executable_page = ExecutablePage {
-        ptr: NonNull::new(executable_page as *mut u8).unwrap(),
-        size: system_info.dwPageSize as usize,
-    };
 
     *STATE.lock().unwrap() = Some(State {
         current_process,
@@ -179,14 +151,6 @@ extern "system" fn Destroy() {
         unsafe {
             ptr::copy_nonoverlapping(code.as_ptr(), state.ptr as *mut u8, code.len());
         }
-
-        unsafe {
-            VirtualFree(
-                state.executable_page.ptr.as_ptr() as *mut c_void,
-                state.executable_page.size,
-                MEM_DECOMMIT | MEM_RELEASE,
-            )
-        };
     }
 
     // *STATE.lock().unwrap() = None;
@@ -197,15 +161,6 @@ extern "system" fn Destroy() {
 extern "system" fn callback(_rax: u64) {
     message_box("SyncEdit.dll", "callback", MessageBoxType::Info).unwrap();
 }
-
-struct ExecutablePage {
-    ptr: NonNull<u8>,
-    size: usize,
-}
-
-unsafe impl Send for ExecutablePage {}
-
-unsafe impl Sync for ExecutablePage {}
 
 fn find_pattern(memory: &[u8], pattern: &[u8]) -> Option<usize> {
     for offset in 0..memory.len() - pattern.len() {
