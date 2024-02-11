@@ -4,8 +4,9 @@ use std::{
     iter,
     mem::{size_of, MaybeUninit},
     panic,
-    ptr::{self, null},
+    ptr::{self, null, NonNull},
     slice,
+    sync::Mutex,
 };
 
 use windows_sys::Win32::{
@@ -13,7 +14,10 @@ use windows_sys::Win32::{
     System::{
         Diagnostics::Debug::WriteProcessMemory,
         LibraryLoader::GetModuleHandleW,
-        Memory::{VirtualAlloc, VirtualProtectEx, MEM_COMMIT, MEM_RESERVE, PAGE_EXECUTE_READWRITE},
+        Memory::{
+            VirtualAlloc, VirtualFree, VirtualProtectEx, MEM_COMMIT, MEM_DECOMMIT, MEM_RELEASE,
+            MEM_RESERVE, PAGE_EXECUTE_READWRITE,
+        },
         ProcessStatus::{GetModuleInformation, MODULEINFO},
         SystemInformation::GetSystemInfo,
         SystemServices::{
@@ -26,6 +30,14 @@ use windows_sys::Win32::{
     },
     UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_ICONINFORMATION},
 };
+
+static STATE: Mutex<Option<State>> = Mutex::new(None);
+
+struct State {
+    current_process: isize,
+    ptr: isize,
+    executable_page: ExecutablePage,
+}
 
 #[allow(dead_code)]
 #[repr(u32)]
@@ -161,17 +173,68 @@ extern "system" fn Init() {
         );
     }
 
+    let executable_page = ExecutablePage {
+        ptr: NonNull::new(executable_page as *mut u8).unwrap(),
+        size: system_info.dwPageSize as usize,
+    };
+
+    *STATE.lock().unwrap() = Some(State {
+        current_process,
+        ptr: ptr as isize,
+        executable_page,
+    });
+
     message_box("SyncEdit.dll", "initialized", MessageBoxType::Info).unwrap();
 }
 
 #[no_mangle]
 extern "system" fn Destroy() {
+    {
+        let state = STATE.lock().unwrap();
+        let state = state.as_ref().unwrap();
+
+        let code: [u8; 12] = [
+            0x49, 0x8b, 0xe3, 0x41, 0x5f, 0x41, 0x5e, 0x41, 0x5d, 0x5f, 0x5d, 0xc3,
+        ];
+
+        let mut n_written = MaybeUninit::uninit();
+
+        unsafe {
+            WriteProcessMemory(
+                state.current_process,
+                state.ptr as *const c_void,
+                code.as_ptr() as *const c_void,
+                code.len(),
+                n_written.as_mut_ptr(),
+            );
+        }
+
+        unsafe {
+            VirtualFree(
+                state.executable_page.ptr.as_ptr() as *mut c_void,
+                state.executable_page.size,
+                MEM_DECOMMIT | MEM_RELEASE,
+            )
+        };
+    }
+
+    // *STATE.lock().unwrap() = None;
+
     message_box("SyncEdit.dll", "destroyed", MessageBoxType::Info).unwrap();
 }
 
 extern "system" fn callback(_rax: u64) {
     message_box("SyncEdit.dll", "callback", MessageBoxType::Info).unwrap();
 }
+
+struct ExecutablePage {
+    ptr: NonNull<u8>,
+    size: usize,
+}
+
+unsafe impl Send for ExecutablePage {}
+
+unsafe impl Sync for ExecutablePage {}
 
 #[repr(u32)]
 enum MessageBoxType {
