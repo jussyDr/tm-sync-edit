@@ -1,44 +1,42 @@
+#![warn(clippy::missing_docs_in_private_items)]
+
+//! Dynamic library for the Openplanet Sync Edit client.
+
+mod hook;
 mod os;
 
 use std::{
-    ffi::c_void,
-    mem::{size_of, MaybeUninit},
+    mem::transmute,
     panic,
-    ptr::{self, null},
-    slice,
-    sync::Mutex,
+    sync::{Arc, Mutex},
 };
 
-use os::{message_box, DllCallReason, ExecutablePage, MessageBoxType};
-use windows_sys::Win32::{
-    Foundation::{BOOL, FALSE, TRUE},
-    System::{
-        LibraryLoader::GetModuleHandleW,
-        Memory::{VirtualProtectEx, PAGE_EXECUTE_READWRITE},
-        ProcessStatus::{GetModuleInformation, MODULEINFO},
-        Threading::{
-            GetCurrentProcessId, OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_OPERATION,
-            PROCESS_VM_READ,
-        },
-    },
+use hook::{hook_return, Hook, HookError};
+use os::{
+    executable_page::ExecutablePage,
+    message_box,
+    process_memory::{exe_module_memory, ProcessMemorySlice},
+    DllCallReason, MessageBoxType,
 };
+use windows_sys::Win32::Foundation::{BOOL, TRUE};
 
-static STATE: Mutex<Option<State>> = Mutex::new(None);
+static STATE: Mutex<State> = Mutex::new(State {
+    place_block_hook: None,
+});
 
 struct State {
-    current_process: isize,
-    ptr: isize,
-    executable_page: ExecutablePage,
+    place_block_hook: Option<Hook>,
 }
 
+/// DLL entry point.
 #[no_mangle]
 extern "system" fn DllMain(_module: isize, call_reason: DllCallReason, _reserved: isize) -> BOOL {
     match call_reason {
         DllCallReason::ProcessAttach => {
             panic::set_hook(Box::new(|panic_info| {
                 message_box(
-                    "SyncEdit.dll",
                     &panic_info.to_string(),
+                    "SyncEdit.dll",
                     MessageBoxType::Error,
                 )
                 .unwrap();
@@ -55,128 +53,55 @@ extern "system" fn DllMain(_module: isize, call_reason: DllCallReason, _reserved
 
 #[no_mangle]
 extern "system" fn Init() {
-    let current_process_id = unsafe { GetCurrentProcessId() };
+    let exe_module_memory = exe_module_memory().unwrap();
+    let mut executable_page = Arc::new(Mutex::new(ExecutablePage::new().unwrap()));
 
-    let current_process = unsafe {
-        OpenProcess(
-            PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_QUERY_INFORMATION,
-            FALSE,
-            current_process_id,
-        )
-    };
+    let place_block_hook =
+        hook_place_block(exe_module_memory, Arc::clone(&executable_page)).unwrap();
 
-    let exe_module = unsafe { GetModuleHandleW(null()) };
+    STATE.lock().unwrap().place_block_hook = Some(place_block_hook);
 
-    let mut exe_module_info = MaybeUninit::uninit();
-
-    unsafe {
-        GetModuleInformation(
-            current_process,
-            exe_module,
-            exe_module_info.as_mut_ptr(),
-            size_of::<MODULEINFO>() as u32,
-        )
-    };
-
-    let exe_module_info = unsafe { exe_module_info.assume_init() };
-
-    let exe_module_memory = unsafe {
-        slice::from_raw_parts(
-            exe_module_info.lpBaseOfDll as *const u8,
-            exe_module_info.SizeOfImage as usize,
-        )
-    };
-
-    let offset = find_pattern(
-        exe_module_memory,
-        &[
-            0x4c, 0x8d, 0x9c, 0x24, 0xc0, 0x00, 0x00, 0x00, 0x49, 0x8b, 0x5b, 0x38, 0x49, 0x8b,
-            0x73, 0x48, 0x49, 0x8b, 0xe3, 0x41, 0x5f, 0x41, 0x5e, 0x41, 0x5d, 0x5f, 0x5d, 0xc3,
-        ],
-    )
-    .unwrap();
-
-    let mut executable_page = ExecutablePage::new().unwrap();
-
-    let mut trampoline = [
-        0x49, 0x8b, 0xe3, 0x41, 0x5f, 0x41, 0x5e, 0x41, 0x5d, 0x5f, 0x5d, 0x50, 0x48, 0x89, 0xc1,
-        0x48, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xd0, 0x58, 0xc3,
-    ];
-
-    trampoline[17..25].copy_from_slice(&(callback as usize).to_le_bytes());
-
-    let executable_trampoline = executable_page.alloc(&trampoline).unwrap();
-
-    let ptr = unsafe { exe_module_memory.as_ptr().add(offset + 16) };
-
-    let mut old_protect = MaybeUninit::uninit();
-
-    unsafe {
-        VirtualProtectEx(
-            current_process,
-            ptr as *const c_void,
-            12,
-            PAGE_EXECUTE_READWRITE,
-            old_protect.as_mut_ptr(),
-        )
-    };
-
-    let mut hook = [0x48, 0xb9, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xe1];
-
-    hook[2..10].copy_from_slice(&(executable_trampoline.as_ptr() as usize).to_le_bytes());
-
-    unsafe {
-        ptr::copy_nonoverlapping(hook.as_ptr(), ptr as *mut u8, hook.len());
-    }
-
-    *STATE.lock().unwrap() = Some(State {
-        current_process,
-        ptr: ptr as isize,
-        executable_page,
-    });
-
-    message_box("SyncEdit.dll", "initialized", MessageBoxType::Info).unwrap();
+    message_box("initialized", "SyncEdit.dll", MessageBoxType::Info).unwrap();
 }
 
 #[no_mangle]
 extern "system" fn Destroy() {
-    {
-        let state = STATE.lock().unwrap();
-        let state = state.as_ref().unwrap();
+    STATE.lock().unwrap().place_block_hook = None;
 
-        let code: [u8; 12] = [
-            0x49, 0x8b, 0xe3, 0x41, 0x5f, 0x41, 0x5e, 0x41, 0x5d, 0x5f, 0x5d, 0xc3,
-        ];
-
-        unsafe {
-            ptr::copy_nonoverlapping(code.as_ptr(), state.ptr as *mut u8, code.len());
-        }
-    }
-
-    // *STATE.lock().unwrap() = None;
-
-    message_box("SyncEdit.dll", "destroyed", MessageBoxType::Info).unwrap();
+    message_box("destroyed", "SyncEdit.dll", MessageBoxType::Info).unwrap();
 }
 
-extern "system" fn callback(_rax: u64) {
-    message_box("SyncEdit.dll", "callback", MessageBoxType::Info).unwrap();
+/// Callback of the place block hook.
+extern "system" fn place_block_callback(_block: *const Block) {
+    message_box("placed block", "SyncEdit.dll", MessageBoxType::Info).unwrap();
 }
 
-fn find_pattern(memory: &[u8], pattern: &[u8]) -> Option<usize> {
-    for offset in 0..memory.len() - pattern.len() {
-        let mut matches = true;
+/// Corresponds to the Trackmania CGameCtnBlock class.
+#[repr(C)]
+struct Block;
 
-        for i in 0..pattern.len() {
-            if memory[offset + i] != pattern[i] {
-                matches = false;
-                break;
-            }
-        }
+/// Hook the place block function.
+fn hook_place_block(
+    exe_module_memory: ProcessMemorySlice,
+    executable_page: Arc<Mutex<ExecutablePage>>,
+) -> Result<Hook, HookError> {
+    let callback: extern "system" fn(*const Block) = place_block_callback;
+    let callback = unsafe { transmute(callback) };
 
-        if matches {
-            return Some(offset);
-        }
+    let code_pattern = &[
+        0x4c, 0x8d, 0x9c, 0x24, 0xc0, 0x00, 0x00, 0x00, 0x49, 0x8b, 0x5b, 0x38, 0x49, 0x8b, 0x73,
+        0x48, 0x49, 0x8b, 0xe3, 0x41, 0x5f, 0x41, 0x5e, 0x41, 0x5d, 0x5f, 0x5d, 0xc3,
+    ];
+
+    let offset_in_pattern = 16;
+
+    unsafe {
+        hook_return(
+            exe_module_memory,
+            executable_page,
+            code_pattern,
+            offset_in_pattern,
+            callback,
+        )
     }
-
-    None
 }

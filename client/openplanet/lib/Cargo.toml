@@ -6,6 +6,9 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib"]
 
+[dependencies]
+memchr = "2.7.1"
+
 [dependencies.windows-sys]
 version = "0.52.0"
 features = [
