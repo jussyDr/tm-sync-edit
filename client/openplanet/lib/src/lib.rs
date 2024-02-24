@@ -25,10 +25,12 @@ static PLACE_BLOCK_FN: OnceLock<PlaceBlockFn> = OnceLock::new();
 
 static STATE: Mutex<State> = Mutex::new(State {
     place_block_hook: None,
+    remove_block_hook: None,
 });
 
 struct State {
     place_block_hook: Option<Hook>,
+    remove_block_hook: Option<Hook>,
 }
 
 /// DLL entry point.
@@ -66,10 +68,12 @@ extern "system" fn Init() {
     )
     .unwrap();
 
+    STATE.lock().unwrap().place_block_hook = Some(place_block_hook);
+
     let remove_block_hook =
         hook_remove_block(&exe_module_memory, executable_page, remove_block_callback).unwrap();
 
-    STATE.lock().unwrap().place_block_hook = Some(place_block_hook);
+    STATE.lock().unwrap().remove_block_hook = Some(remove_block_hook);
 
     message_box("initialized", "SyncEdit.dll", MessageBoxType::Info).unwrap();
 }

@@ -36,32 +36,66 @@ pub unsafe fn hook_start(
     let pattern_offset =
         memmem::find(exe_module_memory.as_slice(), code_pattern).ok_or(HookError::NotFound)?;
 
-    let hooked_code =
+    let hooked_slice =
         exe_module_memory.slice(pattern_offset..pattern_offset + offset_in_pattern)?;
 
     let original_code = &code_pattern[..offset_in_pattern];
 
     let mut trampoline_code_prologue = vec![];
 
-    for _ in 0..num_args.max(4) {
+    trampoline_code_prologue.extend([
+        0x51, // push rcx
+        0x52, // push rdx
+        0x41, 0x50, // push r8
+        0x41, 0x51, // push r9
+    ]);
+
+    let num_stack_args = if num_args >= 4 { num_args - 4 } else { 0 };
+
+    for _ in 0..num_stack_args {
+        let dist = 32 + 8 + 32 + num_stack_args * 8;
+
         trampoline_code_prologue.extend([
-            0xff, 0x74, 0x24, 0x08, // push [rsp + 8]
+            0xff, 0xb4, 0x24, 0, 0, 0, 0, // push [rsp + `dist`]
         ]);
+
+        let vvv = trampoline_code_prologue.len();
+
+        trampoline_code_prologue[vvv - 4..vvv].copy_from_slice(&(dist as u32).to_le_bytes());
     }
 
+    let val = 32 + num_stack_args * 8;
+
     trampoline_code_prologue.extend([
+        0x48, 0x83, 0xec, 0x20, // sub rsp, 32
         0x48, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, // mov rax, `callback`
         0xff, 0xd0, // call rax
+        0x48, 0x83, 0xc4, 0, // add rsp, `val`
+        0x41, 0x59, // pop r9
+        0x41, 0x58, // pop r8
+        0x5a, // pop rdx
+        0x59, // pop rcx
     ]);
+
+    let vvv = trampoline_code_prologue.len();
+    trampoline_code_prologue[vvv - 20..vvv - 12].copy_from_slice(&(callback as u64).to_le_bytes());
+    trampoline_code_prologue[vvv - 7..vvv - 6].copy_from_slice(&(val as u8).to_le_bytes());
 
     let mut trampoline_code_epilogue = [
         0x48, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, // mov rax, `end of hook_code`
         0xff, 0xe0, // jmp rax
     ];
 
+    trampoline_code_epilogue[2..10].copy_from_slice(
+        &(hooked_slice.as_slice().as_ptr().add(offset_in_pattern) as u64).to_le_bytes(),
+    );
+
     let mut hook_code = [
         0x48, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, // mov rax, `trampoline`
         0xff, 0xe0, // jmp rax
+        0x90, // nop
+        0x90, // nop
+        0x90, // nop
     ];
 
     {
@@ -75,7 +109,7 @@ pub unsafe fn hook_start(
 
         trampoline
             [trampoline_code_prologue.len()..trampoline_code_prologue.len() + original_code.len()]
-            .copy_from_slice(&original_code);
+            .copy_from_slice(original_code);
 
         trampoline[trampoline_code_prologue.len() + original_code.len()
             ..trampoline_code_prologue.len()
@@ -85,11 +119,11 @@ pub unsafe fn hook_start(
 
         hook_code[2..10].copy_from_slice(&(trampoline.as_ptr() as usize).to_le_bytes());
 
-        unsafe { hooked_code.write(&hook_code)? };
+        unsafe { hooked_slice.write(&hook_code)? };
     }
 
     Ok(Hook {
-        hooked_code,
+        hooked_slice,
         original_code,
         _executable_page: executable_page,
     })
@@ -110,7 +144,7 @@ pub unsafe fn hook_end(
 
     let offset = pattern_offset + offset_in_pattern;
 
-    let hooked_code = exe_module_memory
+    let hooked_slice = exe_module_memory
         .slice(offset..offset + original_code.len())
         .unwrap();
 
@@ -123,7 +157,7 @@ pub unsafe fn hook_end(
         0xc3, // ret
     ];
 
-    trampoline_code[6..14].copy_from_slice(&(callback as usize).to_le_bytes());
+    trampoline_code[6..14].copy_from_slice(&(callback as u64).to_le_bytes());
 
     {
         let mut ex_pa = executable_page.lock().unwrap();
@@ -143,11 +177,11 @@ pub unsafe fn hook_end(
 
         hook_code[2..10].copy_from_slice(&(trampoline.as_ptr() as usize).to_le_bytes());
 
-        unsafe { hooked_code.write(&hook_code)? };
+        unsafe { hooked_slice.write(&hook_code)? };
     }
 
     Ok(Hook {
-        hooked_code,
+        hooked_slice,
         original_code,
         _executable_page: executable_page,
     })
@@ -158,7 +192,7 @@ pub unsafe fn hook_end(
 /// The function will automatically be unhooked when dropped.
 pub struct Hook {
     /// Slice of memory that has been overwritten by the hook code.
-    hooked_code: ProcessMemorySlice,
+    hooked_slice: ProcessMemorySlice,
     /// Original code that has been overwritten by the hook code.
     original_code: &'static [u8],
     /// Reference to the executable page which contains this hook's trampoline code.
@@ -167,6 +201,6 @@ pub struct Hook {
 
 impl Drop for Hook {
     fn drop(&mut self) {
-        unsafe { self.hooked_code.write(self.original_code).unwrap() };
+        unsafe { self.hooked_slice.write(self.original_code).unwrap() };
     }
 }
