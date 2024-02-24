@@ -1,5 +1,5 @@
 //! Functionality for hooking functions.
-//!
+
 use std::{
     io,
     sync::{Arc, Mutex},
@@ -12,7 +12,7 @@ use crate::os::{executable_page::ExecutablePage, process_memory::ProcessMemorySl
 /// Error that occured when trying to hook a function.
 #[derive(Debug)]
 pub enum HookError {
-    /// The function could not be found.
+    /// The target function could not be found.
     NotFound,
     /// An I/O error.
     Io(io::Error),
@@ -24,13 +24,84 @@ impl From<io::Error> for HookError {
     }
 }
 
-/// Hook the end of a function.
-pub unsafe fn hook_return(
-    exe_module_memory: ProcessMemorySlice,
+/// Hook the start of a function.
+pub unsafe fn hook_start(
+    exe_module_memory: &ProcessMemorySlice,
     executable_page: Arc<Mutex<ExecutablePage>>,
     code_pattern: &'static [u8],
     offset_in_pattern: usize,
-    callback: extern "system" fn(usize),
+    callback: usize,
+    num_args: usize,
+) -> Result<Hook, HookError> {
+    let pattern_offset =
+        memmem::find(exe_module_memory.as_slice(), code_pattern).ok_or(HookError::NotFound)?;
+
+    let hooked_code =
+        exe_module_memory.slice(pattern_offset..pattern_offset + offset_in_pattern)?;
+
+    let original_code = &code_pattern[..offset_in_pattern];
+
+    let mut trampoline_code_prologue = vec![];
+
+    for _ in 0..num_args.max(4) {
+        trampoline_code_prologue.extend([
+            0xff, 0x74, 0x24, 0x08, // push [rsp + 8]
+        ]);
+    }
+
+    trampoline_code_prologue.extend([
+        0x48, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, // mov rax, `callback`
+        0xff, 0xd0, // call rax
+    ]);
+
+    let mut trampoline_code_epilogue = [
+        0x48, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, // mov rax, `end of hook_code`
+        0xff, 0xe0, // jmp rax
+    ];
+
+    let mut hook_code = [
+        0x48, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, // mov rax, `trampoline`
+        0xff, 0xe0, // jmp rax
+    ];
+
+    {
+        let mut ex_pa = executable_page.lock().unwrap();
+
+        let trampoline = ex_pa.alloc(
+            trampoline_code_prologue.len() + original_code.len() + trampoline_code_epilogue.len(),
+        )?;
+
+        trampoline[..trampoline_code_prologue.len()].copy_from_slice(&trampoline_code_prologue);
+
+        trampoline
+            [trampoline_code_prologue.len()..trampoline_code_prologue.len() + original_code.len()]
+            .copy_from_slice(&original_code);
+
+        trampoline[trampoline_code_prologue.len() + original_code.len()
+            ..trampoline_code_prologue.len()
+                + original_code.len()
+                + trampoline_code_epilogue.len()]
+            .copy_from_slice(&trampoline_code_epilogue);
+
+        hook_code[2..10].copy_from_slice(&(trampoline.as_ptr() as usize).to_le_bytes());
+
+        unsafe { hooked_code.write(&hook_code)? };
+    }
+
+    Ok(Hook {
+        hooked_code,
+        original_code,
+        _executable_page: executable_page,
+    })
+}
+
+/// Hook the end of a function.
+pub unsafe fn hook_end(
+    exe_module_memory: &ProcessMemorySlice,
+    executable_page: Arc<Mutex<ExecutablePage>>,
+    code_pattern: &'static [u8],
+    offset_in_pattern: usize,
+    callback: usize,
 ) -> Result<Hook, HookError> {
     let original_code = &code_pattern[offset_in_pattern..];
 

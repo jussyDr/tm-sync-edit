@@ -71,18 +71,23 @@ pub fn exe_module_memory() -> Result<ProcessMemorySlice> {
     })
 }
 
+/// A slice of the memory of a process.
 pub struct ProcessMemorySlice {
+    /// Handle to the process.
     process_handle: OwnedHandle,
+    /// Pointer to the beginning of the slice.
     ptr: NonNull<u8>,
     /// Length of the slice.
     len: usize,
 }
 
 impl ProcessMemorySlice {
+    /// Convert to a slice.
     pub unsafe fn as_slice(&self) -> &[u8] {
         slice::from_raw_parts(self.ptr.as_ptr(), self.len)
     }
 
+    /// Write the given `bytes` to this slice.
     pub unsafe fn write(&self, bytes: &[u8]) -> Result<()> {
         if bytes.len() != self.len {
             return Err(Error::from(ErrorKind::Other));
@@ -109,6 +114,7 @@ impl ProcessMemorySlice {
         Ok(())
     }
 
+    /// Get a slice.
     pub fn slice(&self, range: Range<usize>) -> Result<Self> {
         if range.end > self.len {
             return Err(Error::from(ErrorKind::Other));
