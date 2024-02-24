@@ -80,6 +80,7 @@ extern "system" fn Init() {
 
 #[no_mangle]
 extern "system" fn Destroy() {
+    STATE.lock().unwrap().remove_block_hook = None;
     STATE.lock().unwrap().place_block_hook = None;
 
     message_box("destroyed", "SyncEdit.dll", MessageBoxType::Info).unwrap();
