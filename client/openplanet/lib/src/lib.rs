@@ -26,11 +26,15 @@ static PLACE_BLOCK_FN: OnceLock<PlaceBlockFn> = OnceLock::new();
 static STATE: Mutex<State> = Mutex::new(State {
     place_block_hook: None,
     remove_block_hook: None,
+    place_item_hook: None,
+    remove_item_hook: None,
 });
 
 struct State {
     place_block_hook: Option<Hook>,
     remove_block_hook: Option<Hook>,
+    place_item_hook: Option<Hook>,
+    remove_item_hook: Option<Hook>,
 }
 
 /// DLL entry point.
@@ -70,16 +74,31 @@ extern "system" fn Init() {
 
     STATE.lock().unwrap().place_block_hook = Some(place_block_hook);
 
-    let remove_block_hook =
-        hook_remove_block(&exe_module_memory, executable_page, remove_block_callback).unwrap();
+    let remove_block_hook = hook_remove_block(
+        &exe_module_memory,
+        Arc::clone(&executable_page),
+        remove_block_callback,
+    )
+    .unwrap();
 
     STATE.lock().unwrap().remove_block_hook = Some(remove_block_hook);
+
+    let place_item_hook = hook_place_item(
+        &exe_module_memory,
+        Arc::clone(&executable_page),
+        place_item_callback,
+    )
+    .unwrap();
+
+    STATE.lock().unwrap().place_item_hook = Some(place_item_hook);
 
     message_box("initialized", "SyncEdit.dll", MessageBoxType::Info).unwrap();
 }
 
 #[no_mangle]
 extern "system" fn Destroy() {
+    STATE.lock().unwrap().remove_item_hook = None;
+    STATE.lock().unwrap().place_item_hook = None;
     STATE.lock().unwrap().remove_block_hook = None;
     STATE.lock().unwrap().place_block_hook = None;
 
@@ -102,9 +121,18 @@ extern "win64" fn remove_block_callback(
     message_box("removed block", "SyncEdit.dll", MessageBoxType::Info).unwrap();
 }
 
+/// Callback of the place item hook.
+extern "win64" fn place_item_callback(_item: *const Item) {
+    message_box("placed item", "SyncEdit.dll", MessageBoxType::Info).unwrap();
+}
+
 /// Corresponds to the Trackmania CGameCtnBlock class.
 #[repr(C)]
 struct Block;
+
+/// Corresponds to the Trackmania CGameCtnAnchoredObject class.
+#[repr(C)]
+struct Item;
 
 /// Hook the place block function.
 fn hook_place_block(
@@ -149,6 +177,25 @@ fn hook_remove_block(
             15,
             callback as usize,
             5,
+        )
+    }
+}
+
+/// Hook the remove block function.
+fn hook_place_item(
+    exe_module_memory: &ProcessMemorySlice,
+    executable_page: Arc<Mutex<ExecutablePage>>,
+    callback: extern "win64" fn(*const Item),
+) -> Result<Hook, HookError> {
+    let code_pattern = &[];
+
+    unsafe {
+        hook_end(
+            exe_module_memory,
+            executable_page,
+            code_pattern,
+            15,
+            callback as usize,
         )
     }
 }
