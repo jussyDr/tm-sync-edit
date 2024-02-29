@@ -1,9 +1,10 @@
 use std::{
     collections::HashMap,
-    error::Error,
     io,
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+    num::NonZeroUsize,
     sync::{Arc, Mutex},
+    thread,
 };
 
 use bytes::Bytes;
@@ -19,23 +20,27 @@ use tokio_util::codec::LengthDelimitedCodec;
 
 #[derive(clap::Parser)]
 struct Args {
+    #[arg(short, long)]
     port: Option<u16>,
-    multi_thread: Option<bool>,
+    #[arg(short, long)]
+    num_threads: Option<NonZeroUsize>,
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
-    env_logger::builder()
-        .filter_level(LevelFilter::Info)
-        .try_init()?;
+fn main() -> io::Result<()> {
+    env_logger::builder().filter_level(LevelFilter::Info).init();
 
-    let args = Args::try_parse()?;
+    let args = Args::parse();
 
-    let multi_thread = args.multi_thread.unwrap_or(true);
+    let num_threads = args.num_threads.unwrap_or(thread::available_parallelism()?);
 
-    let mut runtime_builder = if multi_thread {
-        runtime::Builder::new_multi_thread()
-    } else {
+    log::info!("number of worker threads: {num_threads}");
+
+    let mut runtime_builder = if num_threads.get() == 1 {
         runtime::Builder::new_current_thread()
+    } else {
+        let mut runtime_builder = runtime::Builder::new_multi_thread();
+        runtime_builder.worker_threads(num_threads.get());
+        runtime_builder
     };
 
     let runtime = runtime_builder.enable_io().build()?;
@@ -49,7 +54,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         let tcp_listener = TcpListener::bind(socket_addr).await?;
 
-        log::info!("listening on {socket_addr}");
+        log::info!("listening on: {socket_addr}");
 
         loop {
             let (tcp_stream, socket_addr) = tcp_listener.accept().await?;
