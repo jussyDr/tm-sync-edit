@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    error::Error,
     io,
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
     num::NonZeroUsize,
@@ -11,6 +12,7 @@ use bytes::Bytes;
 use clap::Parser;
 use futures_util::{SinkExt, StreamExt};
 use log::LevelFilter;
+use tm_sync_edit_message::Message;
 use tokio::{
     net::{TcpListener, TcpStream},
     runtime, select, spawn,
@@ -78,7 +80,7 @@ async fn handle_connection(
         state.clients.insert(socket_addr, sender);
     }
 
-    if let Err(err) = handle_client(&state, tcp_stream, receiver).await {
+    if let Err(err) = handle_client(&state, tcp_stream, socket_addr, receiver).await {
         log::error!("{err}");
     }
 
@@ -89,10 +91,11 @@ async fn handle_connection(
 }
 
 async fn handle_client(
-    _state: &Arc<Mutex<State>>,
+    state: &Arc<Mutex<State>>,
     tcp_stream: TcpStream,
+    socket_addr: SocketAddr,
     mut receiver: mpsc::UnboundedReceiver<Bytes>,
-) -> io::Result<()> {
+) -> Result<(), Box<dyn Error>> {
     let mut framed_tcp_stream = LengthDelimitedCodec::builder().new_framed(tcp_stream);
 
     loop {
@@ -100,7 +103,58 @@ async fn handle_client(
             Some(frame) = receiver.recv() => {
                 framed_tcp_stream.send(frame).await?;
             },
-            Some(_frame) = framed_tcp_stream.next() => {},
+            Some(frame) = framed_tcp_stream.next() => {
+                let bytes = frame?.freeze();
+
+                let message: Message = postcard::from_bytes(&bytes)?;
+
+                match message {
+                    Message::PlaceBlock => {
+                        let mut state = state.lock().unwrap();
+
+                        if state.map.place_block() {
+                            for (&client_addr, client) in &state.clients {
+                                if client_addr != socket_addr {
+                                    client.send(Bytes::clone(&bytes))?;
+                                }
+                            }
+                        }
+                    },
+                    Message::RemoveBlock => {
+                        let mut state = state.lock().unwrap();
+
+                        if state.map.remove_block() {
+                            for (&client_addr, client) in &state.clients {
+                                if client_addr != socket_addr {
+                                    client.send(Bytes::clone(&bytes))?;
+                                }
+                            }
+                        }
+                    },
+                    Message::PlaceItem => {
+                        let mut state = state.lock().unwrap();
+
+                        if state.map.place_item() {
+                            for (&client_addr, client) in &state.clients {
+                                if client_addr != socket_addr {
+                                    client.send(Bytes::clone(&bytes))?;
+                                }
+                            }
+                        }
+                    },
+                    Message::RemoveItem => {
+                        let mut state = state.lock().unwrap();
+
+                        if state.map.remove_item() {
+                            for (&client_addr, client) in &state.clients {
+                                if client_addr != socket_addr {
+                                    client.send(Bytes::clone(&bytes))?;
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             else => break
         }
     }
@@ -110,12 +164,38 @@ async fn handle_client(
 
 struct State {
     clients: HashMap<SocketAddr, mpsc::UnboundedSender<Bytes>>,
+    map: Map,
 }
 
 impl State {
     fn new() -> Self {
         Self {
             clients: HashMap::new(),
+            map: Map::new(),
         }
+    }
+}
+
+struct Map;
+
+impl Map {
+    fn new() -> Self {
+        Self
+    }
+
+    fn place_block(&mut self) -> bool {
+        true
+    }
+
+    fn remove_block(&mut self) -> bool {
+        true
+    }
+
+    fn place_item(&mut self) -> bool {
+        true
+    }
+
+    fn remove_item(&mut self) -> bool {
+        true
     }
 }

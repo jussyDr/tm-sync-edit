@@ -8,6 +8,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 memchr = "2.7.1"
+tm-sync-edit-message = { path = "../../../message" }
 
 [dependencies.windows-sys]
 version = "0.52.0"
