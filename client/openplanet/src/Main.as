@@ -3,9 +3,12 @@ const string c_title = Icons::Syncthing + " Sync Edit";
 [Setting hidden]
 bool Setting_WindowEnabled = true;
 
+CGameCtnApp@ g_app = null;
 Import::Library@ g_library = null;
 
 void Main() {
+    @g_app = GetApp();
+
     @g_library = Import::GetLibrary("SyncEdit.dll");
     auto libraryInit = g_library.GetFunction("Init");
     libraryInit.Call();
@@ -29,7 +32,9 @@ void RenderInterface() {
     UI::End();
 }
 
-void Update(float dt) {}
+void Update(float dt) {
+    
+}
 
 void OnDestroyed() {
     auto libraryDestroy = g_library.GetFunction("Destroy");

@@ -1,12 +1,15 @@
 use std::{
     collections::HashMap,
+    error::Error,
     io,
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
     sync::{Arc, Mutex},
 };
 
 use bytes::Bytes;
+use clap::Parser;
 use futures_util::{SinkExt, StreamExt};
+use log::LevelFilter;
 use tokio::{
     net::{TcpListener, TcpStream},
     runtime, select, spawn,
@@ -14,9 +17,20 @@ use tokio::{
 };
 use tokio_util::codec::LengthDelimitedCodec;
 
-fn main() -> io::Result<()> {
-    let port = 8369;
-    let multi_thread = true;
+#[derive(clap::Parser)]
+struct Args {
+    port: Option<u16>,
+    multi_thread: Option<bool>,
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+    env_logger::builder()
+        .filter_level(LevelFilter::Info)
+        .try_init()?;
+
+    let args = Args::try_parse()?;
+
+    let multi_thread = args.multi_thread.unwrap_or(true);
 
     let mut runtime_builder = if multi_thread {
         runtime::Builder::new_multi_thread()
@@ -29,9 +43,13 @@ fn main() -> io::Result<()> {
     runtime.block_on(async {
         let state = Arc::new(Mutex::new(State::new()));
 
+        let port = args.port.unwrap_or(8369);
+
         let socket_addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port);
 
         let tcp_listener = TcpListener::bind(socket_addr).await?;
+
+        log::info!("listening on {socket_addr}");
 
         loop {
             let (tcp_stream, socket_addr) = tcp_listener.accept().await?;
@@ -55,7 +73,9 @@ async fn handle_connection(
         state.clients.insert(socket_addr, sender);
     }
 
-    let _ = handle_client(&state, tcp_stream, receiver).await;
+    if let Err(err) = handle_client(&state, tcp_stream, receiver).await {
+        log::error!("{err}");
+    }
 
     {
         let mut state = state.lock().unwrap();
