@@ -6,19 +6,21 @@ use std::{
     error::Error,
     ffi::{c_char, c_void, CStr},
     io,
-    net::{IpAddr, SocketAddr, TcpStream},
+    net::{IpAddr, SocketAddr},
     panic,
     str::FromStr,
     sync::Mutex,
 };
 
+use tm_sync_edit_shared::{framed_tcp_stream, FramedTcpStream};
+use tokio::net::TcpStream;
 use windows::{message_box, DllCallReason, MessageBoxType};
 use windows_sys::Win32::Foundation::{BOOL, HINSTANCE, TRUE};
 
 static STATE: Mutex<State> = Mutex::new(State::new());
 
 struct State {
-    tcp_stream: Option<TcpStream>,
+    tcp_stream: Option<FramedTcpStream>,
 }
 
 impl State {
@@ -89,9 +91,10 @@ fn join(host: *const c_char, port: u16) -> Result<(), Box<dyn Error>> {
     let ip_addr = IpAddr::from_str(host)?;
     let socket_addr = SocketAddr::new(ip_addr, port);
 
-    let tcp_stream = TcpStream::connect(socket_addr)?;
+    let tcp_stream = pollster::block_on(TcpStream::connect(socket_addr))?;
+    let framed_tcp_stream = framed_tcp_stream(tcp_stream);
 
-    STATE.lock().unwrap().tcp_stream = Some(tcp_stream);
+    STATE.lock().unwrap().tcp_stream = Some(framed_tcp_stream);
 
     Ok(())
 }

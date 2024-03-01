@@ -8,7 +8,9 @@ crate-type = ["cdylib"]
 
 [dependencies]
 memchr = "2.7.1"
-tm-sync-edit-message = { path = "../../../message" }
+pollster = "0.3.0"
+tm-sync-edit-shared = { path = "../../../shared" }
+tokio = { version = "1.35.1", features = ["net"] }
 
 [dependencies.windows-sys]
 version = "0.52.0"
