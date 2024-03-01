@@ -61,6 +61,8 @@ fn main() -> io::Result<()> {
         loop {
             let (tcp_stream, socket_addr) = tcp_listener.accept().await?;
 
+            log::info!("connection from: {socket_addr}");
+
             let state = Arc::clone(&state);
 
             spawn(handle_connection(state, tcp_stream, socket_addr));

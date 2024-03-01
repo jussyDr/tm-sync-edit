@@ -2,21 +2,28 @@ mod game;
 mod hook;
 mod windows;
 
-use std::{ffi::c_void, io::Result, panic, sync::Mutex};
+use std::{
+    error::Error,
+    ffi::{c_char, c_void, CStr},
+    io,
+    net::{IpAddr, SocketAddr, TcpStream},
+    panic,
+    str::FromStr,
+    sync::Mutex,
+};
 
-use game::Fns;
 use windows::{message_box, DllCallReason, MessageBoxType};
 use windows_sys::Win32::Foundation::{BOOL, HINSTANCE, TRUE};
 
 static STATE: Mutex<State> = Mutex::new(State::new());
 
 struct State {
-    game_fns: Option<Fns>,
+    tcp_stream: Option<TcpStream>,
 }
 
 impl State {
     const fn new() -> Self {
-        Self { game_fns: None }
+        Self { tcp_stream: None }
     }
 }
 
@@ -49,11 +56,16 @@ extern "C" fn Init() {
     init().unwrap();
 }
 
-fn init() -> Result<()> {
-    let mut state = STATE.lock().unwrap();
+fn init() -> Result<(), ()> {
+    Ok(())
+}
 
-    state.game_fns = unsafe { Some(Fns::find()?) };
+#[no_mangle]
+extern "C" fn Update() {
+    update().unwrap();
+}
 
+fn update() -> Result<(), io::Error> {
     Ok(())
 }
 
@@ -62,10 +74,24 @@ extern "C" fn Destroy() {
     destroy().unwrap();
 }
 
-fn destroy() -> Result<()> {
-    let mut state = STATE.lock().unwrap();
+fn destroy() -> Result<(), ()> {
+    Ok(())
+}
 
-    state.game_fns = None;
+#[no_mangle]
+extern "C" fn Join(host: *const c_char, port: u16) {
+    join(host, port).unwrap()
+}
+
+fn join(host: *const c_char, port: u16) -> Result<(), Box<dyn Error>> {
+    let host = unsafe { CStr::from_ptr(host) }.to_str()?;
+
+    let ip_addr = IpAddr::from_str(host)?;
+    let socket_addr = SocketAddr::new(ip_addr, port);
+
+    let tcp_stream = TcpStream::connect(socket_addr)?;
+
+    STATE.lock().unwrap().tcp_stream = Some(tcp_stream);
 
     Ok(())
 }
