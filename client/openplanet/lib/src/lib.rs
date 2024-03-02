@@ -1,6 +1,5 @@
 mod game;
 mod hook;
-mod poll;
 mod windows;
 
 use std::{
@@ -12,27 +11,34 @@ use std::{
     panic,
     pin::Pin,
     str::FromStr,
-    sync::Mutex,
-    task::Poll,
+    sync::{Arc, Mutex},
+    task::{Context, Poll, Wake, Waker},
 };
 
-use poll::Pollable;
+use futures::{TryFuture, TryStream};
+use serde::{Deserialize, Serialize};
 use tokio::net::TcpStream;
+use tokio_util::codec::{Framed, LengthDelimitedCodec};
 use windows::{message_box, DllCallReason, MessageBoxType};
 use windows_sys::Win32::Foundation::{BOOL, HINSTANCE, TRUE};
 
 static STATE: Mutex<State> = Mutex::new(State::new());
 
-struct State {
-    tcp_stream_future:
-        Option<Pollable<Pin<Box<dyn Future<Output = io::Result<TcpStream>> + Send>>>>,
+enum State {
+    Disconnected,
+    Connecting {
+        tcp_stream_connect: Pin<Box<dyn Future<Output = io::Result<TcpStream>> + Send>>,
+        waker: Arc<TcpStreamConnectWaker>,
+    },
+    Connected {
+        framed_tcp_stream: Framed<TcpStream, LengthDelimitedCodec>,
+        waker: Arc<TcpStreamWaker>,
+    },
 }
 
 impl State {
     const fn new() -> Self {
-        Self {
-            tcp_stream_future: None,
-        }
+        Self::Disconnected
     }
 }
 
@@ -74,13 +80,57 @@ extern "C" fn Update() {
     update().unwrap();
 }
 
-fn update() -> Result<(), io::Error> {
+fn update() -> Result<(), Box<dyn Error>> {
     let mut state = STATE.lock().unwrap();
 
-    if let Some(tcp_stream_future) = &mut state.tcp_stream_future {
-        match tcp_stream_future.poll() {
-            Poll::Pending => {}
-            Poll::Ready(tcp_stream) => {}
+    match &mut *state {
+        State::Disconnected => {}
+        State::Connecting {
+            tcp_stream_connect,
+            waker,
+        } => {
+            let waker = Waker::from(Arc::clone(waker));
+            let mut context = Context::from_waker(&waker);
+
+            if let Poll::Ready(tcp_stream) = tcp_stream_connect.as_mut().try_poll(&mut context) {
+                let framed_tcp_stream = LengthDelimitedCodec::builder().new_framed(tcp_stream?);
+                let waker = Arc::new(TcpStreamWaker::new());
+
+                *state = State::Connected {
+                    framed_tcp_stream,
+                    waker,
+                };
+            }
+        }
+        State::Connected {
+            framed_tcp_stream,
+            waker,
+        } => {
+            let mut framed_tcp_stream = Pin::new(framed_tcp_stream);
+
+            let waker = Waker::from(Arc::clone(waker));
+            let mut context = Context::from_waker(&waker);
+
+            loop {
+                match framed_tcp_stream.as_mut().try_poll_next(&mut context) {
+                    Poll::Pending => break,
+                    Poll::Ready(None) => {
+                        todo!("disconnected")
+                    }
+                    Poll::Ready(Some(frame)) => {
+                        let frame = frame?.freeze();
+
+                        let message = postcard::from_bytes(&frame)?;
+
+                        match message {
+                            Message::PlaceBlock => {}
+                            Message::RemoveBlock => {}
+                            Message::PlaceItem => {}
+                            Message::RemoveItem => {}
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -107,9 +157,49 @@ fn join(host: *const c_char, port: u16) -> Result<(), Box<dyn Error>> {
     let ip_addr = IpAddr::from_str(host)?;
     let socket_addr = SocketAddr::new(ip_addr, port);
 
-    let tcp_stream_future = TcpStream::connect(socket_addr);
+    let tcp_stream_connect = Box::pin(TcpStream::connect(socket_addr));
+    let waker = Arc::new(TcpStreamConnectWaker::new());
 
-    STATE.lock().unwrap().tcp_stream_future = Some(Pollable::new(Box::pin(tcp_stream_future)));
+    *STATE.lock().unwrap() = State::Connecting {
+        tcp_stream_connect,
+        waker,
+    };
 
     Ok(())
+}
+
+struct TcpStreamConnectWaker;
+
+impl TcpStreamConnectWaker {
+    fn new() -> Self {
+        Self
+    }
+}
+
+impl Wake for TcpStreamConnectWaker {
+    fn wake(self: Arc<Self>) {}
+
+    fn wake_by_ref(self: &Arc<Self>) {}
+}
+
+struct TcpStreamWaker;
+
+impl TcpStreamWaker {
+    fn new() -> Self {
+        Self
+    }
+}
+
+impl Wake for TcpStreamWaker {
+    fn wake(self: Arc<Self>) {}
+
+    fn wake_by_ref(self: &Arc<Self>) {}
+}
+
+#[derive(Serialize, Deserialize)]
+enum Message {
+    PlaceBlock,
+    RemoveBlock,
+    PlaceItem,
+    RemoveItem,
 }

@@ -12,12 +12,13 @@ use bytes::Bytes;
 use clap::Parser;
 use futures_util::{SinkExt, StreamExt};
 use log::LevelFilter;
-use tm_sync_edit_shared::{deserialize_message, framed_tcp_stream, Message};
+use serde::{Deserialize, Serialize};
 use tokio::{
     net::{TcpListener, TcpStream},
     runtime, select, spawn,
     sync::mpsc::{self},
 };
+use tokio_util::codec::LengthDelimitedCodec;
 
 #[derive(clap::Parser)]
 struct Args {
@@ -97,7 +98,7 @@ async fn handle_client(
     socket_addr: SocketAddr,
     mut receiver: mpsc::UnboundedReceiver<Bytes>,
 ) -> Result<(), Box<dyn Error>> {
-    let mut framed_tcp_stream = framed_tcp_stream(tcp_stream);
+    let mut framed_tcp_stream = LengthDelimitedCodec::builder().new_framed(tcp_stream);
 
     loop {
         select! {
@@ -107,7 +108,7 @@ async fn handle_client(
             Some(frame) = framed_tcp_stream.next() => {
                 let bytes = frame?.freeze();
 
-                let message = deserialize_message(&bytes)?;
+                let message = postcard::from_bytes(&bytes)?;
 
                 match message {
                     Message::PlaceBlock => {
@@ -199,4 +200,12 @@ impl Map {
     fn remove_item(&mut self) -> bool {
         true
     }
+}
+
+#[derive(Serialize, Deserialize)]
+enum Message {
+    PlaceBlock,
+    RemoveBlock,
+    PlaceItem,
+    RemoveItem,
 }
