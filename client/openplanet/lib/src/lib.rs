@@ -1,18 +1,22 @@
 mod game;
 mod hook;
+mod poll;
 mod windows;
 
 use std::{
     error::Error,
     ffi::{c_char, c_void, CStr},
+    future::Future,
     io,
     net::{IpAddr, SocketAddr},
     panic,
+    pin::Pin,
     str::FromStr,
     sync::Mutex,
+    task::Poll,
 };
 
-use tm_sync_edit_shared::{framed_tcp_stream, FramedTcpStream};
+use poll::Pollable;
 use tokio::net::TcpStream;
 use windows::{message_box, DllCallReason, MessageBoxType};
 use windows_sys::Win32::Foundation::{BOOL, HINSTANCE, TRUE};
@@ -20,12 +24,15 @@ use windows_sys::Win32::Foundation::{BOOL, HINSTANCE, TRUE};
 static STATE: Mutex<State> = Mutex::new(State::new());
 
 struct State {
-    tcp_stream: Option<FramedTcpStream>,
+    tcp_stream_future:
+        Option<Pollable<Pin<Box<dyn Future<Output = io::Result<TcpStream>> + Send>>>>,
 }
 
 impl State {
     const fn new() -> Self {
-        Self { tcp_stream: None }
+        Self {
+            tcp_stream_future: None,
+        }
     }
 }
 
@@ -68,6 +75,15 @@ extern "C" fn Update() {
 }
 
 fn update() -> Result<(), io::Error> {
+    let mut state = STATE.lock().unwrap();
+
+    if let Some(tcp_stream_future) = &mut state.tcp_stream_future {
+        match tcp_stream_future.poll() {
+            Poll::Pending => {}
+            Poll::Ready(tcp_stream) => {}
+        }
+    }
+
     Ok(())
 }
 
@@ -91,10 +107,9 @@ fn join(host: *const c_char, port: u16) -> Result<(), Box<dyn Error>> {
     let ip_addr = IpAddr::from_str(host)?;
     let socket_addr = SocketAddr::new(ip_addr, port);
 
-    let tcp_stream = pollster::block_on(TcpStream::connect(socket_addr))?;
-    let framed_tcp_stream = framed_tcp_stream(tcp_stream);
+    let tcp_stream_future = TcpStream::connect(socket_addr);
 
-    STATE.lock().unwrap().tcp_stream = Some(framed_tcp_stream);
+    STATE.lock().unwrap().tcp_stream_future = Some(Pollable::new(Box::pin(tcp_stream_future)));
 
     Ok(())
 }
