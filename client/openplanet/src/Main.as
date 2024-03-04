@@ -1,4 +1,5 @@
 const string c_title = "Sync Edit";
+const string c_libraryPath = "SyncEdit.dll";
 
 [Setting hidden]
 string Setting_Host = "127.0.0.1";
@@ -6,88 +7,87 @@ string Setting_Host = "127.0.0.1";
 [Setting hidden]
 string Setting_Port = "8369";
 
-string g_errorString = "";
-
 Library@ g_library = null;
 
-void RenderInterface() {
-    if (!UI::Begin(c_title)) {
+void Main() {
+    auto library = Import::GetLibrary(c_libraryPath);
+
+    if (library is null) {
         return;
     }
 
-    Setting_Host = UI::InputText("Host", Setting_Host, UI::InputTextFlags::CharsNoBlank);
+    auto buttonLabel = library.GetFunction("ButtonLabel");
 
-    Setting_Port = UI::InputText("Port", Setting_Port, UI::InputTextFlags::CharsDecimal);
-
-    if (UI::Button("Join")) {
-        LoadLibrary();
-
-        if (g_library !is null) {
-            if (Setting_Port == "") {
-                g_errorString = "no port specified";
-            } else {
-                auto port = Text::ParseUInt(Setting_Port);
-
-                if (port == 0 || port > 65535) {
-                    g_errorString = "invalid port";
-                } else {
-                    if (!g_library.Join(Setting_Host, port)) {
-                        g_errorString = g_library.LastErrorString();
-                    }
-                }
-            }
-        }
+    if (buttonLabel is null) {
+        return;
     }
 
-    UI::Text(g_errorString);
-  
-    UI::End();
+    auto buttonPressed = library.GetFunction("ButtonPressed");
+
+    if (buttonPressed is null) {
+        return;
+    }
+
+    auto statusText = library.GetFunction("StatusText");
+
+    if (statusText is null) {
+        return;
+    }
+
+    @g_library = Library(library, buttonLabel, buttonPressed, statusText);
 }
 
-void LoadLibrary() {
-    auto dll = Import::GetLibrary("SyncEdit.dll");
+void RenderInterface() {
+    if (UI::Begin(c_title)) {
+        if (g_library is null) {
+            UI::Text("failed to load library: " + c_libraryPath);
+        } else {
+            Setting_Host = UI::InputText("Host", Setting_Host, UI::InputTextFlags::CharsNoBlank);
 
-    if (dll is null) {
-        g_errorString = "failed to load library: 'SyncEdit.dll'";
+            Setting_Port = UI::InputText("Port", Setting_Port, UI::InputTextFlags::CharsNoBlank);
 
-        return;
+            if (UI::Button(g_library.ButtonLabel())) {
+                g_library.ButtonPressed(Setting_Host, Setting_Port);
+            }
+
+            UI::Text(g_library.StatusText());
+        }
+
+        UI::End();
     }
+}
 
-    auto lastErrorString = dll.GetFunction("LastErrorString");
-
-    if (lastErrorString is null) {
-        g_errorString = "failed to load library function: 'LastErrorString' in 'SyncEdit.dll'";
-
-        return;
-    }
-
-    auto join = dll.GetFunction("Join");
-
-    if (join is null) {
-        g_errorString = "failed to load library function: 'Join' in 'SyncEdit.dll'";
-
-        return;
-    }
-
-    @g_library = Library(dll, lastErrorString, join);
+void OnDestroyed() {
+    @g_library = null;
 }
 
 class Library {
-    private Import::Library@ dll;
-    private Import::Function@ lastErrorString;
-    private Import::Function@ join;
+    private Import::Library@ library;
+    private Import::Function@ buttonLabel;
+    private Import::Function@ buttonPressed;
+    private Import::Function@ statusText;
 
-    Library(Import::Library@ dll, Import::Function@ lastErrorString, Import::Function@ join) {
-        @this.dll = dll;
-        @this.lastErrorString = lastErrorString;
-        @this.join = join;
+    Library(
+        Import::Library@ library, 
+        Import::Function@ buttonLabel, 
+        Import::Function@ buttonPressed,
+        Import::Function@ statusText
+    ) {
+        @this.library = library;
+        @this.buttonLabel = buttonLabel;
+        @this.buttonPressed = buttonPressed;
+        @this.statusText = statusText;
     }
 
-    string LastErrorString() {
-        return this.lastErrorString.CallString();
+    string ButtonLabel() {
+        return buttonLabel.CallString();
     }
 
-    bool Join(const string&in host, uint16 port) {
-        return this.join.CallBool(host, port);
+    void ButtonPressed(const string&in host, const string&in port) {
+        buttonPressed.Call(host, port);
+    }
+
+    string StatusText() {
+        return statusText.CallString();
     }
 }
