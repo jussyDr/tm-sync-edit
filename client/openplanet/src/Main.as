@@ -23,10 +23,18 @@ void RenderInterface() {
         LoadLibrary();
 
         if (g_library !is null) {
-            uint16 port = Text::ParseUInt(Setting_Port);
+            if (Setting_Port == "") {
+                g_errorString = "no port specified";
+            } else {
+                auto port = Text::ParseUInt(Setting_Port);
 
-            if (!g_library.Join(Setting_Host, port)) {
-                g_errorString = g_library.LastErrorString();
+                if (port == 0 || port > 65535) {
+                    g_errorString = "invalid port";
+                } else {
+                    if (!g_library.Join(Setting_Host, port)) {
+                        g_errorString = g_library.LastErrorString();
+                    }
+                }
             }
         }
     }
