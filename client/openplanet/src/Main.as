@@ -1,7 +1,4 @@
-const string c_title = Icons::Syncthing + " Sync Edit";
-
-[Setting hidden]
-bool Setting_WindowEnabled = true;
+const string c_title = "Sync Edit";
 
 [Setting hidden]
 string Setting_Host = "127.0.0.1";
@@ -9,26 +6,12 @@ string Setting_Host = "127.0.0.1";
 [Setting hidden]
 string Setting_Port = "8369";
 
-Import::Library@ g_library = null;
-Import::Function@ g_libraryUpdate = null;
-Import::Function@ g_libraryDestroy = null;
+string g_errorString = "";
 
-void Main() {
- 
-}
-
-void RenderMenu() {
-    if (UI::MenuItem(c_title, "", Setting_WindowEnabled)) {
-        Setting_WindowEnabled = !Setting_WindowEnabled;
-    }
-}
+Library@ g_library = null;
 
 void RenderInterface() {
-    if (!Setting_WindowEnabled) {
-        return;
-    }
-
-    if (!UI::Begin(c_title, Setting_WindowEnabled)) {
+    if (!UI::Begin(c_title)) {
         return;
     }
 
@@ -37,36 +20,66 @@ void RenderInterface() {
     Setting_Port = UI::InputText("Port", Setting_Port, UI::InputTextFlags::CharsDecimal);
 
     if (UI::Button("Join")) {
-        Join();
+        LoadLibrary();
+
+        if (g_library !is null) {
+            uint16 port = Text::ParseUInt(Setting_Port);
+
+            if (!g_library.Join(Setting_Host, port)) {
+                g_errorString = g_library.LastErrorString();
+            }
+        }
     }
 
+    UI::Text(g_errorString);
+  
     UI::End();
 }
 
-void Update(float dt) {
-    if (g_libraryUpdate != null) {
-        g_libraryUpdate.Call();
-    }
-}
+void LoadLibrary() {
+    auto dll = Import::GetLibrary("SyncEdit.dll");
 
-void OnDestroyed() {
-    g_libraryDestroy.Call();
-    @g_library = null;
-}
+    if (dll is null) {
+        g_errorString = "failed to load library: 'SyncEdit.dll'";
 
-void Join() {
-    @g_library = Import::GetLibrary("SyncEdit.dll");
-
-    if (g_library == null) {
         return;
     }
 
-    auto libraryJoin = g_library.GetFunction("Join");
-    @g_libraryUpdate = g_library.GetFunction("Update");
-    @g_libraryDestroy = g_library.GetFunction("Destroy");
+    auto lastErrorString = dll.GetFunction("LastErrorString");
 
+    if (lastErrorString is null) {
+        g_errorString = "failed to load library function: 'LastErrorString' in 'SyncEdit.dll'";
 
-    uint16 port = Text::ParseUInt(Setting_Port);
+        return;
+    }
 
-    libraryJoin.Call(Setting_Host, port);
+    auto join = dll.GetFunction("Join");
+
+    if (join is null) {
+        g_errorString = "failed to load library function: 'Join' in 'SyncEdit.dll'";
+
+        return;
+    }
+
+    @g_library = Library(dll, lastErrorString, join);
+}
+
+class Library {
+    private Import::Library@ dll;
+    private Import::Function@ lastErrorString;
+    private Import::Function@ join;
+
+    Library(Import::Library@ dll, Import::Function@ lastErrorString, Import::Function@ join) {
+        @this.dll = dll;
+        @this.lastErrorString = lastErrorString;
+        @this.join = join;
+    }
+
+    string LastErrorString() {
+        return this.lastErrorString.CallString();
+    }
+
+    bool Join(const string&in host, uint16 port) {
+        return this.join.CallBool(host, port);
+    }
 }
