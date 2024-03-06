@@ -9,9 +9,10 @@ use std::{
     thread,
 };
 
+use futures_util::TryStreamExt;
 use native_dialog::{MessageDialog, MessageType};
+use tm_sync_edit_shared::framed;
 use tokio::{net::TcpStream, runtime, select, sync::Notify};
-use tokio_util::codec::{Decoder, LengthDelimitedCodec};
 use windows_sys::Win32::{
     Foundation::{BOOL, TRUE},
     System::SystemServices::DLL_PROCESS_ATTACH,
@@ -97,7 +98,9 @@ fn join_inner(cancelled: Arc<Notify>, host: CString, port: CString) -> Result<()
 async fn join_inner_inner(socket_addr: SocketAddr) -> Result<(), Box<dyn Error>> {
     let tcp_stream = TcpStream::connect(socket_addr).await?;
 
-    let framed_tcp_stream = LengthDelimitedCodec::new().framed(tcp_stream);
+    let mut framed_tcp_stream = framed(tcp_stream);
+
+    let _frame = framed_tcp_stream.try_next().await?.ok_or("")?.freeze();
 
     Ok(())
 }
