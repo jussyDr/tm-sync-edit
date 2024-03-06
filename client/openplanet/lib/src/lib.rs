@@ -87,7 +87,7 @@ extern "system" fn JoinError() -> *const c_char {
 }
 
 #[no_mangle]
-extern "system" fn OpenEditor() -> bool {
+extern "system" fn OpenMapEditor() -> bool {
     let mut open_editor = OPEN_EDITOR.lock().unwrap();
 
     if *open_editor {
@@ -100,7 +100,7 @@ extern "system" fn OpenEditor() -> bool {
 }
 
 #[no_mangle]
-extern "system" fn OpenEditorResult(success: bool) {
+extern "system" fn OpenMapEditorResult(success: bool) {
     OPEN_EDITOR_RESULT
         .lock()
         .unwrap()

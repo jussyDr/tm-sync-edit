@@ -23,19 +23,19 @@ void LoadLibrary() {
         return;
     }
 
-    auto openEditor = library.GetFunction("OpenEditor");
+    auto openMapEditor = library.GetFunction("OpenMapEditor");
 
-    if (openEditor is null) {
+    if (openMapEditor is null) {
         return;
     }
 
-    auto openEditorResult = library.GetFunction("OpenEditorResult");
+    auto openMapEditorResult = library.GetFunction("OpenMapEditorResult");
 
-    if (openEditorResult is null) {
+    if (openMapEditorResult is null) {
         return;
     }
 
-    @g_library = Library(library, join, cancelJoin, joinError, openEditor, openEditorResult);
+    @g_library = Library(library, join, cancelJoin, joinError, openMapEditor, openMapEditorResult);
 }
 
 void FreeLibrary() {
@@ -47,23 +47,23 @@ class Library {
     private Import::Function@ m_join;
     private Import::Function@ m_cancelJoin;
     private Import::Function@ m_joinError;
-    private Import::Function@ m_openEditor;
-    private Import::Function@ m_openEditorResult;
+    private Import::Function@ m_openMapEditor;
+    private Import::Function@ m_openMapEditorResult;
     
     Library(
         Import::Library@ library,
         Import::Function@ join,
         Import::Function@ cancelJoin,
         Import::Function@ joinError,
-        Import::Function@ openEditor,
-        Import::Function@ openEditorResult
+        Import::Function@ openMapEditor,
+        Import::Function@ openMapEditorResult
     ) {
         @m_library = library;
         @m_join = join;
         @m_cancelJoin = cancelJoin;
         @m_joinError = joinError;
-        @m_openEditor = openEditor;
-        @m_openEditorResult = openEditorResult;
+        @m_openMapEditor = openMapEditor;
+        @m_openMapEditorResult = openMapEditorResult;
     }
 
     void Join(const string&in host, const string&in port) {
@@ -78,11 +78,11 @@ class Library {
         return m_joinError.CallString();
     }
 
-    bool OpenEditor() {
-        return m_openEditor.CallBool();
+    bool OpenMapEditor() {
+        return m_openMapEditor.CallBool();
     }
 
-    void OpenEditorResult(bool success) {
-        m_openEditorResult.Call(success);
+    void OpenMapEditorResult(bool success) {
+        m_openMapEditorResult.Call(success);
     }
 }

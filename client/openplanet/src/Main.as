@@ -52,8 +52,8 @@ void Update(float dt) {
         }
 
         if (g_joining) {
-            if (g_library.OpenEditor()) {
-                OpenEditor();
+            if (g_library.OpenMapEditor()) {
+                startnew(OpenMapEditor);
             }
         }
     }
@@ -78,8 +78,20 @@ void CancelJoin() {
     }
 }
 
-void OpenEditor() {
+// Try to open the map editor.
+void OpenMapEditor() {
     if (g_library !is null) {
-        g_library.OpenEditorResult(true);
+        auto maniaPlanet = cast<CGameManiaPlanet>(GetApp());
+        auto switcher = maniaPlanet.Switcher;
+
+        if (switcher.ModuleStack.Length == 1 && cast<CTrackManiaMenus>(switcher.ModuleStack[0]) !is null) {
+            maniaPlanet.ManiaTitleControlScriptAPI.EditNewMap2("Stadium", "48x48Screen155Day", "", "CarSport", "", false, "", "");
+        }
+
+        while (switcher.ModuleStack.Length != 1 || cast<CGameCtnEditorFree>(switcher.ModuleStack[0]) is null) {
+            yield();
+        }
+
+        g_library.OpenMapEditorResult(true);
     }
 }
