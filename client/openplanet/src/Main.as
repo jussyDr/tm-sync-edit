@@ -1,4 +1,12 @@
+[Setting hidden]
+string Setting_Host = "127.0.0.1";
+
+[Setting hidden]
+string Setting_Port = "8369";
+
 Library@ g_library = null;
+
+bool g_joining = false;
 
 void Main() {
     LoadLibrary();
@@ -6,94 +14,46 @@ void Main() {
 
 void RenderInterface() {
     if (UI::Begin("Sync Edit")) {
-        if (UI::Button("Join")) {
-            Join();
+        if (g_joining) {
+            UI::LabelText("Host", Setting_Host);
+
+            UI::LabelText("Port", Setting_Port);
+
+            if (UI::Button("Cancel")) {
+                CancelJoin();
+            }
+        } else {
+            Setting_Host = UI::InputText("Host", Setting_Host, UI::InputTextFlags::CharsNoBlank);
+
+            Setting_Port = UI::InputText("Port", Setting_Port, UI::InputTextFlags::CharsDecimal);
+
+            if (UI::Button("Join")) {
+                Join(Setting_Host, Setting_Port);
+            }
         }
 
         UI::End();
     }
 }
 
-
 void Update(float dt) {
-    if (g_library !is null) {
-        if (g_library.ShouldJoin()) {
-            print("joining");
 
-            g_library.JoinSuccess(true);
-        }
-    }
 }
 
 void OnDestroyed() {
     FreeLibrary();
 }
 
-void Join() {
+void Join(const string&in host, const string&in port) {
     if (g_library !is null) {
-        g_library.Join();
+        g_library.Join(host, port);
+        g_joining = true;
     }
 }
 
-void LoadLibrary() {
-    auto library = Import::GetLibrary("SyncEdit.dll");
-
-    if (library is null) {
-        return;
-    }
-
-    auto join = library.GetFunction("Join");
-
-    if (join is null) {
-        return;
-    }
-
-    auto shouldJoin = library.GetFunction("ShouldJoin");
-
-    if (shouldJoin is null) {
-        return;
-    }
-
-    auto joinSuccess = library.GetFunction("JoinSuccess");
-
-    if (joinSuccess is null) {
-        return;
-    }
-
-    @g_library = Library(library, join, shouldJoin, joinSuccess);
-}
-
-void FreeLibrary() {
-    @g_library = null;
-}
-
-class Library {
-    private Import::Library@ m_library;
-    private Import::Function@ m_join;
-    private Import::Function@ m_shouldJoin;
-    private Import::Function@ m_joinSuccess;
-    
-    Library(
-        Import::Library@ library,
-        Import::Function@ join,
-        Import::Function@ shouldJoin,
-        Import::Function@ joinSuccess
-    ) {
-        @m_library = library;
-        @m_join = join;
-        @m_shouldJoin = shouldJoin;
-        @m_joinSuccess = joinSuccess;
-    }
-
-    void Join() {
-        m_join.Call();
-    }
-
-    bool ShouldJoin() {
-        return m_shouldJoin.CallBool();
-    }
-
-    void JoinSuccess(bool success) {
-        m_joinSuccess.Call(success);
+void CancelJoin() {
+    if (g_library !is null) {
+        g_joining = false;
+        g_library.CancelJoin();
     }
 }
