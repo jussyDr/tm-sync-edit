@@ -7,6 +7,18 @@ void LoadLibrary() {
         return;
     }
 
+    auto registerBlockInfo = library.GetFunction("RegisterBlockInfo");
+
+    if (registerBlockInfo is null) {
+        return;
+    }
+
+    auto registerItemModel = library.GetFunction("RegisterItemModel");
+
+    if (registerItemModel is null) {
+        return;
+    }
+
     auto join = library.GetFunction("Join");
 
     if (join is null) {
@@ -37,7 +49,7 @@ void LoadLibrary() {
         return;
     }
 
-    @g_library = Library(library, join, cancelJoin, joinError, openMapEditor, openMapEditorResult);
+    @g_library = Library(library, registerBlockInfo, registerItemModel, join, cancelJoin, joinError, openMapEditor, openMapEditorResult);
 }
 
 void FreeLibrary() {
@@ -46,6 +58,8 @@ void FreeLibrary() {
 
 class Library {
     private Import::Library@ m_library;
+    private Import::Function@ m_registerBlockInfo;
+    private Import::Function@ m_registerItemModel;
     private Import::Function@ m_join;
     private Import::Function@ m_cancelJoin;
     private Import::Function@ m_joinError;
@@ -54,6 +68,8 @@ class Library {
     
     Library(
         Import::Library@ library,
+        Import::Function@ registerBlockInfo,
+        Import::Function@ registerItemModel,
         Import::Function@ join,
         Import::Function@ cancelJoin,
         Import::Function@ joinError,
@@ -61,11 +77,21 @@ class Library {
         Import::Function@ openMapEditorResult
     ) {
         @m_library = library;
+        @m_registerBlockInfo = registerBlockInfo;
+        @m_registerItemModel = registerItemModel;
         @m_join = join;
         @m_cancelJoin = cancelJoin;
         @m_joinError = joinError;
         @m_openMapEditor = openMapEditor;
         @m_openMapEditorResult = openMapEditorResult;
+    }
+
+    void RegisterBlockInfo(const string&in id, const CGameCtnBlockInfo@ blockInfo) {
+        m_registerBlockInfo.Call(id, blockInfo);
+    }
+
+    void RegisterItemModel(const string&in id, const CGameItemModel@ itemModel) {
+        m_registerItemModel.Call(id, itemModel);
     }
 
     void Join(const string&in host, const string&in port) {

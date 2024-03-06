@@ -11,6 +11,7 @@ string g_joinError = "";
 
 void Main() {
     LoadLibrary();
+    LoadAndRegisterObjectModels();
 }
 
 void RenderInterface() {
@@ -61,6 +62,55 @@ void Update(float dt) {
 
 void OnDestroyed() {
     FreeLibrary();
+}
+
+// Registers all in-game block infos and item models, loading them if not yet done.
+void LoadAndRegisterObjectModels() {
+    if (g_library !is null) {
+        auto blockInfoFolder = Fids::GetGameFolder("GameData\\Stadium\\GameCtnBlockInfo");
+        LoadAndRegisterBlockInfos(blockInfoFolder);
+
+        auto itemModelFolder = Fids::GetGameFolder("GameData\\Stadium\\Items");
+        LoadAndRegisterItemModels(itemModelFolder);
+    }
+}
+
+void LoadAndRegisterBlockInfos(CSystemFidsFolder@ folder) {
+    if (folder is null) {
+        return;
+    }
+
+    for (uint i = 0; i < folder.Leaves.Length; i++) {
+        auto fid = folder.Leaves[i];
+        auto blockInfo = cast<CGameCtnBlockInfo>(Fids::Preload(fid));
+
+        if (blockInfo !is null) {
+            g_library.RegisterBlockInfo(blockInfo.IdName, blockInfo);
+        }
+    }
+
+    for (uint i = 0; i < folder.Trees.Length; i++) {
+        LoadAndRegisterBlockInfos(folder.Trees[i]);
+    }
+}
+
+void LoadAndRegisterItemModels(CSystemFidsFolder@ folder) {
+    if (folder is null) {
+        return;
+    }
+
+    for (uint i = 0; i < folder.Leaves.Length; i++) {
+        auto fid = folder.Leaves[i];
+        auto itemModel = cast<CGameItemModel>(Fids::Preload(fid));
+
+        if (itemModel !is null) {
+            g_library.RegisterItemModel(itemModel.IdName, itemModel);
+        }
+    }
+
+    for (uint i = 0; i < folder.Trees.Length; i++) {
+        LoadAndRegisterItemModels(folder.Trees[i]);
+    }
 }
 
 // Join a server with the given host and port.

@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     error::Error,
     ffi::{c_char, CStr, CString},
     net::{IpAddr, SocketAddr},
@@ -12,7 +13,7 @@ use std::{
 
 use futures_util::{StreamExt, TryStreamExt};
 use native_dialog::{MessageDialog, MessageType};
-use tm_sync_edit_shared::framed;
+use tm_sync_edit_shared::{framed_tcp_stream, Map};
 use tokio::{
     net::TcpStream,
     runtime, select,
@@ -22,6 +23,10 @@ use windows_sys::Win32::{
     Foundation::{BOOL, TRUE},
     System::SystemServices::DLL_PROCESS_ATTACH,
 };
+
+static BLOCK_INFOS: Mutex<Option<HashMap<String, usize>>> = Mutex::new(None);
+
+static ITEM_MODELS: Mutex<Option<HashMap<String, usize>>> = Mutex::new(None);
 
 static JOIN_ERROR: Mutex<Option<CString>> = Mutex::new(None);
 
@@ -110,6 +115,32 @@ extern "system" fn OpenMapEditorResult(success: bool) {
         .unwrap();
 }
 
+#[no_mangle]
+extern "system" fn RegisterBlockInfo(id: *const c_char, block_info: usize) {
+    let id = unsafe { CStr::from_ptr(id).to_str().unwrap().to_owned() };
+
+    let mut block_infos = BLOCK_INFOS.lock().unwrap();
+
+    if block_infos.is_none() {
+        *block_infos = Some(HashMap::new());
+    }
+
+    block_infos.as_mut().unwrap().insert(id, block_info);
+}
+
+#[no_mangle]
+extern "system" fn RegisterItemModel(id: *const c_char, item_model: usize) {
+    let id = unsafe { CStr::from_ptr(id).to_str().unwrap().to_owned() };
+
+    let mut item_models = ITEM_MODELS.lock().unwrap();
+
+    if item_models.is_none() {
+        *item_models = Some(HashMap::new());
+    }
+
+    item_models.as_mut().unwrap().insert(id, item_model);
+}
+
 fn join_inner(cancelled: Arc<Notify>, host: CString, port: CString) -> Result<(), Box<dyn Error>> {
     let host = host.to_str()?;
     let port = u16::from_str(port.to_str()?)?;
@@ -131,16 +162,15 @@ fn join_inner(cancelled: Arc<Notify>, host: CString, port: CString) -> Result<()
 async fn join_inner_inner(socket_addr: SocketAddr) -> Result<(), Box<dyn Error>> {
     let tcp_stream = TcpStream::connect(socket_addr).await?;
 
-    let mut framed_tcp_stream = pin!(framed(tcp_stream).peekable());
+    let mut framed_tcp_stream = pin!(framed_tcp_stream(tcp_stream).peekable());
 
-    let _frame = framed_tcp_stream.try_next().await?.ok_or("")?.freeze();
+    let frame = framed_tcp_stream.try_next().await?.ok_or("")?.freeze();
+    let map: Map = tm_sync_edit_shared::deserialize(&frame)?;
 
     select! {
         None = framed_tcp_stream.as_mut().peek() => return Err("".into()),
         result = join_inner_inner_inner() => result?
     }
-
-    let _frame = framed_tcp_stream.try_next().await?.ok_or("")?.freeze();
 
     loop {
         select! {
