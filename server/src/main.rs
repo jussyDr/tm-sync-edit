@@ -43,6 +43,8 @@ async fn handle_client(tcp_stream: TcpStream) -> Result<(), Box<dyn Error>> {
 
     framed_tcp_stream.send(Bytes::new()).await?;
 
+    framed_tcp_stream.send(Bytes::new()).await?;
+
     loop {
         select! {
             result = framed_tcp_stream.try_next() => match result? {

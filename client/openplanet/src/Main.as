@@ -50,6 +50,12 @@ void Update(float dt) {
                 g_joining = false;
             }
         }
+
+        if (g_joining) {
+            if (g_library.OpenEditor()) {
+                OpenEditor();
+            }
+        }
     }
 }
 
@@ -69,5 +75,11 @@ void CancelJoin() {
     if (g_library !is null) {
         g_joining = false;
         g_library.CancelJoin();
+    }
+}
+
+void OpenEditor() {
+    if (g_library !is null) {
+        g_library.OpenEditorResult(true);
     }
 }

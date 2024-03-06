@@ -23,7 +23,19 @@ void LoadLibrary() {
         return;
     }
 
-    @g_library = Library(library, join, cancelJoin, joinError);
+    auto openEditor = library.GetFunction("OpenEditor");
+
+    if (openEditor is null) {
+        return;
+    }
+
+    auto openEditorResult = library.GetFunction("OpenEditorResult");
+
+    if (openEditorResult is null) {
+        return;
+    }
+
+    @g_library = Library(library, join, cancelJoin, joinError, openEditor, openEditorResult);
 }
 
 void FreeLibrary() {
@@ -35,17 +47,23 @@ class Library {
     private Import::Function@ m_join;
     private Import::Function@ m_cancelJoin;
     private Import::Function@ m_joinError;
+    private Import::Function@ m_openEditor;
+    private Import::Function@ m_openEditorResult;
     
     Library(
         Import::Library@ library,
         Import::Function@ join,
         Import::Function@ cancelJoin,
-        Import::Function@ joinError
+        Import::Function@ joinError,
+        Import::Function@ openEditor,
+        Import::Function@ openEditorResult
     ) {
         @m_library = library;
         @m_join = join;
         @m_cancelJoin = cancelJoin;
         @m_joinError = joinError;
+        @m_openEditor = openEditor;
+        @m_openEditorResult = openEditorResult;
     }
 
     void Join(const string&in host, const string&in port) {
@@ -58,5 +76,13 @@ class Library {
 
     string JoinError() {
         return m_joinError.CallString();
+    }
+
+    bool OpenEditor() {
+        return m_openEditor.CallBool();
+    }
+
+    void OpenEditorResult(bool success) {
+        m_openEditorResult.Call(success);
     }
 }
