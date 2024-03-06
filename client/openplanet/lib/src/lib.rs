@@ -25,6 +25,8 @@ static BLOCK_INFOS: Lazy<Mutex<HashMap<String, usize>>> = Lazy::new(|| Mutex::ne
 
 static ITEM_MODELS: Lazy<Mutex<HashMap<String, usize>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
+static SHOULD_OPEN_EDITOR: Mutex<bool> = Mutex::new(false);
+
 #[no_mangle]
 extern "C" fn ButtonLabel() -> *const c_char {
     match *STATE.lock().unwrap() {
@@ -77,6 +79,19 @@ extern "C" fn StatusText() -> *const c_char {
 #[no_mangle]
 extern "C" fn SetEditor(editor: usize) {
     *EDITOR.lock().unwrap() = editor;
+}
+
+#[no_mangle]
+extern "C" fn ShouldOpenEditor() -> bool {
+    let mut should_open_editor = SHOULD_OPEN_EDITOR.lock().unwrap();
+
+    if *should_open_editor {
+        *should_open_editor = false;
+
+        true
+    } else {
+        false
+    }
 }
 
 #[no_mangle]

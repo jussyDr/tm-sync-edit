@@ -79,9 +79,21 @@ void RenderInterface() {
 }
 
 void Update(float dt) {
-    if (g_library !is null) {
-        auto editor = GetApp().Editor;
-        g_library.SetEditor(editor);
+    auto maniaPlanet = cast<CGameManiaPlanet>(GetApp());
+    auto switcher = maniaPlanet.Switcher;
+
+    if (switcher.ModuleStack.Length >= 1) {
+        auto currentSwitcherModule = switcher.ModuleStack[switcher.ModuleStack.Length - 1];
+
+        if (cast<CTrackManiaMenus>(currentSwitcherModule) !is null) {
+            maniaPlanet.ManiaTitleControlScriptAPI.EditNewMap2("Stadium", "48x48Screen155Day", "", "CarSport", "", false, "", "");
+        } else if (cast<CGameEditorMediaTracker>(currentSwitcherModule) !is null) {
+            auto mediaTrackerEditor = cast<CGameEditorMediaTracker>(currentSwitcherModule);
+            auto mediaTrackerEditorPluginAPI = cast<CGameEditorMediaTrackerPluginAPI>(mediaTrackerEditor.PluginAPI);
+            mediaTrackerEditorPluginAPI.Quit();
+        } else if (cast<CGameCtnEditorFree>(currentSwitcherModule) is null) {
+            maniaPlanet.BackToMainMenu();
+        }
     }
 }
 
