@@ -63,6 +63,7 @@ void OnDestroyed() {
     FreeLibrary();
 }
 
+// Join a server with the given host and port.
 void Join(const string&in host, const string&in port) {
     if (g_library !is null) {
         g_joinError = "";
@@ -71,6 +72,7 @@ void Join(const string&in host, const string&in port) {
     }
 }
 
+// Cancel joining a server.
 void CancelJoin() {
     if (g_library !is null) {
         g_joining = false;
@@ -78,7 +80,7 @@ void CancelJoin() {
     }
 }
 
-// Try to open the map editor.
+// Try to open the map editor (blocking).
 void OpenMapEditor() {
     if (g_library !is null) {
         auto maniaPlanet = cast<CGameManiaPlanet>(GetApp());

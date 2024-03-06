@@ -1,3 +1,5 @@
+//! Trackmania Sync Edit server.
+
 use std::{
     error::Error,
     net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -14,6 +16,7 @@ use tokio::{
     runtime, select, spawn,
 };
 
+/// Command line arguments.
 #[derive(clap::Parser)]
 struct Args {
     #[clap(short, long)]

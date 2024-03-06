@@ -1,3 +1,5 @@
+// Interface for calling functions in the SyncEdit.dll library.
+
 void LoadLibrary() {
     auto library = Import::GetLibrary("SyncEdit.dll");
 

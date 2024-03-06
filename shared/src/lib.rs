@@ -1,3 +1,5 @@
+//! Items shared between the server and client.
+
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 

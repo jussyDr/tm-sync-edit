@@ -48,7 +48,7 @@ extern "system" fn DllMain(_dll_module: usize, call_reason: u32, _reserved: usiz
     TRUE
 }
 
-// Try to join a server.
+/// Try to join a server with the given `host` and `port`.
 #[no_mangle]
 extern "system" fn Join(host: *const c_char, port: *const c_char) {
     *JOIN_ERROR.lock().unwrap() = None;
@@ -70,7 +70,7 @@ extern "system" fn Join(host: *const c_char, port: *const c_char) {
     });
 }
 
-// Cancel joining a server.
+/// Cancel joining a server.
 #[no_mangle]
 extern "system" fn CancelJoin() {
     // Notify the cancellation notification.
