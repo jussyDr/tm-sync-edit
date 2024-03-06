@@ -17,7 +17,13 @@ void LoadLibrary() {
         return;
     }
 
-    @g_library = Library(library, join, cancelJoin);
+    auto joinError = library.GetFunction("JoinError");
+
+    if (joinError is null) {
+        return;
+    }
+
+    @g_library = Library(library, join, cancelJoin, joinError);
 }
 
 void FreeLibrary() {
@@ -28,15 +34,18 @@ class Library {
     private Import::Library@ m_library;
     private Import::Function@ m_join;
     private Import::Function@ m_cancelJoin;
+    private Import::Function@ m_joinError;
     
     Library(
         Import::Library@ library,
         Import::Function@ join,
-        Import::Function@ cancelJoin
+        Import::Function@ cancelJoin,
+        Import::Function@ joinError
     ) {
         @m_library = library;
         @m_join = join;
         @m_cancelJoin = cancelJoin;
+        @m_joinError = joinError;
     }
 
     void Join(const string&in host, const string&in port) {
@@ -45,5 +54,9 @@ class Library {
 
     void CancelJoin() {
         m_cancelJoin.Call();
+    }
+
+    string JoinError() {
+        return m_joinError.CallString();
     }
 }

@@ -7,6 +7,7 @@ string Setting_Port = "8369";
 Library@ g_library = null;
 
 bool g_joining = false;
+string g_joinError = "";
 
 void Main() {
     LoadLibrary();
@@ -22,6 +23,8 @@ void RenderInterface() {
             if (UI::Button("Cancel")) {
                 CancelJoin();
             }
+
+            UI::Text("Connecting...");
         } else {
             Setting_Host = UI::InputText("Host", Setting_Host, UI::InputTextFlags::CharsNoBlank);
 
@@ -30,6 +33,8 @@ void RenderInterface() {
             if (UI::Button("Join")) {
                 Join(Setting_Host, Setting_Port);
             }
+
+            UI::Text(g_joinError);
         }
 
         UI::End();
@@ -37,7 +42,15 @@ void RenderInterface() {
 }
 
 void Update(float dt) {
+    if (g_library !is null) {
+        if (g_joining) {
+            g_joinError = g_library.JoinError();
 
+            if (g_joinError != "") {
+                g_joining = false;
+            }
+        }
+    }
 }
 
 void OnDestroyed() {
@@ -46,6 +59,7 @@ void OnDestroyed() {
 
 void Join(const string&in host, const string&in port) {
     if (g_library !is null) {
+        g_joinError = "";
         g_library.Join(host, port);
         g_joining = true;
     }

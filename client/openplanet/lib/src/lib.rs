@@ -3,6 +3,7 @@ use std::{
     ffi::{c_char, CStr, CString},
     net::{IpAddr, SocketAddr},
     panic,
+    ptr::null,
     str::FromStr,
     sync::{Arc, Mutex},
     thread,
@@ -15,6 +16,8 @@ use windows_sys::Win32::{
     Foundation::{BOOL, TRUE},
     System::SystemServices::DLL_PROCESS_ATTACH,
 };
+
+static JOIN_ERROR: Mutex<Option<CString>> = Mutex::new(None);
 
 static CANCELLED: Mutex<Option<Arc<Notify>>> = Mutex::new(None);
 
@@ -38,15 +41,21 @@ extern "system" fn DllMain(_dll_module: usize, call_reason: u32, _reserved: usiz
 // Try to join a server.
 #[no_mangle]
 extern "system" fn Join(host: *const c_char, port: *const c_char) {
+    *JOIN_ERROR.lock().unwrap() = None;
+
+    // Need to copy string parameters to the heap to safely send them to
+    // a new thread since the strings will be dropped when this function returns.
     let host = unsafe { CStr::from_ptr(host).to_owned() };
     let port = unsafe { CStr::from_ptr(port).to_owned() };
 
+    // Initialize the cancellation notification.
     let cancelled = Arc::new(Notify::new());
     *CANCELLED.lock().unwrap() = Some(Arc::clone(&cancelled));
 
+    // Try to join a server asynchronously using a new thread.
     thread::spawn(|| {
         if let Err(error) = join_inner(cancelled, host, port) {
-            panic!("{error}");
+            *JOIN_ERROR.lock().unwrap() = Some(CString::new(error.to_string()).unwrap());
         }
     });
 }
@@ -54,7 +63,17 @@ extern "system" fn Join(host: *const c_char, port: *const c_char) {
 // Cancel joining a server.
 #[no_mangle]
 extern "system" fn CancelJoin() {
+    // Notify the cancellation notification.
     CANCELLED.lock().unwrap().as_ref().unwrap().notify_one();
+}
+
+#[no_mangle]
+extern "system" fn JoinError() -> *const c_char {
+    match &*JOIN_ERROR.lock().unwrap() {
+        None => null(),
+        // TODO: The returned pointer might be dropped at some point.
+        Some(error) => error.as_ptr(),
+    }
 }
 
 fn join_inner(cancelled: Arc<Notify>, host: CString, port: CString) -> Result<(), Box<dyn Error>> {
@@ -67,9 +86,10 @@ fn join_inner(cancelled: Arc<Notify>, host: CString, port: CString) -> Result<()
     let runtime = runtime::Builder::new_current_thread().enable_io().build()?;
 
     runtime.block_on(async {
+        // We either complete the join task or cancel it.
         select! {
+            result = join_inner_inner(socket_addr) => result,
             _ = cancelled.notified() => Ok(()),
-            result = join_inner_inner(socket_addr) => result
         }
     })
 }
