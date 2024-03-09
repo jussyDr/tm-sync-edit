@@ -37,6 +37,12 @@ void LoadLibrary() {
         return;
     }
 
+    auto joinStatus = library.GetFunction("JoinStatus");
+
+    if (joinStatus is null) {
+        return;
+    }
+
     auto openMapEditor = library.GetFunction("OpenMapEditor");
 
     if (openMapEditor is null) {
@@ -49,7 +55,7 @@ void LoadLibrary() {
         return;
     }
 
-    @g_library = Library(library, registerBlockInfo, registerItemModel, join, cancelJoin, joinError, openMapEditor, openMapEditorResult);
+    @g_library = Library(library, registerBlockInfo, registerItemModel, join, cancelJoin, joinError, joinStatus, openMapEditor, openMapEditorResult);
 }
 
 void FreeLibrary() {
@@ -63,6 +69,7 @@ class Library {
     private Import::Function@ m_join;
     private Import::Function@ m_cancelJoin;
     private Import::Function@ m_joinError;
+    private Import::Function@ m_joinStatus;
     private Import::Function@ m_openMapEditor;
     private Import::Function@ m_openMapEditorResult;
     
@@ -73,6 +80,7 @@ class Library {
         Import::Function@ join,
         Import::Function@ cancelJoin,
         Import::Function@ joinError,
+        Import::Function@ joinStatus,
         Import::Function@ openMapEditor,
         Import::Function@ openMapEditorResult
     ) {
@@ -82,6 +90,7 @@ class Library {
         @m_join = join;
         @m_cancelJoin = cancelJoin;
         @m_joinError = joinError;
+        @m_joinStatus = joinStatus;
         @m_openMapEditor = openMapEditor;
         @m_openMapEditorResult = openMapEditorResult;
     }
@@ -104,6 +113,10 @@ class Library {
 
     string JoinError() {
         return m_joinError.CallString();
+    }
+
+    string JoinStatus() {
+        return m_joinStatus.CallString();
     }
 
     bool OpenMapEditor() {

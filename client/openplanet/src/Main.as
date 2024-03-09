@@ -7,7 +7,7 @@ string Setting_Port = "8369";
 Library@ g_library = null;
 
 bool g_joining = false;
-string g_joinError = "";
+string g_statusText = "";
 
 void Main() {
     LoadLibrary();
@@ -25,7 +25,7 @@ void RenderInterface() {
                 CancelJoin();
             }
 
-            UI::Text("Connecting...");
+            UI::Text(g_statusText);
         } else {
             Setting_Host = UI::InputText("Host", Setting_Host, UI::InputTextFlags::CharsNoBlank);
 
@@ -35,7 +35,7 @@ void RenderInterface() {
                 Join(Setting_Host, Setting_Port);
             }
 
-            UI::Text(g_joinError);
+            UI::Text(g_statusText);
         }
 
         UI::End();
@@ -45,11 +45,15 @@ void RenderInterface() {
 void Update(float dt) {
     if (g_library !is null) {
         if (g_joining) {
-            g_joinError = g_library.JoinError();
+            g_statusText = g_library.JoinError();
 
-            if (g_joinError != "") {
+            if (g_statusText != "") {
                 g_joining = false;
             }
+        }
+
+        if (g_joining) {
+            g_statusText = g_library.JoinStatus();
         }
 
         if (g_joining) {
@@ -116,7 +120,7 @@ void LoadAndRegisterItemModels(CSystemFidsFolder@ folder) {
 // Join a server with the given host and port.
 void Join(const string&in host, const string&in port) {
     if (g_library !is null) {
-        g_joinError = "";
+        g_statusText = "";
         g_library.Join(host, port);
         g_joining = true;
     }

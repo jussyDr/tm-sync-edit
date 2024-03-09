@@ -39,6 +39,8 @@ static ITEM_MODELS: Mutex<Option<HashMap<String, usize>>> = Mutex::new(None);
 
 static JOIN_ERROR: Mutex<Option<CString>> = Mutex::new(None);
 
+static JOIN_STATUS: Mutex<Option<CString>> = Mutex::new(None);
+
 static CANCELLED: Mutex<Option<Arc<Notify>>> = Mutex::new(None);
 
 static OPEN_EDITOR: Mutex<bool> = Mutex::new(false);
@@ -150,6 +152,15 @@ extern "system" fn RegisterItemModel(id: *const c_char, item_model: usize) {
     item_models.as_mut().unwrap().insert(id, item_model);
 }
 
+#[no_mangle]
+extern "system" fn JoinStatus() -> *const c_char {
+    match &*JOIN_STATUS.lock().unwrap() {
+        None => null(),
+        // TODO: The returned pointer might be dropped at some point.
+        Some(error) => error.as_ptr(),
+    }
+}
+
 fn join_inner(cancelled: Arc<Notify>, host: CString, port: CString) -> Result<(), Box<dyn Error>> {
     let host = host.to_str()?;
     let port = u16::from_str(port.to_str()?)?;
@@ -169,6 +180,8 @@ fn join_inner(cancelled: Arc<Notify>, host: CString, port: CString) -> Result<()
 }
 
 async fn join_inner_inner(socket_addr: SocketAddr) -> Result<(), Box<dyn Error>> {
+    *JOIN_STATUS.lock().unwrap() = Some(CString::new("Connecting...").unwrap());
+
     let tcp_stream = TcpStream::connect(socket_addr).await?;
 
     let mut framed_tcp_stream = pin!(framed_tcp_stream(tcp_stream).peekable());
@@ -182,6 +195,8 @@ async fn join_inner_inner(socket_addr: SocketAddr) -> Result<(), Box<dyn Error>>
     }
 
     let game_fns = GameFns::find()?;
+
+    *JOIN_STATUS.lock().unwrap() = Some(CString::new("Connected").unwrap());
 
     loop {
         select! {

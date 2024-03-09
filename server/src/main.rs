@@ -97,6 +97,8 @@ async fn handle_connection(
 
     state.lock().await.clients.remove(&socket_addr);
 
+    log::info!("Disconnected: {socket_addr}");
+
     result
 }
 
