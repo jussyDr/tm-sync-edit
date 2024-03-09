@@ -10,9 +10,16 @@ crate-type = ["cdylib"]
 tm-sync-edit-shared = { path = "../../../shared" }
 
 futures-util = { version = "0.3.30", features = ["sink"] }
+memchr = "2.7.1"
 native-dialog = "0.7.0"
 tokio = { version = "1.36.0", features = ["macros", "net", "rt", "sync"] }
 
 [dependencies.windows-sys]
 version = "0.52.0"
-features = ["Win32_Foundation", "Win32_System_SystemServices"]
+features = [
+    "Win32_Foundation",
+    "Win32_System_LibraryLoader",
+    "Win32_System_ProcessStatus",
+    "Win32_System_SystemServices",
+    "Win32_System_Threading",
+]
