@@ -22,4 +22,16 @@ pub fn deserialize<'de, T: Deserialize<'de>>(bytes: &'de [u8]) -> Result<T, post
 pub struct Map {
     pub blocks: Vec<()>,
     pub items: Vec<()>,
+    pub custom_block_infos: Vec<()>,
+    pub custom_item_models: Vec<()>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum Message {
+    PlaceBlock,
+    RemoveBlock,
+    PlaceItem,
+    RemoveItem,
+    AddCustomBlockInfo,
+    AddCustomItemModel,
 }

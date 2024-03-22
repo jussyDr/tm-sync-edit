@@ -12,7 +12,7 @@ use bytes::Bytes;
 use clap::Parser;
 use futures_util::{SinkExt, TryStreamExt};
 use log::LevelFilter;
-use tm_sync_edit_shared::{framed_tcp_stream, FramedTcpStream, Map};
+use tm_sync_edit_shared::{deserialize, framed_tcp_stream, FramedTcpStream, Map, Message};
 use tokio::{
     net::{TcpListener, TcpStream},
     runtime, select, spawn,
@@ -112,6 +112,17 @@ async fn handle_client(
                 None => break,
                 Some(frame) => {
                     let frame = frame.freeze();
+
+                    let message: Message = deserialize(&frame)?;
+
+                    match message {
+                        Message::PlaceBlock => {}
+                        Message::RemoveBlock => {}
+                        Message::PlaceItem => {}
+                        Message::RemoveItem => {}
+                        Message::AddCustomBlockInfo => {}
+                        Message::AddCustomItemModel => {}
+                    }
                 }
             },
             frame = receiver.recv() => match frame {
