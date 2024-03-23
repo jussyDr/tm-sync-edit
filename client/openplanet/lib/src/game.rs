@@ -1,5 +1,6 @@
 use std::{
     error::Error,
+    ffi::c_void,
     io,
     mem::{size_of, transmute, MaybeUninit},
     ptr::null,
@@ -7,10 +8,15 @@ use std::{
 };
 
 use memchr::memmem;
+use native_dialog::{MessageDialog, MessageType};
 use windows_sys::Win32::{
     Foundation::{CloseHandle, FALSE},
     System::{
+        Diagnostics::Debug::WriteProcessMemory,
         LibraryLoader::GetModuleHandleW,
+        Memory::{
+            VirtualAlloc, VirtualFree, MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_EXECUTE_READWRITE,
+        },
         ProcessStatus::{GetModuleInformation, MODULEINFO},
         Threading::{
             GetCurrentProcess, GetCurrentProcessId, OpenProcess, PROCESS_QUERY_INFORMATION,
@@ -62,7 +68,7 @@ impl GameFns {
                 0x18, 0x55,
             ],
         )
-        .ok_or("")?;
+        .ok_or("failed to find place block function")?;
 
         let remove_block_fn_offset = memmem::find(
             module_memory,
@@ -71,7 +77,7 @@ impl GameFns {
                 0x18, 0x57, 0x48, 0x83, 0xec, 0x40, 0x83, 0x7c, 0x24, 0x70, 0x00,
             ],
         )
-        .ok_or("")?;
+        .ok_or("failed to find remove block function")?;
 
         let place_item_fn_offset = memmem::find(
             module_memory,
@@ -80,7 +86,7 @@ impl GameFns {
                 0x20, 0x57, 0x48, 0x83, 0xec, 0x40, 0x49, 0x8b, 0xf9,
             ],
         )
-        .ok_or("")?;
+        .ok_or("failed to find place item function")?;
 
         let remove_item_fn_offset = memmem::find(
             module_memory,
@@ -89,7 +95,7 @@ impl GameFns {
                 0x8b, 0xd9, 0x48, 0x85, 0xd2, 0x0f, 0x84, 0xe6, 0x00, 0x00, 0x00,
             ],
         )
-        .ok_or("")?;
+        .ok_or("failed to find remove item function")?;
 
         let place_block_fn =
             unsafe { transmute(module_memory.as_ptr().add(place_block_fn_offset)) };
@@ -168,23 +174,123 @@ pub fn hook_place_block() -> Result<(), Box<dyn Error>> {
         )
     };
 
-    let place_block_fn_end_offset = memmem::find(exe_module_memory, &[]).ok_or("")?;
+    let place_block_fn_end_offset = memmem::find(
+        exe_module_memory,
+        &[
+            0x4c, 0x8d, 0x9c, 0x24, 0xc0, 0x00, 0x00, 0x00, 0x49, 0x8b, 0x5b, 0x38, 0x49, 0x8b,
+            0x73, 0x48, 0x49, 0x8b, 0xe3, 0x41, 0x5f, 0x41, 0x5e, 0x41, 0x5d, 0x5f, 0x5d, 0xc3,
+        ],
+    )
+    .ok_or("failed to find place block function end")?;
+
+    let mut trampoline_code = [
+        0x49, 0x8b, 0xe3, // mov rsp, r11
+        0x41, 0x5f, // pop r15
+        0x41, 0x5e, // pop r14
+        0x41, 0x5d, // pop r13
+        0x5f, // pop rdi
+        0x5d, // pop rbp
+        0x50, // push rax
+        0x48, 0x89, 0xc1, // mov rcx, rax
+        0x48, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, // mov rax, ????????
+        0xff, 0xd0, // call rax
+        0x58, // pop rax
+        0xc3, // ret
+    ];
+
+    trampoline_code[17..17 + 8].copy_from_slice(&(place_block_callback as usize).to_le_bytes());
+
+    let trampoline_ptr = unsafe {
+        VirtualAlloc(
+            null(),
+            trampoline_code.len(),
+            MEM_COMMIT | MEM_RESERVE,
+            PAGE_EXECUTE_READWRITE,
+        )
+    };
+
+    if trampoline_ptr.is_null() {
+        return Err(io::Error::last_os_error().into());
+    }
+
+    let trampoline =
+        unsafe { slice::from_raw_parts_mut(trampoline_ptr as *mut u8, trampoline_code.len()) };
+
+    trampoline.copy_from_slice(&trampoline_code);
+
+    let mut hook_code = [
+        0x48, 0xb9, 0, 0, 0, 0, 0, 0, 0, 0, // mov rcx, ????????
+        0xff, 0xe1, // jmp rcx
+    ];
+
+    hook_code[2..2 + 8].copy_from_slice(&(trampoline_ptr as usize).to_le_bytes());
+
+    let mut n_written = MaybeUninit::uninit();
+
+    let result = unsafe {
+        WriteProcessMemory(
+            current_process,
+            exe_module_memory
+                .as_ptr()
+                .add(place_block_fn_end_offset + 16) as *const c_void,
+            hook_code.as_ptr() as *const c_void,
+            12,
+            n_written.as_mut_ptr(),
+        )
+    };
+
+    if result == 0 {
+        return Err(io::Error::last_os_error().into());
+    }
+
+    let mut n_written = MaybeUninit::uninit();
+
+    let original_code: [u8; 12] = [
+        0x49, 0x8b, 0xe3, 0x41, 0x5f, 0x41, 0x5e, 0x41, 0x5d, 0x5f, 0x5d, 0xc3,
+    ];
+
+    let result = unsafe {
+        WriteProcessMemory(
+            current_process,
+            exe_module_memory
+                .as_ptr()
+                .add(place_block_fn_end_offset + 16) as *const c_void,
+            original_code.as_ptr() as *const c_void,
+            12,
+            n_written.as_mut_ptr(),
+        )
+    };
+
+    if result == 0 {
+        return Err(io::Error::last_os_error().into());
+    }
+
+    unsafe { VirtualFree(trampoline_ptr, trampoline_code.len(), MEM_RELEASE) };
 
     unsafe { CloseHandle(current_process) };
 
-    todo!()
+    Ok(())
+}
+
+unsafe extern "system" fn place_block_callback(block: *mut u8) {
+    MessageDialog::new()
+        .set_type(MessageType::Info)
+        .set_title("SyncEdit.dll")
+        .set_text("placed block!")
+        .show_confirm()
+        .unwrap();
 }
 
 pub fn hook_remove_block() -> Result<(), Box<dyn Error>> {
-    todo!()
+    Ok(())
 }
 
 pub fn hook_place_item() -> Result<(), Box<dyn Error>> {
-    todo!()
+    Ok(())
 }
 
 pub fn hook_remove_item() -> Result<(), Box<dyn Error>> {
-    todo!()
+    Ok(())
 }
 
 type PlaceBlockFn = unsafe extern "system" fn();

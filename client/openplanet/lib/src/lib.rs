@@ -4,20 +4,16 @@ use std::{
     collections::HashMap,
     error::Error,
     ffi::{c_char, CStr, CString},
-    io,
-    mem::{size_of, transmute, MaybeUninit},
     net::{IpAddr, SocketAddr},
     panic,
     pin::pin,
     ptr::null,
-    slice,
     str::FromStr,
     sync::{Arc, Mutex},
     thread,
 };
 
 use futures_util::{StreamExt, TryStreamExt};
-use memchr::memmem;
 use native_dialog::{MessageDialog, MessageType};
 use tm_sync_edit_shared::{deserialize, framed_tcp_stream, Map, Message};
 use tokio::{
@@ -27,12 +23,7 @@ use tokio::{
 };
 use windows_sys::Win32::{
     Foundation::{BOOL, TRUE},
-    System::{
-        LibraryLoader::GetModuleHandleW,
-        ProcessStatus::{GetModuleInformation, MODULEINFO},
-        SystemServices::DLL_PROCESS_ATTACH,
-        Threading::GetCurrentProcess,
-    },
+    System::SystemServices::DLL_PROCESS_ATTACH,
 };
 
 use crate::game::{
