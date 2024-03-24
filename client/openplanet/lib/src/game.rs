@@ -31,48 +31,16 @@ pub type PlaceItemCallbackFn = unsafe extern "system" fn(*const u8);
 pub type RemoveItemCallbackFn = unsafe extern "system" fn(*const u8);
 
 pub fn hook_place_block(callback: PlaceBlockCallbackFn) -> Result<Hook, Box<dyn Error>> {
-    let current_process = unsafe { open_current_process()? };
-
-    let exe_module = unsafe { GetModuleHandleW(null()) };
-
-    let mut exe_module_info = MaybeUninit::uninit();
-
-    let success = unsafe {
-        GetModuleInformation(
-            current_process,
-            exe_module,
-            exe_module_info.as_mut_ptr(),
-            size_of::<MODULEINFO>() as u32,
-        )
-    };
-
-    if success == 0 {
-        return Err(io::Error::last_os_error().into());
-    }
-
-    let exe_module_info = unsafe { exe_module_info.assume_init() };
-
-    let exe_module_memory = unsafe {
-        slice::from_raw_parts(
-            exe_module_info.lpBaseOfDll as *const u8,
-            exe_module_info.SizeOfImage as usize,
-        )
-    };
-
-    let place_block_fn_end_offset = memmem::find(
-        exe_module_memory,
-        &[
-            0x4c, 0x8d, 0x9c, 0x24, 0xc0, 0x00, 0x00, 0x00, 0x49, 0x8b, 0x5b, 0x38, 0x49, 0x8b,
-            0x73, 0x48, 0x49, 0x8b, 0xe3, 0x41, 0x5f, 0x41, 0x5e, 0x41, 0x5d, 0x5f, 0x5d, 0xc3,
-        ],
-    )
-    .ok_or("failed to find place block function end")?;
+    let code_pattern = &[
+        0x4c, 0x8d, 0x9c, 0x24, 0xc0, 0x00, 0x00, 0x00, 0x49, 0x8b, 0x5b, 0x38, 0x49, 0x8b, 0x73,
+        0x48, 0x49, 0x8b, 0xe3, 0x41, 0x5f, 0x41, 0x5e, 0x41, 0x5d, 0x5f, 0x5d, 0xc3,
+    ];
 
     let original_code = &[
         0x49, 0x8b, 0xe3, 0x41, 0x5f, 0x41, 0x5e, 0x41, 0x5d, 0x5f, 0x5d, 0xc3,
     ];
 
-    let trampoline_code = {
+    let trampoline_code_fn = |_hook_end_ptr| {
         let mut trampoline_code = vec![];
 
         trampoline_code.extend_from_slice(&[
@@ -98,25 +66,7 @@ pub fn hook_place_block(callback: PlaceBlockCallbackFn) -> Result<Hook, Box<dyn 
         trampoline_code
     };
 
-    let trampoline_ptr = unsafe {
-        VirtualAlloc(
-            null(),
-            trampoline_code.len(),
-            MEM_COMMIT | MEM_RESERVE,
-            PAGE_EXECUTE_READWRITE,
-        )
-    };
-
-    if trampoline_ptr.is_null() {
-        return Err(io::Error::last_os_error().into());
-    }
-
-    let trampoline =
-        unsafe { slice::from_raw_parts_mut(trampoline_ptr as *mut u8, trampoline_code.len()) };
-
-    trampoline.copy_from_slice(&trampoline_code);
-
-    let hook_code = {
+    let hook_code_fn = |trampoline_ptr| {
         let mut hook_code = vec![];
 
         hook_code.extend_from_slice(&[
@@ -132,68 +82,26 @@ pub fn hook_place_block(callback: PlaceBlockCallbackFn) -> Result<Hook, Box<dyn 
         hook_code
     };
 
-    let hook_ptr = unsafe {
-        exe_module_memory
-            .as_ptr()
-            .add(place_block_fn_end_offset + 16) as *const c_void
-    };
-
-    unsafe { write_process_memory(current_process, hook_ptr, &hook_code)? };
-
-    unsafe { CloseHandle(current_process) };
-
-    Ok(Hook {
-        ptr: hook_ptr as *const u8,
+    hook(
+        code_pattern,
+        16,
         original_code,
-    })
+        trampoline_code_fn,
+        hook_code_fn,
+    )
 }
 
 pub fn hook_remove_block(callback: RemoveBlockCallbackFn) -> Result<Hook, Box<dyn Error>> {
-    let current_process = unsafe { open_current_process()? };
-
-    let exe_module = unsafe { GetModuleHandleW(null()) };
-
-    let mut exe_module_info = MaybeUninit::uninit();
-
-    let success = unsafe {
-        GetModuleInformation(
-            current_process,
-            exe_module,
-            exe_module_info.as_mut_ptr(),
-            size_of::<MODULEINFO>() as u32,
-        )
-    };
-
-    if success == 0 {
-        return Err(io::Error::last_os_error().into());
-    }
-
-    let exe_module_info = unsafe { exe_module_info.assume_init() };
-
-    let exe_module_memory = unsafe {
-        slice::from_raw_parts(
-            exe_module_info.lpBaseOfDll as *const u8,
-            exe_module_info.SizeOfImage as usize,
-        )
-    };
-
-    let remove_block_fn_offset = memmem::find(
-        exe_module_memory,
-        &[
-            0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x6c, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24,
-            0x18, 0x57, 0x48, 0x83, 0xec, 0x40, 0x83, 0x7c, 0x24, 0x70, 0x00,
-        ],
-    )
-    .ok_or("failed to find remove block function")?;
+    let code_pattern = &[
+        0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x6c, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18,
+        0x57, 0x48, 0x83, 0xec, 0x40, 0x83, 0x7c, 0x24, 0x70, 0x00,
+    ];
 
     let original_code = &[
         0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x6c, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18,
     ];
 
-    let hook_ptr = unsafe { exe_module_memory.as_ptr().add(remove_block_fn_offset) };
-    let hook_end_ptr = unsafe { hook_ptr.add(original_code.len()) };
-
-    let trampoline_code = {
+    let trampoline_code_fn = |hook_end_ptr| {
         let mut trampoline_code = vec![];
 
         trampoline_code.extend_from_slice(&[
@@ -230,25 +138,7 @@ pub fn hook_remove_block(callback: RemoveBlockCallbackFn) -> Result<Hook, Box<dy
         trampoline_code
     };
 
-    let trampoline_ptr = unsafe {
-        VirtualAlloc(
-            null(),
-            trampoline_code.len(),
-            MEM_COMMIT | MEM_RESERVE,
-            PAGE_EXECUTE_READWRITE,
-        )
-    };
-
-    if trampoline_ptr.is_null() {
-        return Err(io::Error::last_os_error().into());
-    }
-
-    let trampoline =
-        unsafe { slice::from_raw_parts_mut(trampoline_ptr as *mut u8, trampoline_code.len()) };
-
-    trampoline.copy_from_slice(&trampoline_code);
-
-    let hook_code = {
+    let hook_code_fn = |trampoline_ptr| {
         let mut hook_code = vec![];
 
         hook_code.extend_from_slice(&[
@@ -264,53 +154,20 @@ pub fn hook_remove_block(callback: RemoveBlockCallbackFn) -> Result<Hook, Box<dy
         hook_code
     };
 
-    unsafe { write_process_memory(current_process, hook_ptr as *const c_void, &hook_code)? };
-
-    unsafe { CloseHandle(current_process) };
-
-    Ok(Hook {
-        ptr: hook_ptr,
+    hook(
+        code_pattern,
+        0,
         original_code,
-    })
+        trampoline_code_fn,
+        hook_code_fn,
+    )
 }
 
 pub fn hook_place_item(callback: PlaceItemCallbackFn) -> Result<Hook, Box<dyn Error>> {
-    let current_process = unsafe { open_current_process()? };
-
-    let exe_module = unsafe { GetModuleHandleW(null()) };
-
-    let mut exe_module_info = MaybeUninit::uninit();
-
-    let success = unsafe {
-        GetModuleInformation(
-            current_process,
-            exe_module,
-            exe_module_info.as_mut_ptr(),
-            size_of::<MODULEINFO>() as u32,
-        )
-    };
-
-    if success == 0 {
-        return Err(io::Error::last_os_error().into());
-    }
-
-    let exe_module_info = unsafe { exe_module_info.assume_init() };
-
-    let exe_module_memory = unsafe {
-        slice::from_raw_parts(
-            exe_module_info.lpBaseOfDll as *const u8,
-            exe_module_info.SizeOfImage as usize,
-        )
-    };
-
-    let place_item_fn_offset = memmem::find(
-        exe_module_memory,
-        &[
-            0x48, 0x89, 0x5c, 0x24, 0x10, 0x48, 0x89, 0x6c, 0x24, 0x18, 0x48, 0x89, 0x74, 0x24,
-            0x20, 0x57, 0x48, 0x83, 0xec, 0x40, 0x49, 0x8b, 0xf9,
-        ],
-    )
-    .ok_or("failed to find place item function")?;
+    let code_pattern = &[
+        0x48, 0x89, 0x5c, 0x24, 0x10, 0x48, 0x89, 0x6c, 0x24, 0x18, 0x48, 0x89, 0x74, 0x24, 0x20,
+        0x57, 0x48, 0x83, 0xec, 0x40, 0x49, 0x8b, 0xf9,
+    ];
 
     let original_code = &[
         0x48, 0x89, 0x5c, 0x24, 0x10, // mov [rsp + 16], rbx
@@ -318,10 +175,7 @@ pub fn hook_place_item(callback: PlaceItemCallbackFn) -> Result<Hook, Box<dyn Er
         0x48, 0x89, 0x74, 0x24, 0x20, // mov [rsp + 32], rsi
     ];
 
-    let hook_ptr = unsafe { exe_module_memory.as_ptr().add(place_item_fn_offset) };
-    let hook_end_ptr = unsafe { hook_ptr.add(original_code.len()) };
-
-    let trampoline_code = {
+    let trampoline_code_fn = |hook_end_ptr| {
         let mut trampoline_code = vec![];
 
         trampoline_code.extend_from_slice(&[
@@ -358,25 +212,7 @@ pub fn hook_place_item(callback: PlaceItemCallbackFn) -> Result<Hook, Box<dyn Er
         trampoline_code
     };
 
-    let trampoline_ptr = unsafe {
-        VirtualAlloc(
-            null(),
-            trampoline_code.len(),
-            MEM_COMMIT | MEM_RESERVE,
-            PAGE_EXECUTE_READWRITE,
-        )
-    };
-
-    if trampoline_ptr.is_null() {
-        return Err(io::Error::last_os_error().into());
-    }
-
-    let trampoline =
-        unsafe { slice::from_raw_parts_mut(trampoline_ptr as *mut u8, trampoline_code.len()) };
-
-    trampoline.copy_from_slice(&trampoline_code);
-
-    let hook_code = {
+    let hook_code_fn = |trampoline_ptr| {
         let mut hook_code = vec![];
 
         hook_code.extend_from_slice(&[
@@ -392,53 +228,20 @@ pub fn hook_place_item(callback: PlaceItemCallbackFn) -> Result<Hook, Box<dyn Er
         hook_code
     };
 
-    unsafe { write_process_memory(current_process, hook_ptr as *const c_void, &hook_code)? };
-
-    unsafe { CloseHandle(current_process) };
-
-    Ok(Hook {
-        ptr: hook_ptr,
+    hook(
+        code_pattern,
+        0,
         original_code,
-    })
+        trampoline_code_fn,
+        hook_code_fn,
+    )
 }
 
 pub fn hook_remove_item(callback: RemoveItemCallbackFn) -> Result<Hook, Box<dyn Error>> {
-    let current_process = unsafe { open_current_process()? };
-
-    let exe_module = unsafe { GetModuleHandleW(null()) };
-
-    let mut exe_module_info = MaybeUninit::uninit();
-
-    let success = unsafe {
-        GetModuleInformation(
-            current_process,
-            exe_module,
-            exe_module_info.as_mut_ptr(),
-            size_of::<MODULEINFO>() as u32,
-        )
-    };
-
-    if success == 0 {
-        return Err(io::Error::last_os_error().into());
-    }
-
-    let exe_module_info = unsafe { exe_module_info.assume_init() };
-
-    let exe_module_memory = unsafe {
-        slice::from_raw_parts(
-            exe_module_info.lpBaseOfDll as *const u8,
-            exe_module_info.SizeOfImage as usize,
-        )
-    };
-
-    let remove_item_fn_offset = memmem::find(
-        exe_module_memory,
-        &[
-            0x48, 0x89, 0x5c, 0x24, 0x08, 0x57, 0x48, 0x83, 0xec, 0x30, 0x48, 0x8b, 0xfa, 0x48,
-            0x8b, 0xd9, 0x48, 0x85, 0xd2, 0x0f, 0x84, 0xe6, 0x00, 0x00, 0x00,
-        ],
-    )
-    .ok_or("failed to find remove item function")?;
+    let code_pattern = &[
+        0x48, 0x89, 0x5c, 0x24, 0x08, 0x57, 0x48, 0x83, 0xec, 0x30, 0x48, 0x8b, 0xfa, 0x48, 0x8b,
+        0xd9, 0x48, 0x85, 0xd2, 0x0f, 0x84, 0xe6, 0x00, 0x00, 0x00,
+    ];
 
     let original_code = &[
         0x48, 0x89, 0x5c, 0x24, 0x08, // mov [rsp + 8], rbx
@@ -447,10 +250,7 @@ pub fn hook_remove_item(callback: RemoveItemCallbackFn) -> Result<Hook, Box<dyn 
         0x48, 0x8b, 0xfa, // mov rdi, rdx
     ];
 
-    let hook_ptr = unsafe { exe_module_memory.as_ptr().add(remove_item_fn_offset) };
-    let hook_end_ptr = unsafe { hook_ptr.add(original_code.len()) };
-
-    let trampoline_code = {
+    let trampoline_code_fn = |hook_end_ptr| {
         let mut trampoline_code = vec![];
 
         trampoline_code.extend_from_slice(&[
@@ -488,25 +288,7 @@ pub fn hook_remove_item(callback: RemoveItemCallbackFn) -> Result<Hook, Box<dyn 
         trampoline_code
     };
 
-    let trampoline_ptr = unsafe {
-        VirtualAlloc(
-            null(),
-            trampoline_code.len(),
-            MEM_COMMIT | MEM_RESERVE,
-            PAGE_EXECUTE_READWRITE,
-        )
-    };
-
-    if trampoline_ptr.is_null() {
-        return Err(io::Error::last_os_error().into());
-    }
-
-    let trampoline =
-        unsafe { slice::from_raw_parts_mut(trampoline_ptr as *mut u8, trampoline_code.len()) };
-
-    trampoline.copy_from_slice(&trampoline_code);
-
-    let hook_code = {
+    let hook_code_fn = |trampoline_ptr| {
         let mut hook_code = vec![];
 
         hook_code.extend_from_slice(&[
@@ -522,14 +304,13 @@ pub fn hook_remove_item(callback: RemoveItemCallbackFn) -> Result<Hook, Box<dyn 
         hook_code
     };
 
-    unsafe { write_process_memory(current_process, hook_ptr as *const c_void, &hook_code)? };
-
-    unsafe { CloseHandle(current_process) };
-
-    Ok(Hook {
-        ptr: hook_ptr,
+    hook(
+        code_pattern,
+        0,
         original_code,
-    })
+        trampoline_code_fn,
+        hook_code_fn,
+    )
 }
 
 pub struct Hook {
@@ -590,4 +371,78 @@ unsafe fn write_process_memory(
     }
 
     Ok(())
+}
+
+fn hook(
+    code_pattern: &[u8],
+    code_pattern_offset: usize,
+    original_code: &'static [u8],
+    trampoline_code_fn: impl Fn(*const u8) -> Vec<u8>,
+    hook_code_fn: impl Fn(*const u8) -> Vec<u8>,
+) -> Result<Hook, Box<dyn Error>> {
+    let current_process = unsafe { open_current_process()? };
+
+    let exe_module = unsafe { GetModuleHandleW(null()) };
+
+    let mut exe_module_info = MaybeUninit::uninit();
+
+    let success = unsafe {
+        GetModuleInformation(
+            current_process,
+            exe_module,
+            exe_module_info.as_mut_ptr(),
+            size_of::<MODULEINFO>() as u32,
+        )
+    };
+
+    if success == 0 {
+        return Err(io::Error::last_os_error().into());
+    }
+
+    let exe_module_info = unsafe { exe_module_info.assume_init() };
+
+    let exe_module_memory = unsafe {
+        slice::from_raw_parts(
+            exe_module_info.lpBaseOfDll as *const u8,
+            exe_module_info.SizeOfImage as usize,
+        )
+    };
+
+    let hook_offset = memmem::find(exe_module_memory, code_pattern)
+        .ok_or("failed to find code pattern")?
+        + code_pattern_offset;
+
+    let hook_ptr = unsafe { exe_module_memory.as_ptr().add(hook_offset) };
+    let hook_end_ptr = unsafe { hook_ptr.add(original_code.len()) };
+
+    let trampoline_code = trampoline_code_fn(hook_end_ptr);
+
+    let trampoline_ptr = unsafe {
+        VirtualAlloc(
+            null(),
+            trampoline_code.len(),
+            MEM_COMMIT | MEM_RESERVE,
+            PAGE_EXECUTE_READWRITE,
+        )
+    };
+
+    if trampoline_ptr.is_null() {
+        return Err(io::Error::last_os_error().into());
+    }
+
+    let trampoline =
+        unsafe { slice::from_raw_parts_mut(trampoline_ptr as *mut u8, trampoline_code.len()) };
+
+    trampoline.copy_from_slice(&trampoline_code);
+
+    let hook_code = hook_code_fn(trampoline_ptr as *const u8);
+
+    unsafe { write_process_memory(current_process, hook_ptr as *const c_void, &hook_code)? };
+
+    unsafe { CloseHandle(current_process) };
+
+    Ok(Hook {
+        ptr: hook_ptr,
+        original_code,
+    })
 }
