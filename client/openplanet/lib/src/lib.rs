@@ -26,9 +26,7 @@ use windows_sys::Win32::{
     System::SystemServices::DLL_PROCESS_ATTACH,
 };
 
-use crate::game::{
-    hook_place_block, hook_place_item, hook_remove_block, hook_remove_item, GameFns,
-};
+use crate::game::{hook_place_block, hook_place_item, hook_remove_block, hook_remove_item};
 
 static BLOCK_INFOS: Mutex<Option<HashMap<String, usize>>> = Mutex::new(None);
 
@@ -191,14 +189,12 @@ async fn join_inner_inner(socket_addr: SocketAddr) -> Result<(), Box<dyn Error>>
         result = join_inner_inner_inner() => result?
     }
 
-    let game_fns = GameFns::find()?;
-
     *JOIN_STATUS.lock().unwrap() = Some(CString::new("Connected").unwrap());
 
     let _place_block_hook = hook_place_block(place_block_callback)?;
     let _remove_block_hook = hook_remove_block(remove_block_callback)?;
-    let _place_item_hook = hook_place_item()?;
-    let _remove_item_hook = hook_remove_item()?;
+    let _place_item_hook = hook_place_item(place_item_callback)?;
+    let _remove_item_hook = hook_remove_item(remove_item_callback)?;
 
     loop {
         select! {
@@ -251,6 +247,24 @@ unsafe extern "system" fn remove_block_callback(block: *const u8) {
         .set_type(MessageType::Info)
         .set_title("SyncEdit.dll")
         .set_text("removed block!")
+        .show_confirm()
+        .unwrap();
+}
+
+unsafe extern "system" fn place_item_callback(item_params: *const u8) {
+    MessageDialog::new()
+        .set_type(MessageType::Info)
+        .set_title("SyncEdit.dll")
+        .set_text("placed item!")
+        .show_confirm()
+        .unwrap();
+}
+
+unsafe extern "system" fn remove_item_callback(item: *const u8) {
+    MessageDialog::new()
+        .set_type(MessageType::Info)
+        .set_title("SyncEdit.dll")
+        .set_text("removed item!")
         .show_confirm()
         .unwrap();
 }
