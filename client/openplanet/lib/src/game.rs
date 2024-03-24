@@ -173,22 +173,31 @@ pub fn hook_place_block() -> Result<PlaceBlockHook, Box<dyn Error>> {
     )
     .ok_or("failed to find place block function end")?;
 
-    let mut trampoline_code = [
-        0x49, 0x8b, 0xe3, // mov rsp, r11
-        0x41, 0x5f, // pop r15
-        0x41, 0x5e, // pop r14
-        0x41, 0x5d, // pop r13
-        0x5f, // pop rdi
-        0x5d, // pop rbp
-        0x50, // push rax
-        0x48, 0x89, 0xc1, // mov rcx, rax
-        0x48, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, // mov rax, ????????
-        0xff, 0xd0, // call rax
-        0x58, // pop rax
-        0xc3, // ret
-    ];
+    let trampoline_code = {
+        let mut trampoline_code = vec![];
 
-    trampoline_code[17..17 + 8].copy_from_slice(&(place_block_callback as usize).to_le_bytes());
+        trampoline_code.extend_from_slice(&[
+            0x49, 0x8b, 0xe3, // mov rsp, r11
+            0x41, 0x5f, // pop r15
+            0x41, 0x5e, // pop r14
+            0x41, 0x5d, // pop r13
+            0x5f, // pop rdi
+            0x5d, // pop rbp
+            0x50, // push rax
+            0x48, 0x89, 0xc1, // mov rcx, rax
+            0x48, 0xb8, // mov rax, ????????
+        ]);
+
+        trampoline_code.extend_from_slice(&(place_block_callback as usize).to_le_bytes());
+
+        trampoline_code.extend_from_slice(&[
+            0xff, 0xd0, // call rax
+            0x58, // pop rax
+            0xc3, // ret
+        ]);
+
+        trampoline_code
+    };
 
     let trampoline_ptr = unsafe {
         VirtualAlloc(
@@ -208,12 +217,21 @@ pub fn hook_place_block() -> Result<PlaceBlockHook, Box<dyn Error>> {
 
     trampoline.copy_from_slice(&trampoline_code);
 
-    let mut hook_code = [
-        0x48, 0xb9, 0, 0, 0, 0, 0, 0, 0, 0, // mov rcx, ????????
-        0xff, 0xe1, // jmp rcx
-    ];
+    let hook_code = {
+        let mut hook_code = vec![];
 
-    hook_code[2..2 + 8].copy_from_slice(&(trampoline_ptr as usize).to_le_bytes());
+        hook_code.extend_from_slice(&[
+            0x48, 0xb9, // mov rcx, ????????
+        ]);
+
+        hook_code.extend_from_slice(&(trampoline_ptr as usize).to_le_bytes());
+
+        hook_code.extend_from_slice(&[
+            0xff, 0xe1, // jmp rcx
+        ]);
+
+        hook_code
+    };
 
     let hook_ptr = unsafe {
         exe_module_memory
@@ -221,14 +239,7 @@ pub fn hook_place_block() -> Result<PlaceBlockHook, Box<dyn Error>> {
             .add(place_block_fn_end_offset + 16) as *const c_void
     };
 
-    unsafe {
-        write_process_memory(
-            current_process,
-            hook_ptr,
-            hook_code.as_ptr() as *const c_void,
-            hook_code.len(),
-        )?
-    };
+    unsafe { write_process_memory(current_process, hook_ptr, &hook_code)? };
 
     unsafe { CloseHandle(current_process) };
 
@@ -247,15 +258,7 @@ impl Drop for PlaceBlockHook {
             0x49, 0x8b, 0xe3, 0x41, 0x5f, 0x41, 0x5e, 0x41, 0x5d, 0x5f, 0x5d, 0xc3,
         ];
 
-        unsafe {
-            write_process_memory(
-                current_process,
-                self.hook_ptr,
-                original_code.as_ptr() as *const c_void,
-                original_code.len(),
-            )
-            .unwrap()
-        };
+        unsafe { write_process_memory(current_process, self.hook_ptr, &original_code).unwrap() };
 
         // unsafe { VirtualFree(trampoline_ptr, trampoline_code.len(), MEM_RELEASE) };
     }
@@ -311,29 +314,42 @@ pub fn hook_remove_block() -> Result<RemoveBlockHook, Box<dyn Error>> {
     let hook_ptr = unsafe { exe_module_memory.as_ptr().add(remove_block_fn_offset) };
     let hook_end_ptr = unsafe { hook_ptr.add(15) };
 
-    let mut trampoline_code = [
-        0x48, 0x89, 0x5c, 0x24, 0x08, // mov [rsp + 8], rbx
-        0x48, 0x89, 0x6c, 0x24, 0x10, // mov [rsp + 16], rbp
-        0x48, 0x89, 0x74, 0x24, 0x18, // mov [rsp + 24], rsi
-        0x51, // push rcx
-        0x52, // push rdx
-        0x41, 0x50, // push r8
-        0x41, 0x51, // push r9
-        0x48, 0x83, 0xec, 0x20, // sub rsp, 32
-        0x48, 0x89, 0xd1, // mov rcx, rdx
-        0x48, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, // mov rax, ????????
-        0xff, 0xd0, // call rax
-        0x48, 0x83, 0xc4, 0x20, // add rsp, 32
-        0x41, 0x59, // pop r9
-        0x41, 0x58, // pop r8
-        0x5a, // pop rdx
-        0x59, // pop rcx
-        0x48, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, // mov rax, ????????
-        0xff, 0xe0, // jmp rax
-    ];
+    let trampoline_code = {
+        let mut trampoline_code = vec![];
 
-    trampoline_code[30..30 + 8].copy_from_slice(&(remove_block_callback as usize).to_le_bytes());
-    trampoline_code[52..52 + 8].copy_from_slice(&(hook_end_ptr as usize).to_le_bytes());
+        trampoline_code.extend_from_slice(&[
+            0x48, 0x89, 0x5c, 0x24, 0x08, // mov [rsp + 8], rbx
+            0x48, 0x89, 0x6c, 0x24, 0x10, // mov [rsp + 16], rbp
+            0x48, 0x89, 0x74, 0x24, 0x18, // mov [rsp + 24], rsi
+            0x51, // push rcx
+            0x52, // push rdx
+            0x41, 0x50, // push r8
+            0x41, 0x51, // push r9
+            0x48, 0x83, 0xec, 0x20, // sub rsp, 32
+            0x48, 0x89, 0xd1, // mov rcx, rdx
+            0x48, 0xb8, // mov rax, ????????
+        ]);
+
+        trampoline_code.extend_from_slice(&(remove_block_callback as usize).to_le_bytes());
+
+        trampoline_code.extend_from_slice(&[
+            0xff, 0xd0, // call rax
+            0x48, 0x83, 0xc4, 0x20, // add rsp, 32
+            0x41, 0x59, // pop r9
+            0x41, 0x58, // pop r8
+            0x5a, // pop rdx
+            0x59, // pop rcx
+            0x48, 0xb8, // mov rax, ????????
+        ]);
+
+        trampoline_code.extend_from_slice(&(hook_end_ptr as usize).to_le_bytes());
+
+        trampoline_code.extend_from_slice(&[
+            0xff, 0xe0, // jmp rax
+        ]);
+
+        trampoline_code
+    };
 
     let trampoline_ptr = unsafe {
         VirtualAlloc(
@@ -353,24 +369,23 @@ pub fn hook_remove_block() -> Result<RemoveBlockHook, Box<dyn Error>> {
 
     trampoline.copy_from_slice(&trampoline_code);
 
-    let mut hook_code: [u8; 15] = [
-        0x48, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, // mov rax, ????????
-        0xff, 0xe0, // jmp rax
-        0x90, // nop
-        0x90, // nop
-        0x90, // nop
-    ];
+    let hook_code = {
+        let mut hook_code = vec![];
 
-    hook_code[2..2 + 8].copy_from_slice(&(trampoline_ptr as usize).to_le_bytes());
+        hook_code.extend_from_slice(&[
+            0x48, 0xb8, // mov rax, ????????
+        ]);
 
-    unsafe {
-        write_process_memory(
-            current_process,
-            hook_ptr as *const c_void,
-            hook_code.as_ptr() as *const c_void,
-            hook_code.len(),
-        )?
+        hook_code.extend_from_slice(&(trampoline_ptr as usize).to_le_bytes());
+
+        hook_code.extend_from_slice(&[
+            0xff, 0xe0, // jmp rax
+        ]);
+
+        hook_code
     };
+
+    unsafe { write_process_memory(current_process, hook_ptr as *const c_void, &hook_code)? };
 
     unsafe { CloseHandle(current_process) };
 
@@ -392,15 +407,7 @@ impl Drop for RemoveBlockHook {
             0x18,
         ];
 
-        unsafe {
-            write_process_memory(
-                current_process,
-                self.hook_ptr,
-                original_code.as_ptr() as *const c_void,
-                original_code.len(),
-            )
-            .unwrap()
-        };
+        unsafe { write_process_memory(current_process, self.hook_ptr, &original_code).unwrap() };
 
         // unsafe { VirtualFree(trampoline_ptr, trampoline_code.len(), MEM_RELEASE) };
     }
@@ -458,10 +465,17 @@ unsafe fn open_current_process() -> io::Result<isize> {
 unsafe fn write_process_memory(
     process: isize,
     base_addr: *const c_void,
-    buffer: *const c_void,
-    size: usize,
+    buf: &[u8],
 ) -> io::Result<()> {
-    let result = unsafe { WriteProcessMemory(process, base_addr, buffer, size, null_mut()) };
+    let result = unsafe {
+        WriteProcessMemory(
+            process,
+            base_addr,
+            buf.as_ptr() as *const c_void,
+            buf.len(),
+            null_mut(),
+        )
+    };
 
     if result == 0 {
         return Err(io::Error::last_os_error());
