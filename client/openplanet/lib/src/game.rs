@@ -36,20 +36,14 @@ pub fn hook_place_block(callback: PlaceBlockCallbackFn) -> Result<Hook, Box<dyn 
         0x48, 0x49, 0x8b, 0xe3, 0x41, 0x5f, 0x41, 0x5e, 0x41, 0x5d, 0x5f, 0x5d, 0xc3,
     ];
 
-    let original_code = &[
-        0x49, 0x8b, 0xe3, 0x41, 0x5f, 0x41, 0x5e, 0x41, 0x5d, 0x5f, 0x5d, 0xc3,
-    ];
+    let original_code = &code_pattern[16..];
 
     let trampoline_code_fn = |_hook_end_ptr| {
         let mut trampoline_code = vec![];
 
+        trampoline_code.extend_from_slice(&original_code[..11]);
+
         trampoline_code.extend_from_slice(&[
-            0x49, 0x8b, 0xe3, // mov rsp, r11
-            0x41, 0x5f, // pop r15
-            0x41, 0x5e, // pop r14
-            0x41, 0x5d, // pop r13
-            0x5f, // pop rdi
-            0x5d, // pop rbp
             0x50, // push rax
             0x48, 0x89, 0xc1, // mov rcx, rax
             0x48, 0xb8, // mov rax, ????????
@@ -97,17 +91,14 @@ pub fn hook_remove_block(callback: RemoveBlockCallbackFn) -> Result<Hook, Box<dy
         0x57, 0x48, 0x83, 0xec, 0x40, 0x83, 0x7c, 0x24, 0x70, 0x00,
     ];
 
-    let original_code = &[
-        0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x6c, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18,
-    ];
+    let original_code = &code_pattern[..15];
 
     let trampoline_code_fn = |hook_end_ptr| {
         let mut trampoline_code = vec![];
 
+        trampoline_code.extend_from_slice(original_code);
+
         trampoline_code.extend_from_slice(&[
-            0x48, 0x89, 0x5c, 0x24, 0x08, // mov [rsp + 8], rbx
-            0x48, 0x89, 0x6c, 0x24, 0x10, // mov [rsp + 16], rbp
-            0x48, 0x89, 0x74, 0x24, 0x18, // mov [rsp + 24], rsi
             0x51, // push rcx
             0x52, // push rdx
             0x41, 0x50, // push r8
@@ -169,19 +160,14 @@ pub fn hook_place_item(callback: PlaceItemCallbackFn) -> Result<Hook, Box<dyn Er
         0x57, 0x48, 0x83, 0xec, 0x40, 0x49, 0x8b, 0xf9,
     ];
 
-    let original_code = &[
-        0x48, 0x89, 0x5c, 0x24, 0x10, // mov [rsp + 16], rbx
-        0x48, 0x89, 0x6c, 0x24, 0x18, // mov [rsp + 24], rbp
-        0x48, 0x89, 0x74, 0x24, 0x20, // mov [rsp + 32], rsi
-    ];
+    let original_code = &code_pattern[..15];
 
     let trampoline_code_fn = |hook_end_ptr| {
         let mut trampoline_code = vec![];
 
+        trampoline_code.extend_from_slice(original_code);
+
         trampoline_code.extend_from_slice(&[
-            0x48, 0x89, 0x5c, 0x24, 0x10, // mov [rsp + 16], rbx
-            0x48, 0x89, 0x6c, 0x24, 0x18, // mov [rsp + 24], rbp
-            0x48, 0x89, 0x74, 0x24, 0x20, // mov [rsp + 32], rsi
             0x51, // push rcx
             0x52, // push rdx
             0x41, 0x50, // push r8
@@ -243,21 +229,14 @@ pub fn hook_remove_item(callback: RemoveItemCallbackFn) -> Result<Hook, Box<dyn 
         0xd9, 0x48, 0x85, 0xd2, 0x0f, 0x84, 0xe6, 0x00, 0x00, 0x00,
     ];
 
-    let original_code = &[
-        0x48, 0x89, 0x5c, 0x24, 0x08, // mov [rsp + 8], rbx
-        0x57, // push rdi
-        0x48, 0x83, 0xec, 0x30, // sub rsp, 48
-        0x48, 0x8b, 0xfa, // mov rdi, rdx
-    ];
+    let original_code = &code_pattern[..13];
 
     let trampoline_code_fn = |hook_end_ptr| {
         let mut trampoline_code = vec![];
 
+        trampoline_code.extend_from_slice(original_code);
+
         trampoline_code.extend_from_slice(&[
-            0x48, 0x89, 0x5c, 0x24, 0x08, // mov [rsp + 8], rbx
-            0x57, // push rdi
-            0x48, 0x83, 0xec, 0x30, // sub rsp, 48
-            0x48, 0x8b, 0xfa, // mov rdi, rdx
             0x51, // push rcx
             0x52, // push rdx
             0x41, 0x50, // push r8
