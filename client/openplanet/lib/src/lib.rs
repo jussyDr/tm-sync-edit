@@ -243,28 +243,28 @@ unsafe extern "system" fn place_block_callback(block: *const u8) {
 }
 
 unsafe extern "system" fn remove_block_callback(block: *const u8) {
-    MessageDialog::new()
-        .set_type(MessageType::Info)
-        .set_title("SyncEdit.dll")
-        .set_text("removed block!")
-        .show_confirm()
-        .unwrap();
+    // MessageDialog::new()
+    //     .set_type(MessageType::Info)
+    //     .set_title("SyncEdit.dll")
+    //     .set_text("removed block!")
+    //     .show_confirm()
+    //     .unwrap();
 }
 
 unsafe extern "system" fn place_item_callback(item_params: *const u8) {
-    MessageDialog::new()
-        .set_type(MessageType::Info)
-        .set_title("SyncEdit.dll")
-        .set_text("placed item!")
-        .show_confirm()
-        .unwrap();
+    // MessageDialog::new()
+    //     .set_type(MessageType::Info)
+    //     .set_title("SyncEdit.dll")
+    //     .set_text("placed item!")
+    //     .show_confirm()
+    //     .unwrap();
 }
 
 unsafe extern "system" fn remove_item_callback(item: *const u8) {
-    MessageDialog::new()
-        .set_type(MessageType::Info)
-        .set_title("SyncEdit.dll")
-        .set_text("removed item!")
-        .show_confirm()
-        .unwrap();
+    // MessageDialog::new()
+    //     .set_type(MessageType::Info)
+    //     .set_title("SyncEdit.dll")
+    //     .set_text("removed item!")
+    //     .show_confirm()
+    //     .unwrap();
 }

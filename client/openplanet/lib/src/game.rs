@@ -68,6 +68,10 @@ pub fn hook_place_block(callback: PlaceBlockCallbackFn) -> Result<Hook, Box<dyn 
     )
     .ok_or("failed to find place block function end")?;
 
+    let original_code = &[
+        0x49, 0x8b, 0xe3, 0x41, 0x5f, 0x41, 0x5e, 0x41, 0x5d, 0x5f, 0x5d, 0xc3,
+    ];
+
     let trampoline_code = {
         let mut trampoline_code = vec![];
 
@@ -140,9 +144,7 @@ pub fn hook_place_block(callback: PlaceBlockCallbackFn) -> Result<Hook, Box<dyn 
 
     Ok(Hook {
         ptr: hook_ptr as *const u8,
-        original_code: &[
-            0x49, 0x8b, 0xe3, 0x41, 0x5f, 0x41, 0x5e, 0x41, 0x5d, 0x5f, 0x5d, 0xc3,
-        ],
+        original_code,
     })
 }
 
@@ -184,8 +186,12 @@ pub fn hook_remove_block(callback: RemoveBlockCallbackFn) -> Result<Hook, Box<dy
     )
     .ok_or("failed to find remove block function")?;
 
+    let original_code = &[
+        0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x6c, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18,
+    ];
+
     let hook_ptr = unsafe { exe_module_memory.as_ptr().add(remove_block_fn_offset) };
-    let hook_end_ptr = unsafe { hook_ptr.add(15) };
+    let hook_end_ptr = unsafe { hook_ptr.add(original_code.len()) };
 
     let trampoline_code = {
         let mut trampoline_code = vec![];
@@ -264,10 +270,7 @@ pub fn hook_remove_block(callback: RemoveBlockCallbackFn) -> Result<Hook, Box<dy
 
     Ok(Hook {
         ptr: hook_ptr,
-        original_code: &[
-            0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x6c, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24,
-            0x18,
-        ],
+        original_code,
     })
 }
 
@@ -309,8 +312,14 @@ pub fn hook_place_item(callback: PlaceItemCallbackFn) -> Result<Hook, Box<dyn Er
     )
     .ok_or("failed to find place item function")?;
 
+    let original_code = &[
+        0x48, 0x89, 0x5c, 0x24, 0x10, // mov [rsp + 16], rbx
+        0x48, 0x89, 0x6c, 0x24, 0x18, // mov [rsp + 24], rbp
+        0x48, 0x89, 0x74, 0x24, 0x20, // mov [rsp + 32], rsi
+    ];
+
     let hook_ptr = unsafe { exe_module_memory.as_ptr().add(place_item_fn_offset) };
-    let hook_end_ptr = unsafe { hook_ptr.add(15) };
+    let hook_end_ptr = unsafe { hook_ptr.add(original_code.len()) };
 
     let trampoline_code = {
         let mut trampoline_code = vec![];
@@ -389,11 +398,7 @@ pub fn hook_place_item(callback: PlaceItemCallbackFn) -> Result<Hook, Box<dyn Er
 
     Ok(Hook {
         ptr: hook_ptr,
-        original_code: &[
-            0x48, 0x89, 0x5c, 0x24, 0x10, // mov [rsp + 16], rbx
-            0x48, 0x89, 0x6c, 0x24, 0x18, // mov [rsp + 24], rbp
-            0x48, 0x89, 0x74, 0x24, 0x20, // mov [rsp + 32], rsi
-        ],
+        original_code,
     })
 }
 
@@ -435,8 +440,15 @@ pub fn hook_remove_item(callback: RemoveItemCallbackFn) -> Result<Hook, Box<dyn 
     )
     .ok_or("failed to find remove item function")?;
 
+    let original_code = &[
+        0x48, 0x89, 0x5c, 0x24, 0x08, // mov [rsp + 8], rbx
+        0x57, // push rdi
+        0x48, 0x83, 0xec, 0x30, // sub rsp, 48
+        0x48, 0x8b, 0xfa, // mov rdi, rdx
+    ];
+
     let hook_ptr = unsafe { exe_module_memory.as_ptr().add(remove_item_fn_offset) };
-    let hook_end_ptr = unsafe { hook_ptr.add(15) };
+    let hook_end_ptr = unsafe { hook_ptr.add(original_code.len()) };
 
     let trampoline_code = {
         let mut trampoline_code = vec![];
@@ -516,12 +528,7 @@ pub fn hook_remove_item(callback: RemoveItemCallbackFn) -> Result<Hook, Box<dyn 
 
     Ok(Hook {
         ptr: hook_ptr,
-        original_code: &[
-            0x48, 0x89, 0x5c, 0x24, 0x08, // mov [rsp + 8], rbx
-            0x57, // push rdi
-            0x48, 0x83, 0xec, 0x30, // sub rsp, 48
-            0x48, 0x8b, 0xfa, // mov rdi, rdx
-        ],
+        original_code,
     })
 }
 
