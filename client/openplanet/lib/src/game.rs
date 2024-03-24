@@ -204,7 +204,7 @@ pub fn hook_remove_block(callback: RemoveBlockCallbackFn) -> Result<Hook, Box<dy
             0x52, // push rdx
             0x41, 0x50, // push r8
             0x41, 0x51, // push r9
-            0x48, 0x83, 0xec, 0x20, // sub rsp, 32
+            0x48, 0x83, 0xec, 0x28, // sub rsp, 40
             0x48, 0x89, 0xd1, // mov rcx, rdx
             0x48, 0xb8, // mov rax, ????????
         ]);
@@ -213,7 +213,7 @@ pub fn hook_remove_block(callback: RemoveBlockCallbackFn) -> Result<Hook, Box<dy
 
         trampoline_code.extend_from_slice(&[
             0xff, 0xd0, // call rax
-            0x48, 0x83, 0xc4, 0x20, // add rsp, 32
+            0x48, 0x83, 0xc4, 0x28, // add rsp, 40
             0x41, 0x59, // pop r9
             0x41, 0x58, // pop r8
             0x5a, // pop rdx
@@ -332,7 +332,7 @@ pub fn hook_place_item(callback: PlaceItemCallbackFn) -> Result<Hook, Box<dyn Er
             0x52, // push rdx
             0x41, 0x50, // push r8
             0x41, 0x51, // push r9
-            0x48, 0x83, 0xec, 0x20, // sub rsp, 32
+            0x48, 0x83, 0xec, 0x28, // sub rsp, 40
             0x48, 0x89, 0xd1, // mov rcx, rdx
             0x48, 0xb8, // mov rax, ????????
         ]);
@@ -341,7 +341,7 @@ pub fn hook_place_item(callback: PlaceItemCallbackFn) -> Result<Hook, Box<dyn Er
 
         trampoline_code.extend_from_slice(&[
             0xff, 0xd0, // call rax
-            0x48, 0x83, 0xc4, 0x20, // add rsp, 32
+            0x48, 0x83, 0xc4, 0x28, // add rsp, 40
             0x41, 0x59, // pop r9
             0x41, 0x58, // pop r8
             0x5a, // pop rdx
