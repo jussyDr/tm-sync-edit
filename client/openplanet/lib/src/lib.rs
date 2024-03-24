@@ -14,6 +14,7 @@ use std::{
 };
 
 use futures_util::{StreamExt, TryStreamExt};
+use game::{Block, Item, ItemParams};
 use native_dialog::{MessageDialog, MessageType};
 use tm_sync_edit_shared::{deserialize, framed_tcp_stream, Map, Message};
 use tokio::{
@@ -233,7 +234,7 @@ async fn join_inner_inner_inner() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-unsafe extern "system" fn place_block_callback(block: *const u8) {
+unsafe extern "system" fn place_block_callback(block: &Block) {
     MessageDialog::new()
         .set_type(MessageType::Info)
         .set_title("SyncEdit.dll")
@@ -242,7 +243,7 @@ unsafe extern "system" fn place_block_callback(block: *const u8) {
         .unwrap();
 }
 
-unsafe extern "system" fn remove_block_callback(block: *const u8) {
+unsafe extern "system" fn remove_block_callback(block: &Block) {
     MessageDialog::new()
         .set_type(MessageType::Info)
         .set_title("SyncEdit.dll")
@@ -251,7 +252,7 @@ unsafe extern "system" fn remove_block_callback(block: *const u8) {
         .unwrap();
 }
 
-unsafe extern "system" fn place_item_callback(item_params: *const u8) {
+unsafe extern "system" fn place_item_callback(item_params: &ItemParams) {
     MessageDialog::new()
         .set_type(MessageType::Info)
         .set_title("SyncEdit.dll")
@@ -260,7 +261,7 @@ unsafe extern "system" fn place_item_callback(item_params: *const u8) {
         .unwrap();
 }
 
-unsafe extern "system" fn remove_item_callback(item: *const u8) {
+unsafe extern "system" fn remove_item_callback(item: &Item) {
     MessageDialog::new()
         .set_type(MessageType::Info)
         .set_title("SyncEdit.dll")

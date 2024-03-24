@@ -22,13 +22,109 @@ use windows_sys::Win32::{
     },
 };
 
-pub type PlaceBlockCallbackFn = unsafe extern "system" fn(*const u8);
+use super::{Block, Item, ItemParams};
 
-pub type RemoveBlockCallbackFn = unsafe extern "system" fn(*const u8);
+pub type PlaceBlockCallbackFn = unsafe extern "system" fn(&Block);
 
-pub type PlaceItemCallbackFn = unsafe extern "system" fn(*const u8);
+pub type RemoveBlockCallbackFn = unsafe extern "system" fn(&Block);
 
-pub type RemoveItemCallbackFn = unsafe extern "system" fn(*const u8);
+pub type PlaceItemCallbackFn = unsafe extern "system" fn(&ItemParams);
+
+pub type RemoveItemCallbackFn = unsafe extern "system" fn(&Item);
+
+pub struct Hook {
+    ptr: *const u8,
+    original_code: &'static [u8],
+}
+
+impl Drop for Hook {
+    fn drop(&mut self) {
+        let current_process = unsafe { open_current_process().unwrap() };
+
+        unsafe {
+            write_process_memory(
+                current_process,
+                self.ptr as *const c_void,
+                self.original_code,
+            )
+            .unwrap()
+        };
+    }
+}
+
+fn hook(
+    code_pattern: &[u8],
+    code_pattern_offset: usize,
+    original_code: &'static [u8],
+    trampoline_code_fn: impl Fn(*const u8) -> Vec<u8>,
+    hook_code_fn: impl Fn(*const u8) -> Vec<u8>,
+) -> Result<Hook, Box<dyn Error>> {
+    let current_process = unsafe { open_current_process()? };
+
+    let exe_module = unsafe { GetModuleHandleW(null()) };
+
+    let mut exe_module_info = MaybeUninit::uninit();
+
+    let success = unsafe {
+        GetModuleInformation(
+            current_process,
+            exe_module,
+            exe_module_info.as_mut_ptr(),
+            size_of::<MODULEINFO>() as u32,
+        )
+    };
+
+    if success == 0 {
+        return Err(io::Error::last_os_error().into());
+    }
+
+    let exe_module_info = unsafe { exe_module_info.assume_init() };
+
+    let exe_module_memory = unsafe {
+        slice::from_raw_parts(
+            exe_module_info.lpBaseOfDll as *const u8,
+            exe_module_info.SizeOfImage as usize,
+        )
+    };
+
+    let hook_offset = memmem::find(exe_module_memory, code_pattern)
+        .ok_or("failed to find code pattern")?
+        + code_pattern_offset;
+
+    let hook_ptr = unsafe { exe_module_memory.as_ptr().add(hook_offset) };
+    let hook_end_ptr = unsafe { hook_ptr.add(original_code.len()) };
+
+    let trampoline_code = trampoline_code_fn(hook_end_ptr);
+
+    let trampoline_ptr = unsafe {
+        VirtualAlloc(
+            null(),
+            trampoline_code.len(),
+            MEM_COMMIT | MEM_RESERVE,
+            PAGE_EXECUTE_READWRITE,
+        )
+    };
+
+    if trampoline_ptr.is_null() {
+        return Err(io::Error::last_os_error().into());
+    }
+
+    let trampoline =
+        unsafe { slice::from_raw_parts_mut(trampoline_ptr as *mut u8, trampoline_code.len()) };
+
+    trampoline.copy_from_slice(&trampoline_code);
+
+    let hook_code = hook_code_fn(trampoline_ptr as *const u8);
+
+    unsafe { write_process_memory(current_process, hook_ptr as *const c_void, &hook_code)? };
+
+    unsafe { CloseHandle(current_process) };
+
+    Ok(Hook {
+        ptr: hook_ptr,
+        original_code,
+    })
+}
 
 pub fn hook_place_block(callback: PlaceBlockCallbackFn) -> Result<Hook, Box<dyn Error>> {
     let code_pattern = &[
@@ -292,26 +388,6 @@ pub fn hook_remove_item(callback: RemoveItemCallbackFn) -> Result<Hook, Box<dyn 
     )
 }
 
-pub struct Hook {
-    ptr: *const u8,
-    original_code: &'static [u8],
-}
-
-impl Drop for Hook {
-    fn drop(&mut self) {
-        let current_process = unsafe { open_current_process().unwrap() };
-
-        unsafe {
-            write_process_memory(
-                current_process,
-                self.ptr as *const c_void,
-                self.original_code,
-            )
-            .unwrap()
-        };
-    }
-}
-
 unsafe fn open_current_process() -> io::Result<isize> {
     let current_process_id = unsafe { GetCurrentProcessId() };
 
@@ -350,78 +426,4 @@ unsafe fn write_process_memory(
     }
 
     Ok(())
-}
-
-fn hook(
-    code_pattern: &[u8],
-    code_pattern_offset: usize,
-    original_code: &'static [u8],
-    trampoline_code_fn: impl Fn(*const u8) -> Vec<u8>,
-    hook_code_fn: impl Fn(*const u8) -> Vec<u8>,
-) -> Result<Hook, Box<dyn Error>> {
-    let current_process = unsafe { open_current_process()? };
-
-    let exe_module = unsafe { GetModuleHandleW(null()) };
-
-    let mut exe_module_info = MaybeUninit::uninit();
-
-    let success = unsafe {
-        GetModuleInformation(
-            current_process,
-            exe_module,
-            exe_module_info.as_mut_ptr(),
-            size_of::<MODULEINFO>() as u32,
-        )
-    };
-
-    if success == 0 {
-        return Err(io::Error::last_os_error().into());
-    }
-
-    let exe_module_info = unsafe { exe_module_info.assume_init() };
-
-    let exe_module_memory = unsafe {
-        slice::from_raw_parts(
-            exe_module_info.lpBaseOfDll as *const u8,
-            exe_module_info.SizeOfImage as usize,
-        )
-    };
-
-    let hook_offset = memmem::find(exe_module_memory, code_pattern)
-        .ok_or("failed to find code pattern")?
-        + code_pattern_offset;
-
-    let hook_ptr = unsafe { exe_module_memory.as_ptr().add(hook_offset) };
-    let hook_end_ptr = unsafe { hook_ptr.add(original_code.len()) };
-
-    let trampoline_code = trampoline_code_fn(hook_end_ptr);
-
-    let trampoline_ptr = unsafe {
-        VirtualAlloc(
-            null(),
-            trampoline_code.len(),
-            MEM_COMMIT | MEM_RESERVE,
-            PAGE_EXECUTE_READWRITE,
-        )
-    };
-
-    if trampoline_ptr.is_null() {
-        return Err(io::Error::last_os_error().into());
-    }
-
-    let trampoline =
-        unsafe { slice::from_raw_parts_mut(trampoline_ptr as *mut u8, trampoline_code.len()) };
-
-    trampoline.copy_from_slice(&trampoline_code);
-
-    let hook_code = hook_code_fn(trampoline_ptr as *const u8);
-
-    unsafe { write_process_memory(current_process, hook_ptr as *const c_void, &hook_code)? };
-
-    unsafe { CloseHandle(current_process) };
-
-    Ok(Hook {
-        ptr: hook_ptr,
-        original_code,
-    })
 }
