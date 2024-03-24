@@ -8,7 +8,6 @@ use std::{
 };
 
 use memchr::memmem;
-use native_dialog::{MessageDialog, MessageType};
 use windows_sys::Win32::{
     Foundation::{CloseHandle, FALSE},
     System::{
@@ -135,7 +134,15 @@ impl GameFns {
     }
 }
 
-pub fn hook_place_block() -> Result<PlaceBlockHook, Box<dyn Error>> {
+pub type PlaceBlockCallbackFn = unsafe extern "system" fn(*const u8);
+
+pub type RemoveBlockCallbackFn = unsafe extern "system" fn(*const u8);
+
+pub type PlaceItemCallbackFn = unsafe extern "system" fn(*const u8);
+
+pub type RemoveItemCallbackFn = unsafe extern "system" fn(*const u8);
+
+pub fn hook_place_block(callback: PlaceBlockCallbackFn) -> Result<Hook, Box<dyn Error>> {
     let current_process = unsafe { open_current_process()? };
 
     let exe_module = unsafe { GetModuleHandleW(null()) };
@@ -188,7 +195,7 @@ pub fn hook_place_block() -> Result<PlaceBlockHook, Box<dyn Error>> {
             0x48, 0xb8, // mov rax, ????????
         ]);
 
-        trampoline_code.extend_from_slice(&(place_block_callback as usize).to_le_bytes());
+        trampoline_code.extend_from_slice(&(callback as usize).to_le_bytes());
 
         trampoline_code.extend_from_slice(&[
             0xff, 0xd0, // call rax
@@ -243,37 +250,15 @@ pub fn hook_place_block() -> Result<PlaceBlockHook, Box<dyn Error>> {
 
     unsafe { CloseHandle(current_process) };
 
-    Ok(PlaceBlockHook { hook_ptr })
-}
-
-pub struct PlaceBlockHook {
-    hook_ptr: *const c_void,
-}
-
-impl Drop for PlaceBlockHook {
-    fn drop(&mut self) {
-        let current_process = unsafe { open_current_process().unwrap() };
-
-        let original_code: [u8; 12] = [
+    Ok(Hook {
+        ptr: hook_ptr as *const u8,
+        original_code: &[
             0x49, 0x8b, 0xe3, 0x41, 0x5f, 0x41, 0x5e, 0x41, 0x5d, 0x5f, 0x5d, 0xc3,
-        ];
-
-        unsafe { write_process_memory(current_process, self.hook_ptr, &original_code).unwrap() };
-
-        // unsafe { VirtualFree(trampoline_ptr, trampoline_code.len(), MEM_RELEASE) };
-    }
+        ],
+    })
 }
 
-unsafe extern "system" fn place_block_callback(block: *mut u8) {
-    MessageDialog::new()
-        .set_type(MessageType::Info)
-        .set_title("SyncEdit.dll")
-        .set_text("placed block!")
-        .show_confirm()
-        .unwrap();
-}
-
-pub fn hook_remove_block() -> Result<RemoveBlockHook, Box<dyn Error>> {
+pub fn hook_remove_block(callback: RemoveBlockCallbackFn) -> Result<Hook, Box<dyn Error>> {
     let current_process = unsafe { open_current_process()? };
 
     let exe_module = unsafe { GetModuleHandleW(null()) };
@@ -330,7 +315,7 @@ pub fn hook_remove_block() -> Result<RemoveBlockHook, Box<dyn Error>> {
             0x48, 0xb8, // mov rax, ????????
         ]);
 
-        trampoline_code.extend_from_slice(&(remove_block_callback as usize).to_le_bytes());
+        trampoline_code.extend_from_slice(&(callback as usize).to_le_bytes());
 
         trampoline_code.extend_from_slice(&[
             0xff, 0xd0, // call rax
@@ -389,37 +374,13 @@ pub fn hook_remove_block() -> Result<RemoveBlockHook, Box<dyn Error>> {
 
     unsafe { CloseHandle(current_process) };
 
-    Ok(RemoveBlockHook {
-        hook_ptr: hook_ptr as *const c_void,
-    })
-}
-
-pub struct RemoveBlockHook {
-    hook_ptr: *const c_void,
-}
-
-impl Drop for RemoveBlockHook {
-    fn drop(&mut self) {
-        let current_process = unsafe { open_current_process().unwrap() };
-
-        let original_code: [u8; 15] = [
+    Ok(Hook {
+        ptr: hook_ptr,
+        original_code: &[
             0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x6c, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24,
             0x18,
-        ];
-
-        unsafe { write_process_memory(current_process, self.hook_ptr, &original_code).unwrap() };
-
-        // unsafe { VirtualFree(trampoline_ptr, trampoline_code.len(), MEM_RELEASE) };
-    }
-}
-
-unsafe extern "system" fn remove_block_callback(block: *mut u8) {
-    MessageDialog::new()
-        .set_type(MessageType::Info)
-        .set_title("SyncEdit.dll")
-        .set_text("removed block!")
-        .show_confirm()
-        .unwrap();
+        ],
+    })
 }
 
 pub fn hook_place_item() -> Result<(), Box<dyn Error>> {
@@ -482,4 +443,24 @@ unsafe fn write_process_memory(
     }
 
     Ok(())
+}
+
+pub struct Hook {
+    ptr: *const u8,
+    original_code: &'static [u8],
+}
+
+impl Drop for Hook {
+    fn drop(&mut self) {
+        let current_process = unsafe { open_current_process().unwrap() };
+
+        unsafe {
+            write_process_memory(
+                current_process,
+                self.ptr as *const c_void,
+                self.original_code,
+            )
+            .unwrap()
+        };
+    }
 }

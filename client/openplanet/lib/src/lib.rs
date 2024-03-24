@@ -195,8 +195,8 @@ async fn join_inner_inner(socket_addr: SocketAddr) -> Result<(), Box<dyn Error>>
 
     *JOIN_STATUS.lock().unwrap() = Some(CString::new("Connected").unwrap());
 
-    let _place_block_hook = hook_place_block()?;
-    let _remove_block_hook = hook_remove_block()?;
+    let _place_block_hook = hook_place_block(place_block_callback)?;
+    let _remove_block_hook = hook_remove_block(remove_block_callback)?;
     let _place_item_hook = hook_place_item()?;
     let _remove_item_hook = hook_remove_item()?;
 
@@ -235,4 +235,22 @@ async fn join_inner_inner_inner() -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
+}
+
+unsafe extern "system" fn place_block_callback(block: *const u8) {
+    MessageDialog::new()
+        .set_type(MessageType::Info)
+        .set_title("SyncEdit.dll")
+        .set_text("placed block!")
+        .show_confirm()
+        .unwrap();
+}
+
+unsafe extern "system" fn remove_block_callback(block: *const u8) {
+    MessageDialog::new()
+        .set_type(MessageType::Info)
+        .set_title("SyncEdit.dll")
+        .set_text("removed block!")
+        .show_confirm()
+        .unwrap();
 }
