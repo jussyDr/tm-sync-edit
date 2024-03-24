@@ -238,7 +238,7 @@ unsafe extern "system" fn place_block_callback(block: &Block) {
     MessageDialog::new()
         .set_type(MessageType::Info)
         .set_title("SyncEdit.dll")
-        .set_text("placed block!")
+        .set_text(&text)
         .show_confirm()
         .unwrap();
 }
