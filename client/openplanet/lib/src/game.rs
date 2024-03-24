@@ -3,7 +3,7 @@ use std::{
     ffi::c_void,
     io,
     mem::{size_of, transmute, MaybeUninit},
-    ptr::null,
+    ptr::{null, null_mut},
     slice,
 };
 
@@ -137,16 +137,8 @@ impl GameFns {
     }
 }
 
-pub fn hook_place_block() -> Result<(), Box<dyn Error>> {
-    let current_process_id = unsafe { GetCurrentProcessId() };
-
-    let current_process = unsafe {
-        OpenProcess(
-            PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE,
-            FALSE,
-            current_process_id,
-        )
-    };
+pub fn hook_place_block() -> Result<PlaceBlockHook, Box<dyn Error>> {
+    let current_process = unsafe { open_current_process()? };
 
     let exe_module = unsafe { GetModuleHandleW(null()) };
 
@@ -243,33 +235,57 @@ pub fn hook_place_block() -> Result<(), Box<dyn Error>> {
         return Err(io::Error::last_os_error().into());
     }
 
-    let mut n_written = MaybeUninit::uninit();
-
-    let original_code: [u8; 12] = [
-        0x49, 0x8b, 0xe3, 0x41, 0x5f, 0x41, 0x5e, 0x41, 0x5d, 0x5f, 0x5d, 0xc3,
-    ];
-
-    let result = unsafe {
-        WriteProcessMemory(
-            current_process,
-            exe_module_memory
-                .as_ptr()
-                .add(place_block_fn_end_offset + 16) as *const c_void,
-            original_code.as_ptr() as *const c_void,
-            12,
-            n_written.as_mut_ptr(),
-        )
+    let hook_ptr = unsafe {
+        exe_module_memory
+            .as_ptr()
+            .add(place_block_fn_end_offset + 16) as *const c_void
     };
 
-    if result == 0 {
-        return Err(io::Error::last_os_error().into());
-    }
+    unsafe {
+        write_process_memory(
+            current_process,
+            hook_ptr,
+            hook_code.as_ptr() as *const c_void,
+            12,
+        )?
+    };
 
     unsafe { VirtualFree(trampoline_ptr, trampoline_code.len(), MEM_RELEASE) };
 
     unsafe { CloseHandle(current_process) };
 
-    Ok(())
+    MessageDialog::new()
+        .set_type(MessageType::Info)
+        .set_title("SyncEdit.dll")
+        .set_text("placed block!")
+        .show_confirm()
+        .unwrap();
+
+    Ok(PlaceBlockHook { hook_ptr })
+}
+
+pub struct PlaceBlockHook {
+    hook_ptr: *const c_void,
+}
+
+impl Drop for PlaceBlockHook {
+    fn drop(&mut self) {
+        let current_process = unsafe { open_current_process().unwrap() };
+
+        let original_code: [u8; 12] = [
+            0x49, 0x8b, 0xe3, 0x41, 0x5f, 0x41, 0x5e, 0x41, 0x5d, 0x5f, 0x5d, 0xc3,
+        ];
+
+        unsafe {
+            write_process_memory(
+                current_process,
+                self.hook_ptr,
+                original_code.as_ptr() as *const c_void,
+                original_code.len(),
+            )
+            .unwrap()
+        };
+    }
 }
 
 unsafe extern "system" fn place_block_callback(block: *mut u8) {
@@ -306,3 +322,36 @@ struct GameBlock {
 }
 
 impl GameBlock {}
+
+unsafe fn open_current_process() -> io::Result<isize> {
+    let current_process_id = unsafe { GetCurrentProcessId() };
+
+    let current_process = unsafe {
+        OpenProcess(
+            PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE,
+            FALSE,
+            current_process_id,
+        )
+    };
+
+    if current_process == 0 {
+        return Err(io::Error::last_os_error());
+    }
+
+    Ok(current_process)
+}
+
+unsafe fn write_process_memory(
+    process: isize,
+    base_addr: *const c_void,
+    buffer: *const c_void,
+    size: usize,
+) -> io::Result<()> {
+    let result = unsafe { WriteProcessMemory(process, base_addr, buffer, size, null_mut()) };
+
+    if result == 0 {
+        return Err(io::Error::last_os_error());
+    }
+
+    Ok(())
+}

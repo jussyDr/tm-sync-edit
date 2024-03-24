@@ -195,10 +195,10 @@ async fn join_inner_inner(socket_addr: SocketAddr) -> Result<(), Box<dyn Error>>
 
     *JOIN_STATUS.lock().unwrap() = Some(CString::new("Connected").unwrap());
 
-    hook_place_block()?;
-    hook_remove_block()?;
-    hook_place_item()?;
-    hook_remove_item()?;
+    let _place_block_hook = hook_place_block()?;
+    let _remove_block_hook = hook_remove_block()?;
+    let _place_item_hook = hook_place_item()?;
+    let _remove_item_hook = hook_remove_item()?;
 
     loop {
         select! {
