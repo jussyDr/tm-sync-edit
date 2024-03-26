@@ -7,4 +7,8 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-tm-sync-edit-shared = { path = "../../../shared" }
+shared = { path = "../../../shared" }
+
+futures = "0.3.30"
+futures-util = { version = "0.3.30", features = ["sink"] }
+tokio = { version = "1.36.0", features = ["macros", "net", "rt"] }
