@@ -93,7 +93,7 @@ async fn handle_connection(
 
     framed_tcp_stream.send(Bytes::from(frame)).await?;
 
-    let result = handle_client(framed_tcp_stream, receiver).await;
+    let result = handle_client(&state, framed_tcp_stream, receiver).await;
 
     state.lock().await.clients.remove(&socket_addr);
 
@@ -103,6 +103,7 @@ async fn handle_connection(
 }
 
 async fn handle_client(
+    state: &Arc<Mutex<State>>,
     mut framed_tcp_stream: FramedTcpStream,
     mut receiver: mpsc::UnboundedReceiver<Bytes>,
 ) -> Result<()> {
@@ -110,36 +111,40 @@ async fn handle_client(
         select! {
             result = framed_tcp_stream.try_next() => match result? {
                 None => break,
-                Some(frame) => {
-                    let frame = frame.freeze();
-
-                    let message: Message = deserialize(&frame)?;
-
-                    match message {
-                        Message::PlaceBlock => {
-                            println!("place block");
-                        }
-                        Message::RemoveBlock => {
-                            println!("remove block");
-                        }
-                        Message::PlaceItem => {
-                            println!("place item");
-                        }
-                        Message::RemoveItem => {
-                            println!("remove item");
-                        }
-                        Message::AddCustomBlockInfo => {}
-                        Message::AddCustomItemModel => {}
-                    }
-                }
+                Some(frame) => handle_frame(state, frame.freeze()).await?,
             },
             frame = receiver.recv() => match frame {
                 None => todo!(),
-                Some(frame) => {
-                    framed_tcp_stream.send(frame).await?;
-                }
+                Some(frame) =>framed_tcp_stream.send(frame).await?
             }
         }
+    }
+
+    Ok(())
+}
+
+async fn handle_frame(state: &Arc<Mutex<State>>, frame: Bytes) -> Result<()> {
+    let message: Message = deserialize(&frame)?;
+
+    match message {
+        Message::PlaceBlock => {
+            println!("place block");
+        }
+        Message::RemoveBlock => {
+            println!("remove block");
+        }
+        Message::PlaceItem => {
+            println!("place item");
+        }
+        Message::RemoveItem => {
+            println!("remove item");
+        }
+        Message::AddCustomBlockInfo => {}
+        Message::AddCustomItemModel => {}
+    }
+
+    for sender in state.lock().await.clients.values() {
+        sender.send(Bytes::clone(&frame))?;
     }
 
     Ok(())
