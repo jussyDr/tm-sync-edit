@@ -9,6 +9,7 @@ crate-type = ["cdylib"]
 [dependencies]
 tm-sync-edit-shared = { path = "../../../shared" }
 
+bytes = "1.6.0"
 futures-util = { version = "0.3.30", features = ["sink"] }
 memchr = "2.7.1"
 native-dialog = "0.7.0"

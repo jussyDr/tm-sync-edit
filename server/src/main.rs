@@ -116,10 +116,18 @@ async fn handle_client(
                     let message: Message = deserialize(&frame)?;
 
                     match message {
-                        Message::PlaceBlock => {}
-                        Message::RemoveBlock => {}
-                        Message::PlaceItem => {}
-                        Message::RemoveItem => {}
+                        Message::PlaceBlock => {
+                            println!("place block");
+                        }
+                        Message::RemoveBlock => {
+                            println!("remove block");
+                        }
+                        Message::PlaceItem => {
+                            println!("place item");
+                        }
+                        Message::RemoveItem => {
+                            println!("remove item");
+                        }
                         Message::AddCustomBlockInfo => {}
                         Message::AddCustomItemModel => {}
                     }

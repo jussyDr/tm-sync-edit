@@ -1,3 +1,5 @@
+//! Functionality for hooking into the game.
+
 use std::{
     error::Error,
     ffi::c_void,

@@ -13,14 +13,15 @@ use std::{
     thread,
 };
 
-use futures_util::{StreamExt, TryStreamExt};
+use bytes::Bytes;
+use futures_util::{SinkExt, StreamExt, TryStreamExt};
 use game::{Block, Item, ItemParams};
 use native_dialog::{MessageDialog, MessageType};
-use tm_sync_edit_shared::{deserialize, framed_tcp_stream, Map, Message};
+use tm_sync_edit_shared::{deserialize, framed_tcp_stream, serialize, Map, Message};
 use tokio::{
     net::TcpStream,
     runtime, select,
-    sync::{oneshot, Notify},
+    sync::{mpsc, oneshot, Notify},
 };
 use windows_sys::Win32::{
     Foundation::{BOOL, TRUE},
@@ -42,6 +43,8 @@ static CANCELLED: Mutex<Option<Arc<Notify>>> = Mutex::new(None);
 static OPEN_EDITOR: Mutex<bool> = Mutex::new(false);
 
 static OPEN_EDITOR_RESULT: Mutex<Option<oneshot::Sender<bool>>> = Mutex::new(None);
+
+static SENDER: Mutex<Option<mpsc::UnboundedSender<Bytes>>> = Mutex::new(None);
 
 #[no_mangle]
 extern "system" fn DllMain(_dll_module: usize, call_reason: u32, _reserved: usize) -> BOOL {
@@ -190,6 +193,9 @@ async fn join_inner_inner(socket_addr: SocketAddr) -> Result<(), Box<dyn Error>>
         result = join_inner_inner_inner() => result?
     }
 
+    let (sender, mut receiver) = mpsc::unbounded_channel();
+    *SENDER.lock().unwrap() = Some(sender);
+
     *JOIN_STATUS.lock().unwrap() = Some(CString::new("Connected").unwrap());
 
     let _place_block_hook = hook_place_block(place_block_callback)?;
@@ -215,6 +221,9 @@ async fn join_inner_inner(socket_addr: SocketAddr) -> Result<(), Box<dyn Error>>
                         Message::AddCustomItemModel => {}
                     }
                 }
+            },
+            Some(frame) = receiver.recv() => {
+                framed_tcp_stream.send(frame).await?;
             }
         }
     }
@@ -235,37 +244,33 @@ async fn join_inner_inner_inner() -> Result<(), Box<dyn Error>> {
 }
 
 unsafe extern "system" fn place_block_callback(block: &Block) {
-    MessageDialog::new()
-        .set_type(MessageType::Info)
-        .set_title("SyncEdit.dll")
-        .set_text(&text)
-        .show_confirm()
-        .unwrap();
+    let message = Message::PlaceBlock;
+    send_message(message);
 }
 
 unsafe extern "system" fn remove_block_callback(block: &Block) {
-    MessageDialog::new()
-        .set_type(MessageType::Info)
-        .set_title("SyncEdit.dll")
-        .set_text("removed block!")
-        .show_confirm()
-        .unwrap();
+    let message = Message::RemoveBlock;
+    send_message(message);
 }
 
 unsafe extern "system" fn place_item_callback(item_params: &ItemParams) {
-    MessageDialog::new()
-        .set_type(MessageType::Info)
-        .set_title("SyncEdit.dll")
-        .set_text("placed item!")
-        .show_confirm()
-        .unwrap();
+    let message = Message::PlaceItem;
+    send_message(message);
 }
 
 unsafe extern "system" fn remove_item_callback(item: &Item) {
-    MessageDialog::new()
-        .set_type(MessageType::Info)
-        .set_title("SyncEdit.dll")
-        .set_text("removed item!")
-        .show_confirm()
+    let message = Message::RemoveItem;
+    send_message(message);
+}
+
+fn send_message(message: Message) {
+    let frame = serialize(&message).unwrap();
+
+    SENDER
+        .lock()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .send(frame.into())
         .unwrap();
 }

@@ -1,3 +1,7 @@
+//! Functionality for interacting with the actual game.
+//!
+//! A lot of items here depend on the current game version, and can break in the future.
+
 mod hook;
 
 pub use hook::*;
