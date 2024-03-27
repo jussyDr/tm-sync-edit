@@ -8,7 +8,3 @@ crate-type = ["cdylib"]
 
 [dependencies]
 shared = { path = "../../../shared" }
-
-futures = "0.3.30"
-futures-util = { version = "0.3.30", features = ["sink"] }
-tokio = { version = "1.36.0", features = ["macros", "net", "rt"] }
