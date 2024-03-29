@@ -7,11 +7,11 @@ use std::{
 use clap::Parser;
 use futures_util::TryStreamExt;
 use log::LevelFilter;
-use shared::{framed_tcp_stream, FramedTcpStream};
 use tokio::{
     net::{TcpListener, TcpStream},
     runtime, select,
 };
+use tokio_util::codec::{Decoder, LengthDelimitedCodec};
 
 #[derive(clap::Parser)]
 struct Args {
@@ -70,15 +70,15 @@ fn main() {
 async fn handle_connection(tcp_stream: TcpStream, socket_addr: SocketAddr) {
     log::info!("accepted connection to: {socket_addr}");
 
-    let framed_tcp_stream = framed_tcp_stream(tcp_stream);
-
-    match handle_client(framed_tcp_stream).await {
+    match handle_client(tcp_stream).await {
         Ok(()) => log::info!("closed connection to: {socket_addr}"),
         Err(error) => log::error!("{error}"),
     }
 }
 
-async fn handle_client(mut framed_tcp_stream: FramedTcpStream) -> Result<(), Box<dyn Error>> {
+async fn handle_client(tcp_stream: TcpStream) -> Result<(), Box<dyn Error>> {
+    let mut framed_tcp_stream = LengthDelimitedCodec::new().framed(tcp_stream);
+
     loop {
         select! {
             result = framed_tcp_stream.try_next() => match result? {

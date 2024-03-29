@@ -12,9 +12,10 @@ use std::{
 };
 
 use async_compat::CompatExt;
-use futures::task::noop_waker_ref;
+use futures::{task::noop_waker_ref, TryStreamExt};
 use native_dialog::{MessageDialog, MessageType};
-use tokio::net::TcpStream;
+use tokio::{net::TcpStream, select};
+use tokio_util::codec::{Decoder, LengthDelimitedCodec};
 use windows_sys::Win32::{
     Foundation::{BOOL, HINSTANCE, TRUE},
     System::SystemServices::DLL_PROCESS_ATTACH,
@@ -114,7 +115,16 @@ async fn connection(host: String, port: String) -> Result<(), Box<dyn Error>> {
 
     let tcp_stream = TcpStream::connect(socket_addr).compat().await?;
 
-    Ok(())
+    let mut framed_tcp_stream = LengthDelimitedCodec::new().framed(tcp_stream);
+
+    loop {
+        select! {
+            result = framed_tcp_stream.try_next() => match result? {
+                None => return Err("server closed connection".into()),
+                Some(_frame) => {}
+            }
+        }
+    }
 }
 
 // utils //
