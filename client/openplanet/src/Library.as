@@ -75,6 +75,19 @@ class Library {
         m_destroyContext.Call(m_context);
     }
 
+    string GetStatusText() {
+        return Dev::ReadCString(Dev::ReadUInt64(m_context));
+    }
+
+    void SetStatusText(string statusText) {
+        if (statusText.Length >= 256) {
+            return;
+        }
+
+        Dev::WriteCString(Dev::ReadUInt64(m_context), statusText);
+        Dev::Write(Dev::ReadUInt64(m_context) + statusText.Length, uint8(0));
+    }
+
     void OpenConnection(const string&in host, const string&in port) {
         m_openConnection.Call(m_context, host, port);
     }

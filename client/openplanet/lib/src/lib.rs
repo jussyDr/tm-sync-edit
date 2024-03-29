@@ -2,13 +2,13 @@ mod game;
 
 use std::{
     error::Error,
-    ffi::{c_char, c_void, CStr},
+    ffi::{c_char, c_void, CStr, CString},
     future::Future,
     net::{IpAddr, SocketAddr},
     panic,
     pin::Pin,
     str::FromStr,
-    task,
+    task::{self, Poll},
 };
 
 use async_compat::CompatExt;
@@ -48,7 +48,10 @@ unsafe extern "system" fn DllMain(
 
 #[no_mangle]
 unsafe extern "system" fn CreateContext() -> *mut Context {
-    Box::into_raw(Box::new(Context::new()))
+    let mut context = Context::new();
+    context.set_status_text("Disconnected");
+
+    Box::into_raw(Box::new(context))
 }
 
 #[no_mangle]
@@ -65,24 +68,32 @@ unsafe extern "system" fn OpenConnection(
     let host = convert_c_string(host);
     let port = convert_c_string(port);
 
-    let connection_future = Box::pin(connection(host, port));
+    let connection_future = Box::pin(connection(&mut *context, host, port));
 
     (*context).connection_future = Some(connection_future);
 }
 
 #[no_mangle]
 unsafe extern "system" fn UpdateConnection(context: *mut Context) -> bool {
-    let connection_future = (*context)
+    let context = &mut *context;
+
+    let connection_future = context
         .connection_future
         .as_mut()
         .expect("no open connection");
 
     let mut task_context = task::Context::from_waker(noop_waker_ref());
 
-    connection_future
-        .as_mut()
-        .poll(&mut task_context)
-        .is_pending()
+    match connection_future.as_mut().poll(&mut task_context) {
+        Poll::Ready(value) => {
+            if let Err(error) = value {
+                context.set_status_text(&error.to_string());
+            }
+
+            false
+        }
+        Poll::Pending => true,
+    }
 }
 
 #[no_mangle]
@@ -92,15 +103,27 @@ unsafe extern "system" fn CloseConnection(context: *mut Context) {
 
 // context //
 
+#[repr(C)]
 struct Context {
+    status_text_buf: Box<[u8; 256]>,
     connection_future: Option<ConnectionFuture>,
 }
 
 impl Context {
     fn new() -> Self {
         Self {
+            status_text_buf: Box::new([0; 256]),
             connection_future: None,
         }
+    }
+
+    fn set_status_text(&mut self, status_text: &str) {
+        if status_text.len() >= self.status_text_buf.len() {
+            panic!("status text is too long for buffer");
+        }
+
+        self.status_text_buf[..status_text.len()].copy_from_slice(status_text.as_bytes());
+        self.status_text_buf[status_text.len()] = 0;
     }
 }
 
@@ -108,12 +131,20 @@ impl Context {
 
 type ConnectionFuture = Pin<Box<dyn Future<Output = Result<(), Box<dyn Error>>>>>;
 
-async fn connection(host: String, port: String) -> Result<(), Box<dyn Error>> {
+async fn connection(
+    context: &mut Context,
+    host: String,
+    port: String,
+) -> Result<(), Box<dyn Error>> {
     let ip_addr = IpAddr::from_str(&host)?;
     let port = u16::from_str(&port)?;
     let socket_addr = SocketAddr::new(ip_addr, port);
 
+    context.set_status_text("Connecting...");
+
     let tcp_stream = TcpStream::connect(socket_addr).compat().await?;
+
+    context.set_status_text("Connected");
 
     let mut framed_tcp_stream = LengthDelimitedCodec::new().framed(tcp_stream);
 

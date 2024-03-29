@@ -38,6 +38,8 @@ void RenderInterface() {
             if (UI::Button("Cancel")) {
                 g_library.CloseConnection();
                 g_connectionOpen = false;
+
+                g_library.SetStatusText("Canceled");
             }
         } else {
             Setting_Host = UI::InputText("Host", Setting_Host, UI::InputTextFlags::CharsNoBlank);
@@ -49,6 +51,8 @@ void RenderInterface() {
                 g_connectionOpen = true;
             }
         }
+
+        UI::Text(g_library.GetStatusText());
     }
 
     UI::End();
