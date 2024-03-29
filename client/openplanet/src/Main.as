@@ -10,7 +10,7 @@ string Setting_Port = "8369";
 const string c_title = "Sync Edit";
 
 Library@ g_library = null;
-uint64 g_context = 0;
+bool g_connectionOpen = false;
 
 void Main() {
     @g_library = LoadLibrary();
@@ -28,7 +28,29 @@ void RenderInterface() {
     if (!UI::Begin(c_title)) {
         return;
     }
-    
+
+    if (g_library !is null) {
+        if (g_connectionOpen) {
+            UI::LabelText("Host", Setting_Host);
+
+            UI::LabelText("Port", Setting_Port);
+
+            if (UI::Button("Cancel")) {
+                g_library.CloseConnection();
+                g_connectionOpen = false;
+            }
+        } else {
+            Setting_Host = UI::InputText("Host", Setting_Host, UI::InputTextFlags::CharsNoBlank);
+
+            Setting_Port = UI::InputText("Port", Setting_Port, UI::InputTextFlags::CharsNoBlank);
+
+            if (UI::Button("Join")) {
+                g_library.OpenConnection(Setting_Host, Setting_Port);
+                g_connectionOpen = true;
+            }
+        }
+    }
+
     UI::End();
 }
 
@@ -38,10 +60,8 @@ void RenderMenu() {
     }
 }
 
-void Update() {
-
-}
-
-void OnDestroyed() {
- 
+void Update(float dt) {
+    if (g_library !is null && g_connectionOpen) {
+        g_connectionOpen = g_library.UpdateConnection();
+    }
 }

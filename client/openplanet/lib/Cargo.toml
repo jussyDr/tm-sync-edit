@@ -9,11 +9,12 @@ crate-type = ["cdylib"]
 [dependencies]
 shared = { path = "../../../shared" }
 
+async-compat = "0.2.3"
 futures = "0.3.30"
 futures-util = { version = "0.3.30", features = ["sink"] }
 memchr = "2.7.2"
 native-dialog = "0.7.0"
-tokio = { version = "1.36.0", features = ["macros", "net", "rt"] }
+tokio = { version = "1.36.0", features = ["macros", "net"] }
 
 [dependencies.windows-sys]
 version = "0.52.0"
