@@ -2,7 +2,7 @@ mod game;
 
 use std::{
     error::Error,
-    ffi::{c_char, c_void, CStr, CString},
+    ffi::{c_char, c_void, CStr},
     future::Future,
     net::{IpAddr, SocketAddr},
     panic,
@@ -65,6 +65,8 @@ unsafe extern "system" fn OpenConnection(
     host: *const c_char,
     port: *const c_char,
 ) {
+    (*context).state = State::Connected;
+
     let host = convert_c_string(host);
     let port = convert_c_string(port);
 
@@ -74,7 +76,7 @@ unsafe extern "system" fn OpenConnection(
 }
 
 #[no_mangle]
-unsafe extern "system" fn UpdateConnection(context: *mut Context) -> bool {
+unsafe extern "system" fn UpdateConnection(context: *mut Context) {
     let context = &mut *context;
 
     let connection_future = context
@@ -84,27 +86,25 @@ unsafe extern "system" fn UpdateConnection(context: *mut Context) -> bool {
 
     let mut task_context = task::Context::from_waker(noop_waker_ref());
 
-    match connection_future.as_mut().poll(&mut task_context) {
-        Poll::Ready(value) => {
-            if let Err(error) = value {
-                context.set_status_text(&error.to_string());
-            }
-
-            false
-        }
-        Poll::Pending => true,
+    if let Poll::Ready(Err(error)) = connection_future.as_mut().poll(&mut task_context) {
+        context.state = State::Disconnected;
+        context.set_status_text(&error.to_string());
     }
 }
 
 #[no_mangle]
 unsafe extern "system" fn CloseConnection(context: *mut Context) {
-    (*context).connection_future = None;
+    let context = &mut *context;
+
+    context.state = State::Disconnected;
+    context.connection_future = None;
 }
 
 // context //
 
 #[repr(C)]
 struct Context {
+    state: State,
     status_text_buf: Box<[u8; 256]>,
     connection_future: Option<ConnectionFuture>,
 }
@@ -112,6 +112,7 @@ struct Context {
 impl Context {
     fn new() -> Self {
         Self {
+            state: State::Disconnected,
             status_text_buf: Box::new([0; 256]),
             connection_future: None,
         }
@@ -125,6 +126,12 @@ impl Context {
         self.status_text_buf[..status_text.len()].copy_from_slice(status_text.as_bytes());
         self.status_text_buf[status_text.len()] = 0;
     }
+}
+
+#[repr(u8)]
+enum State {
+    Disconnected,
+    Connected,
 }
 
 // connection //

@@ -75,8 +75,12 @@ class Library {
         m_destroyContext.Call(m_context);
     }
 
+    State GetState() {
+        return State(Dev::ReadUInt8(m_context));
+    }
+
     string GetStatusText() {
-        return Dev::ReadCString(Dev::ReadUInt64(m_context));
+        return Dev::ReadCString(Dev::ReadUInt64(m_context + 8));
     }
 
     void SetStatusText(string statusText) {
@@ -84,19 +88,24 @@ class Library {
             return;
         }
 
-        Dev::WriteCString(Dev::ReadUInt64(m_context), statusText);
-        Dev::Write(Dev::ReadUInt64(m_context) + statusText.Length, uint8(0));
+        Dev::WriteCString(Dev::ReadUInt64(m_context + 8), statusText);
+        Dev::Write(Dev::ReadUInt64(m_context + 8) + statusText.Length, uint8(0));
     }
 
     void OpenConnection(const string&in host, const string&in port) {
         m_openConnection.Call(m_context, host, port);
     }
 
-    bool UpdateConnection() {
-        return m_updateConnection.CallBool(m_context);
+    void UpdateConnection() {
+        m_updateConnection.Call(m_context);
     }
 
     void CloseConnection() {
         m_closeConnection.Call(m_context);
     }
+}
+
+enum State {
+    Disconnected,
+    Connected,
 }
