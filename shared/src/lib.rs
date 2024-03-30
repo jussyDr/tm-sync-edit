@@ -39,8 +39,6 @@ pub struct Block {
     pub x: u8,
     pub y: u8,
     pub z: u8,
-    pub direction: Direction,
-    pub elem_color: ElemColor,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -62,7 +60,14 @@ pub enum ElemColor {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct GhostBlock;
+pub struct GhostBlock {
+    pub x: u8,
+    pub y: u8,
+    pub z: u8,
+    pub direction: Direction,
+    pub is_ground: bool,
+    pub elem_color: ElemColor,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FreeBlock;

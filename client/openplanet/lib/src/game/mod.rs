@@ -6,15 +6,18 @@ mod hook;
 
 pub use hook::*;
 
-#[repr(C)]
-pub struct Block {
-    pad_1: [u8; 96],
-    pub x: u32,
-    pub y: u32,
-    pub z: u32,
-    pub direction: u32,
-    pad_2: [u8; 44],
-    pub elem_color: u32,
+use autopad::autopad;
+
+autopad! {
+    #[repr(C)]
+    pub struct Block {
+        0x60 => pub x: u32,
+        0x64 => pub y: u32,
+        0x68 => pub z: u32,
+        0x6C => pub direction: u32,
+        0x8C => pub flags: u32,
+        0x9C => pub elem_color: u8
+    }
 }
 
 #[repr(C)]

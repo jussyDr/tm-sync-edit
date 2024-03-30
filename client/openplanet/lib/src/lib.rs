@@ -17,7 +17,8 @@ use futures::{executor::block_on, task::noop_waker_ref, SinkExt, TryStreamExt};
 use game::{hook_place_block, hook_place_item, hook_remove_block, hook_remove_item};
 use native_dialog::{MessageDialog, MessageType};
 use shared::{
-    deserialize, framed_tcp_stream, serialize, Direction, ElemColor, FramedTcpStream, Item, Message,
+    deserialize, framed_tcp_stream, serialize, Direction, ElemColor, FramedTcpStream, GhostBlock,
+    Item, Message,
 };
 use tokio::{net::TcpStream, select};
 use windows_sys::Win32::{
@@ -216,14 +217,14 @@ async fn connection(
 unsafe extern "system" fn place_block_callback(user_data: *mut u8, block: *mut game::Block) {
     let slice = std::slice::from_raw_parts(block as *mut u8, 444);
 
+    let context = &mut *(user_data as *mut Context);
+    let block = &*block;
+
     let _ = MessageDialog::new()
         .set_type(MessageType::Error)
         .set_title(FILE_NAME)
         .set_text(&format!("{slice:02X?}"))
         .show_alert();
-
-    let context = &mut *(user_data as *mut Context);
-    let block = &*block;
 
     let direction = match block.direction {
         0 => Direction::North,
@@ -233,24 +234,31 @@ unsafe extern "system" fn place_block_callback(user_data: *mut u8, block: *mut g
         _ => unreachable!(),
     };
 
-    let elem_color = match block.elem_color {
-        0 => ElemColor::Default,
-        1 => ElemColor::White,
-        2 => ElemColor::Green,
-        3 => ElemColor::Blue,
-        4 => ElemColor::Red,
-        5 => ElemColor::Black,
-        _ => ElemColor::Default,
-    };
+    let is_ground = block.flags & 0x00001000 != 0;
 
-    let message = Message::PlaceBlock {
-        block: shared::Block {
-            x: block.x as u8,
-            y: block.y as u8,
-            z: block.z as u8,
-            direction,
-            elem_color,
-        },
+    let is_ghost = block.flags & 0x10000000 != 0;
+
+    let elem_color = ElemColor::Default;
+
+    let message = if is_ghost {
+        Message::PlaceGhostBlock {
+            ghost_block: GhostBlock {
+                x: block.x as u8,
+                y: block.y as u8,
+                z: block.z as u8,
+                direction,
+                is_ground,
+                elem_color,
+            },
+        }
+    } else {
+        Message::PlaceBlock {
+            block: shared::Block {
+                x: block.x as u8,
+                y: block.y as u8,
+                z: block.z as u8,
+            },
+        }
     };
 
     send_message(context, &message);
@@ -268,24 +276,31 @@ unsafe extern "system" fn remove_block_callback(user_data: *mut u8, block: *mut 
         _ => unreachable!(),
     };
 
-    let elem_color = match block.elem_color {
-        0 => ElemColor::Default,
-        1 => ElemColor::White,
-        2 => ElemColor::Green,
-        3 => ElemColor::Blue,
-        4 => ElemColor::Red,
-        5 => ElemColor::Black,
-        _ => unreachable!(),
-    };
+    let is_ghost = block.flags & 0x10000000 != 0;
 
-    let message = Message::RemoveBlock {
-        block: shared::Block {
-            x: block.x as u8,
-            y: block.y as u8,
-            z: block.z as u8,
-            direction,
-            elem_color,
-        },
+    let is_ground = block.flags & 0x00001000 != 0;
+
+    let elem_color = ElemColor::Default;
+
+    let message = if is_ghost {
+        Message::RemoveGhostBlock {
+            ghost_block: GhostBlock {
+                x: block.x as u8,
+                y: block.y as u8,
+                z: block.z as u8,
+                direction,
+                is_ground,
+                elem_color,
+            },
+        }
+    } else {
+        Message::PlaceBlock {
+            block: shared::Block {
+                x: block.x as u8,
+                y: block.y as u8,
+                z: block.z as u8,
+            },
+        }
     };
 
     send_message(context, &message);

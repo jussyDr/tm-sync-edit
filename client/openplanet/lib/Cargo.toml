@@ -10,6 +10,7 @@ crate-type = ["cdylib"]
 shared = { path = "../../../shared" }
 
 async-compat = "0.2.3"
+autopad = "1.0.0"
 futures = "0.3.30"
 futures-util = { version = "0.3.30", features = ["sink"] }
 memchr = "2.7.2"
