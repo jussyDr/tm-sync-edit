@@ -294,7 +294,7 @@ pub fn hook_place_item(
             0x48, 0xb9, // mov rcx, ????????
         ]);
 
-        trampoline_code.extend_from_slice(&(user_data as usize).to_be_bytes());
+        trampoline_code.extend_from_slice(&(user_data as usize).to_le_bytes());
 
         trampoline_code.extend_from_slice(&[
             0x48, 0xb8, // mov rax, ????????

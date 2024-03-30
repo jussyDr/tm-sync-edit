@@ -102,6 +102,7 @@ unsafe extern "system" fn CloseConnection(context: *mut Context) {
 
     context.state = State::Disconnected;
     context.connection_future = None;
+    context.framed_tcp_stream = None;
 }
 
 // context //
@@ -204,6 +205,34 @@ unsafe extern "system" fn place_block_callback(user_data: *mut u8, _block: *mut 
 
     let message = Message::PlaceBlock;
 
+    send_message(context, &message);
+}
+
+unsafe extern "system" fn remove_block_callback(user_data: *mut u8, _block: *mut Block) {
+    let context = &mut *(user_data as *mut Context);
+
+    let message = Message::RemoveBlock;
+
+    send_message(context, &message);
+}
+
+unsafe extern "system" fn place_item_callback(user_data: *mut u8, _item_params: *mut ItemParams) {
+    let context = &mut *(user_data as *mut Context);
+
+    let message = Message::PlaceItem;
+
+    send_message(context, &message);
+}
+
+unsafe extern "system" fn remove_item_callback(user_data: *mut u8, _item: *mut Item) {
+    let context = &mut *(user_data as *mut Context);
+
+    let message = Message::RemoveItem;
+
+    send_message(context, &message);
+}
+
+fn send_message(context: &mut Context, message: &Message) {
     let frame = serialize(&message).expect("Failed to serialize message");
 
     block_on(async {
@@ -215,18 +244,6 @@ unsafe extern "system" fn place_block_callback(user_data: *mut u8, _block: *mut 
             .await
             .expect("Failed to send frame");
     });
-}
-
-unsafe extern "system" fn remove_block_callback(user_data: *mut u8, _block: *mut Block) {
-    let _context = &mut *(user_data as *mut Context);
-}
-
-unsafe extern "system" fn place_item_callback(user_data: *mut u8, _item_params: *mut ItemParams) {
-    let _context = &mut *(user_data as *mut Context);
-}
-
-unsafe extern "system" fn remove_item_callback(user_data: *mut u8, _item: *mut Item) {
-    let _context = &mut *(user_data as *mut Context);
 }
 
 // utils //

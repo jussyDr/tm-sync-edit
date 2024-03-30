@@ -87,10 +87,18 @@ async fn handle_client(tcp_stream: TcpStream) -> Result<(), Box<dyn Error>> {
                     let message: Message = deserialize(&frame)?;
 
                     match message {
-                        Message::PlaceBlock => {}
-                        Message::RemoveBlock => {}
-                        Message::PlaceItem => {}
-                        Message::RemoveItem => {}
+                        Message::PlaceBlock => {
+                            println!("placed block");
+                        }
+                        Message::RemoveBlock => {
+                            println!("removed block");
+                        }
+                        Message::PlaceItem => {
+                            println!("placed item");
+                        }
+                        Message::RemoveItem => {
+                            println!("removed item");
+                        }
                     }
                 }
             }
