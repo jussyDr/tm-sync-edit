@@ -13,6 +13,8 @@ pub struct Block {
     pub y: u32,
     pub z: u32,
     pub direction: u32,
+    pad_2: [u8; 44],
+    pub elem_color: u32,
 }
 
 #[repr(C)]

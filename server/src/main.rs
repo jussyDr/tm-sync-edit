@@ -1,16 +1,20 @@
 use std::{
+    collections::HashMap,
     error::Error,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     num::NonZeroUsize,
+    sync::Arc,
 };
 
+use bytes::Bytes;
 use clap::Parser;
-use futures_util::TryStreamExt;
+use futures_util::{SinkExt, TryStreamExt};
 use log::LevelFilter;
 use shared::{deserialize, framed_tcp_stream, Message};
 use tokio::{
     net::{TcpListener, TcpStream},
     runtime, select,
+    sync::{mpsc, Mutex},
 };
 
 #[derive(clap::Parser)]
@@ -54,10 +58,16 @@ fn main() {
             .await
             .expect("failed to create tcp listener");
 
+        let state = Arc::new(Mutex::new(State {
+            clients: HashMap::new(),
+        }));
+
         loop {
             match tcp_listener.accept().await {
                 Ok((tcp_stream, socket_addr)) => {
-                    runtime.spawn(handle_connection(tcp_stream, socket_addr));
+                    let state = Arc::clone(&state);
+
+                    runtime.spawn(handle_connection(state, tcp_stream, socket_addr));
                 }
                 Err(error) => {
                     log::error!("{error}");
@@ -67,42 +77,85 @@ fn main() {
     });
 }
 
-async fn handle_connection(tcp_stream: TcpStream, socket_addr: SocketAddr) {
-    log::info!("accepted connection to: {socket_addr}");
-
-    match handle_client(tcp_stream).await {
-        Ok(()) => log::info!("closed connection to: {socket_addr}"),
-        Err(error) => log::error!("{error}"),
-    }
+struct State {
+    clients: HashMap<SocketAddr, mpsc::UnboundedSender<Bytes>>,
 }
 
-async fn handle_client(tcp_stream: TcpStream) -> Result<(), Box<dyn Error>> {
+async fn handle_connection(
+    state: Arc<Mutex<State>>,
+    tcp_stream: TcpStream,
+    socket_addr: SocketAddr,
+) {
+    log::info!("accepted connection to: {socket_addr}");
+
+    let (sender, receiver) = mpsc::unbounded_channel();
+
+    state.lock().await.clients.insert(socket_addr, sender);
+
+    if let Err(error) = handle_client(&state, tcp_stream, receiver).await {
+        log::error!("{error}");
+    }
+
+    state.lock().await.clients.remove(&socket_addr);
+
+    log::info!("closed connection to: {socket_addr}")
+}
+
+async fn handle_client(
+    state: &Arc<Mutex<State>>,
+    tcp_stream: TcpStream,
+    mut receiver: mpsc::UnboundedReceiver<Bytes>,
+) -> Result<(), Box<dyn Error>> {
     let mut framed_tcp_stream = framed_tcp_stream(tcp_stream);
 
     loop {
         select! {
             result = framed_tcp_stream.try_next() => match result? {
                 None => break,
-                Some(frame) => {
-                    let message: Message = deserialize(&frame)?;
-
-                    match message {
-                        Message::PlaceBlock => {
-                            println!("placed block");
-                        }
-                        Message::RemoveBlock => {
-                            println!("removed block");
-                        }
-                        Message::PlaceItem => {
-                            println!("placed item");
-                        }
-                        Message::RemoveItem => {
-                            println!("removed item");
-                        }
-                    }
-                }
+                Some(frame) => handle_frame(state, frame.freeze()).await?,
+            },
+            option = receiver.recv() => match option {
+                None => break,
+                Some(frame) => framed_tcp_stream.send(frame).await?,
             }
         }
+    }
+
+    Ok(())
+}
+
+async fn handle_frame(state: &Arc<Mutex<State>>, frame: Bytes) -> Result<(), Box<dyn Error>> {
+    let message: Message = deserialize(&frame)?;
+
+    match message {
+        Message::PlaceBlock { block } => {
+            println!("placed block: {block:?}");
+        }
+        Message::RemoveBlock { block } => {
+            println!("removed block: {block:?}");
+        }
+        Message::PlaceGhostBlock { ghost_block } => {
+            println!("placed ghost block: {ghost_block:?}");
+        }
+        Message::RemoveGhostBlock { ghost_block } => {
+            println!("removed ghost block: {ghost_block:?}");
+        }
+        Message::PlaceFreeBlock { free_block } => {
+            println!("placed free block: {free_block:?}");
+        }
+        Message::RemoveFreeBlock { free_block } => {
+            println!("removed free block: {free_block:?}");
+        }
+        Message::PlaceItem { item } => {
+            println!("placed item: {item:?}");
+        }
+        Message::RemoveItem { item } => {
+            println!("removed item {item:?}");
+        }
+    }
+
+    for client in state.lock().await.clients.values() {
+        client.send(Bytes::clone(&frame))?;
     }
 
     Ok(())

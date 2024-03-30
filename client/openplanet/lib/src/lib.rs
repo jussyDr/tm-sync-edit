@@ -14,11 +14,11 @@ use std::{
 
 use async_compat::CompatExt;
 use futures::{executor::block_on, task::noop_waker_ref, SinkExt, TryStreamExt};
-use game::{
-    hook_place_block, hook_place_item, hook_remove_block, hook_remove_item, Block, Item, ItemParams,
-};
+use game::{hook_place_block, hook_place_item, hook_remove_block, hook_remove_item};
 use native_dialog::{MessageDialog, MessageType};
-use shared::{framed_tcp_stream, serialize, FramedTcpStream, Message};
+use shared::{
+    deserialize, framed_tcp_stream, serialize, Direction, ElemColor, FramedTcpStream, Item, Message,
+};
 use tokio::{net::TcpStream, select};
 use windows_sys::Win32::{
     Foundation::{BOOL, HINSTANCE, TRUE},
@@ -192,7 +192,20 @@ async fn connection(
         select! {
             result = context.framed_tcp_stream.as_mut().unwrap().try_next() => match result? {
                 None => return Err("Server closed connection".into()),
-                Some(_frame) => {}
+                Some(frame) => {
+                    let message = deserialize(&frame)?;
+
+                    match message {
+                        Message::PlaceBlock { .. } => {}
+                        Message::RemoveBlock { .. } => {}
+                        Message::PlaceGhostBlock { .. } => {}
+                        Message::RemoveGhostBlock { .. } => {}
+                        Message::PlaceFreeBlock { .. } => {}
+                        Message::RemoveFreeBlock { .. } => {}
+                        Message::PlaceItem { .. } => {}
+                        Message::RemoveItem { .. } => {}
+                    }
+                }
             }
         }
     }
@@ -200,34 +213,99 @@ async fn connection(
 
 // hook callbacks //
 
-unsafe extern "system" fn place_block_callback(user_data: *mut u8, _block: *mut Block) {
-    let context = &mut *(user_data as *mut Context);
+unsafe extern "system" fn place_block_callback(user_data: *mut u8, block: *mut game::Block) {
+    let slice = std::slice::from_raw_parts(block as *mut u8, 444);
 
-    let message = Message::PlaceBlock;
+    let _ = MessageDialog::new()
+        .set_type(MessageType::Error)
+        .set_title(FILE_NAME)
+        .set_text(&format!("{slice:02X?}"))
+        .show_alert();
+
+    let context = &mut *(user_data as *mut Context);
+    let block = &*block;
+
+    let direction = match block.direction {
+        0 => Direction::North,
+        1 => Direction::East,
+        2 => Direction::South,
+        3 => Direction::West,
+        _ => unreachable!(),
+    };
+
+    let elem_color = match block.elem_color {
+        0 => ElemColor::Default,
+        1 => ElemColor::White,
+        2 => ElemColor::Green,
+        3 => ElemColor::Blue,
+        4 => ElemColor::Red,
+        5 => ElemColor::Black,
+        _ => ElemColor::Default,
+    };
+
+    let message = Message::PlaceBlock {
+        block: shared::Block {
+            x: block.x as u8,
+            y: block.y as u8,
+            z: block.z as u8,
+            direction,
+            elem_color,
+        },
+    };
 
     send_message(context, &message);
 }
 
-unsafe extern "system" fn remove_block_callback(user_data: *mut u8, _block: *mut Block) {
+unsafe extern "system" fn remove_block_callback(user_data: *mut u8, block: *mut game::Block) {
     let context = &mut *(user_data as *mut Context);
+    let block = &*block;
 
-    let message = Message::RemoveBlock;
+    let direction = match block.direction {
+        0 => Direction::North,
+        1 => Direction::East,
+        2 => Direction::South,
+        3 => Direction::West,
+        _ => unreachable!(),
+    };
+
+    let elem_color = match block.elem_color {
+        0 => ElemColor::Default,
+        1 => ElemColor::White,
+        2 => ElemColor::Green,
+        3 => ElemColor::Blue,
+        4 => ElemColor::Red,
+        5 => ElemColor::Black,
+        _ => unreachable!(),
+    };
+
+    let message = Message::RemoveBlock {
+        block: shared::Block {
+            x: block.x as u8,
+            y: block.y as u8,
+            z: block.z as u8,
+            direction,
+            elem_color,
+        },
+    };
 
     send_message(context, &message);
 }
 
-unsafe extern "system" fn place_item_callback(user_data: *mut u8, _item_params: *mut ItemParams) {
+unsafe extern "system" fn place_item_callback(
+    user_data: *mut u8,
+    _item_params: *mut game::ItemParams,
+) {
     let context = &mut *(user_data as *mut Context);
 
-    let message = Message::PlaceItem;
+    let message = Message::PlaceItem { item: Item };
 
     send_message(context, &message);
 }
 
-unsafe extern "system" fn remove_item_callback(user_data: *mut u8, _item: *mut Item) {
+unsafe extern "system" fn remove_item_callback(user_data: *mut u8, _item: *mut game::Item) {
     let context = &mut *(user_data as *mut Context);
 
-    let message = Message::RemoveItem;
+    let message = Message::RemoveItem { item: Item };
 
     send_message(context, &message);
 }
