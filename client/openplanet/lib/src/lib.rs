@@ -13,13 +13,13 @@ use std::{
 };
 
 use async_compat::CompatExt;
-use futures::{task::noop_waker_ref, TryStreamExt};
+use futures::{executor::block_on, task::noop_waker_ref, SinkExt, TryStreamExt};
 use game::{
     hook_place_block, hook_place_item, hook_remove_block, hook_remove_item, Block, Item, ItemParams,
 };
 use native_dialog::{MessageDialog, MessageType};
+use shared::{framed_tcp_stream, serialize, FramedTcpStream, Message};
 use tokio::{net::TcpStream, select};
-use tokio_util::codec::{Decoder, LengthDelimitedCodec};
 use windows_sys::Win32::{
     Foundation::{BOOL, HINSTANCE, TRUE},
     System::SystemServices::DLL_PROCESS_ATTACH,
@@ -113,6 +113,7 @@ struct Context {
     map_editor: Option<NonZeroUsize>,
 
     connection_future: Option<ConnectionFuture>,
+    framed_tcp_stream: Option<FramedTcpStream>,
 }
 
 impl Context {
@@ -122,6 +123,7 @@ impl Context {
             status_text_buf: Box::new([0; 256]),
             map_editor: None,
             connection_future: None,
+            framed_tcp_stream: None,
         }
     }
 
@@ -177,17 +179,17 @@ async fn connection(
     context.state = State::Connected;
     context.set_status_text("Connected");
 
+    context.framed_tcp_stream = Some(framed_tcp_stream(tcp_stream));
+
     let user_data = context as *mut Context as *mut u8;
     let _place_block_hook = hook_place_block(user_data, place_block_callback)?;
     let _remove_block_hook = hook_remove_block(user_data, remove_block_callback)?;
     let _place_item_hook = hook_place_item(user_data, place_item_callback)?;
     let _remove_item_hook = hook_remove_item(user_data, remove_item_callback)?;
 
-    let mut framed_tcp_stream = LengthDelimitedCodec::new().framed(tcp_stream);
-
     loop {
         select! {
-            result = framed_tcp_stream.try_next() => match result? {
+            result = context.framed_tcp_stream.as_mut().unwrap().try_next() => match result? {
                 None => return Err("Server closed connection".into()),
                 Some(_frame) => {}
             }
@@ -197,13 +199,35 @@ async fn connection(
 
 // hook callbacks //
 
-unsafe extern "system" fn place_block_callback(_user_data: *mut u8, _block: *mut Block) {}
+unsafe extern "system" fn place_block_callback(user_data: *mut u8, _block: *mut Block) {
+    let context = &mut *(user_data as *mut Context);
 
-unsafe extern "system" fn remove_block_callback(_user_data: *mut u8, _block: *mut Block) {}
+    let message = Message::PlaceBlock;
 
-unsafe extern "system" fn place_item_callback(_user_data: *mut u8, _item_params: *mut ItemParams) {}
+    let frame = serialize(&message).expect("Failed to serialize message");
 
-unsafe extern "system" fn remove_item_callback(_user_data: *mut u8, _item: *mut Item) {}
+    block_on(async {
+        context
+            .framed_tcp_stream
+            .as_mut()
+            .expect("TCP stream not initialized")
+            .send(frame.into())
+            .await
+            .expect("Failed to send frame");
+    });
+}
+
+unsafe extern "system" fn remove_block_callback(user_data: *mut u8, _block: *mut Block) {
+    let _context = &mut *(user_data as *mut Context);
+}
+
+unsafe extern "system" fn place_item_callback(user_data: *mut u8, _item_params: *mut ItemParams) {
+    let _context = &mut *(user_data as *mut Context);
+}
+
+unsafe extern "system" fn remove_item_callback(user_data: *mut u8, _item: *mut Item) {
+    let _context = &mut *(user_data as *mut Context);
+}
 
 // utils //
 

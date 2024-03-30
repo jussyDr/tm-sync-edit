@@ -1,0 +1,10 @@
+[package]
+name = "shared"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bitcode = { version = "0.6.0", features = ["serde"] }
+serde = { version = "1.0.197", features = ["derive"] }
+tokio = { version = "1.36.0", features = ["net"] }
+tokio-util = { version = "0.7.3", features = ["codec"] }
