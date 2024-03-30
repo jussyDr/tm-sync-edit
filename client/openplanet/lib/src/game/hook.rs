@@ -26,13 +26,13 @@ use windows_sys::Win32::{
 
 use super::{Block, Item, ItemParams};
 
-pub type PlaceBlockCallbackFn = unsafe extern "system" fn(&Block);
+pub type PlaceBlockCallbackFn = unsafe extern "system" fn(*mut Block);
 
-pub type RemoveBlockCallbackFn = unsafe extern "system" fn(&Block);
+pub type RemoveBlockCallbackFn = unsafe extern "system" fn(*mut Block);
 
-pub type PlaceItemCallbackFn = unsafe extern "system" fn(&ItemParams);
+pub type PlaceItemCallbackFn = unsafe extern "system" fn(*mut ItemParams);
 
-pub type RemoveItemCallbackFn = unsafe extern "system" fn(&Item);
+pub type RemoveItemCallbackFn = unsafe extern "system" fn(*mut Item);
 
 pub struct Hook {
     ptr: *const u8,

@@ -14,6 +14,9 @@ use std::{
 
 use async_compat::CompatExt;
 use futures::{task::noop_waker_ref, TryStreamExt};
+use game::{
+    hook_place_block, hook_place_item, hook_remove_block, hook_remove_item, Block, Item, ItemParams,
+};
 use native_dialog::{MessageDialog, MessageType};
 use tokio::{net::TcpStream, select};
 use tokio_util::codec::{Decoder, LengthDelimitedCodec};
@@ -174,6 +177,11 @@ async fn connection(
     context.state = State::Connected;
     context.set_status_text("Connected");
 
+    let _place_block_hook = hook_place_block(place_block_callback)?;
+    let _remove_block_hook = hook_remove_block(remove_block_callback)?;
+    let _place_item_hook = hook_place_item(place_item_callback)?;
+    let _remove_item_hook = hook_remove_item(remove_item_callback)?;
+
     let mut framed_tcp_stream = LengthDelimitedCodec::new().framed(tcp_stream);
 
     loop {
@@ -185,6 +193,16 @@ async fn connection(
         }
     }
 }
+
+// hook callbacks //
+
+unsafe extern "system" fn place_block_callback(_block: *mut Block) {}
+
+unsafe extern "system" fn remove_block_callback(_block: *mut Block) {}
+
+unsafe extern "system" fn place_item_callback(_item_params: *mut ItemParams) {}
+
+unsafe extern "system" fn remove_item_callback(_item: *mut Item) {}
 
 // utils //
 
