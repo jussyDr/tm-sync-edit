@@ -17,8 +17,8 @@ use futures::{executor::block_on, task::noop_waker_ref, SinkExt, TryStreamExt};
 use game::{hook_place_block, hook_place_item, hook_remove_block, hook_remove_item};
 use native_dialog::{MessageDialog, MessageType};
 use shared::{
-    deserialize, framed_tcp_stream, serialize, Direction, ElemColor, FramedTcpStream, GhostBlock,
-    Item, Message,
+    deserialize, framed_tcp_stream, serialize, Block, Direction, ElemColor, FramedTcpStream,
+    FreeBlock, Item, Message,
 };
 use tokio::{net::TcpStream, select};
 use windows_sys::Win32::{
@@ -197,14 +197,12 @@ async fn connection(
                     let message = deserialize(&frame)?;
 
                     match message {
-                        Message::PlaceBlock { .. } => {}
-                        Message::RemoveBlock { .. } => {}
-                        Message::PlaceGhostBlock { .. } => {}
-                        Message::RemoveGhostBlock { .. } => {}
-                        Message::PlaceFreeBlock { .. } => {}
-                        Message::RemoveFreeBlock { .. } => {}
-                        Message::PlaceItem { .. } => {}
-                        Message::RemoveItem { .. } => {}
+                        Message::PlaceBlock(..) => {}
+                        Message::RemoveBlock(..) => {}
+                        Message::PlaceFreeBlock(..) => {}
+                        Message::RemoveFreeBlock(..)=> {}
+                        Message::PlaceItem(..) => {}
+                        Message::RemoveItem(..) => {}
                     }
                 }
             }
@@ -223,7 +221,7 @@ unsafe extern "system" fn place_block_callback(user_data: *mut u8, block: *mut g
     let _ = MessageDialog::new()
         .set_type(MessageType::Error)
         .set_title(FILE_NAME)
-        .set_text(&format!("{slice:02X?}"))
+        .set_text(&format!("{:02X?}", slice))
         .show_alert();
 
     let direction = match block.direction {
@@ -238,27 +236,30 @@ unsafe extern "system" fn place_block_callback(user_data: *mut u8, block: *mut g
 
     let is_ghost = block.flags & 0x10000000 != 0;
 
+    let is_free = block.flags & 0x20000000 != 0;
+
     let elem_color = ElemColor::Default;
 
-    let message = if is_ghost {
-        Message::PlaceGhostBlock {
-            ghost_block: GhostBlock {
-                x: block.x as u8,
-                y: block.y as u8,
-                z: block.z as u8,
-                direction,
-                is_ground,
-                elem_color,
-            },
-        }
+    let message = if is_free {
+        Message::PlaceFreeBlock(FreeBlock {
+            x: block.x_pos,
+            y: block.y_pos,
+            z: block.z_pos,
+            yaw: block.yaw,
+            pitch: block.pitch,
+            roll: block.roll,
+            elem_color,
+        })
     } else {
-        Message::PlaceBlock {
-            block: shared::Block {
-                x: block.x as u8,
-                y: block.y as u8,
-                z: block.z as u8,
-            },
-        }
+        Message::PlaceBlock(Block {
+            x: block.x_coord as u8,
+            y: block.y_coord as u8,
+            z: block.z_coord as u8,
+            direction,
+            is_ground,
+            is_ghost,
+            elem_color,
+        })
     };
 
     send_message(context, &message);
@@ -276,31 +277,34 @@ unsafe extern "system" fn remove_block_callback(user_data: *mut u8, block: *mut 
         _ => unreachable!(),
     };
 
+    let is_ground = block.flags & 0x00001000 != 0;
+
     let is_ghost = block.flags & 0x10000000 != 0;
 
-    let is_ground = block.flags & 0x00001000 != 0;
+    let is_free = block.flags & 0x20000000 != 0;
 
     let elem_color = ElemColor::Default;
 
-    let message = if is_ghost {
-        Message::RemoveGhostBlock {
-            ghost_block: GhostBlock {
-                x: block.x as u8,
-                y: block.y as u8,
-                z: block.z as u8,
-                direction,
-                is_ground,
-                elem_color,
-            },
-        }
+    let message = if is_free {
+        Message::RemoveFreeBlock(FreeBlock {
+            x: block.x_pos,
+            y: block.y_pos,
+            z: block.z_pos,
+            yaw: block.yaw,
+            pitch: block.pitch,
+            roll: block.roll,
+            elem_color,
+        })
     } else {
-        Message::PlaceBlock {
-            block: shared::Block {
-                x: block.x as u8,
-                y: block.y as u8,
-                z: block.z as u8,
-            },
-        }
+        Message::RemoveBlock(Block {
+            x: block.x_coord as u8,
+            y: block.y_coord as u8,
+            z: block.z_coord as u8,
+            direction,
+            is_ground,
+            is_ghost,
+            elem_color,
+        })
     };
 
     send_message(context, &message);
@@ -312,7 +316,7 @@ unsafe extern "system" fn place_item_callback(
 ) {
     let context = &mut *(user_data as *mut Context);
 
-    let message = Message::PlaceItem { item: Item };
+    let message = Message::PlaceItem(Item);
 
     send_message(context, &message);
 }
@@ -320,7 +324,7 @@ unsafe extern "system" fn place_item_callback(
 unsafe extern "system" fn remove_item_callback(user_data: *mut u8, _item: *mut game::Item) {
     let context = &mut *(user_data as *mut Context);
 
-    let message = Message::RemoveItem { item: Item };
+    let message = Message::RemoveItem(Item);
 
     send_message(context, &message);
 }

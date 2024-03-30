@@ -24,14 +24,12 @@ pub fn deserialize<'de, T: Deserialize<'de>>(bytes: &'de [u8]) -> Result<T, Box<
 
 #[derive(Serialize, Deserialize)]
 pub enum Message {
-    PlaceBlock { block: Block },
-    RemoveBlock { block: Block },
-    PlaceGhostBlock { ghost_block: GhostBlock },
-    RemoveGhostBlock { ghost_block: GhostBlock },
-    PlaceFreeBlock { free_block: FreeBlock },
-    RemoveFreeBlock { free_block: FreeBlock },
-    PlaceItem { item: Item },
-    RemoveItem { item: Item },
+    PlaceBlock(Block),
+    RemoveBlock(Block),
+    PlaceFreeBlock(FreeBlock),
+    RemoveFreeBlock(FreeBlock),
+    PlaceItem(Item),
+    RemoveItem(Item),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -39,6 +37,10 @@ pub struct Block {
     pub x: u8,
     pub y: u8,
     pub z: u8,
+    pub direction: Direction,
+    pub is_ground: bool,
+    pub is_ghost: bool,
+    pub elem_color: ElemColor,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -60,17 +62,15 @@ pub enum ElemColor {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct GhostBlock {
-    pub x: u8,
-    pub y: u8,
-    pub z: u8,
-    pub direction: Direction,
-    pub is_ground: bool,
+pub struct FreeBlock {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub yaw: f32,
+    pub pitch: f32,
+    pub roll: f32,
     pub elem_color: ElemColor,
 }
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct FreeBlock;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Item;

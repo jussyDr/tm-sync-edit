@@ -128,28 +128,22 @@ async fn handle_frame(state: &Arc<Mutex<State>>, frame: Bytes) -> Result<(), Box
     let message: Message = deserialize(&frame)?;
 
     match message {
-        Message::PlaceBlock { block } => {
+        Message::PlaceBlock(block) => {
             println!("placed block: {block:?}");
         }
-        Message::RemoveBlock { block } => {
+        Message::RemoveBlock(block) => {
             println!("removed block: {block:?}");
         }
-        Message::PlaceGhostBlock { ghost_block } => {
-            println!("placed ghost block: {ghost_block:?}");
-        }
-        Message::RemoveGhostBlock { ghost_block } => {
-            println!("removed ghost block: {ghost_block:?}");
-        }
-        Message::PlaceFreeBlock { free_block } => {
+        Message::PlaceFreeBlock(free_block) => {
             println!("placed free block: {free_block:?}");
         }
-        Message::RemoveFreeBlock { free_block } => {
+        Message::RemoveFreeBlock(free_block) => {
             println!("removed free block: {free_block:?}");
         }
-        Message::PlaceItem { item } => {
+        Message::PlaceItem(item) => {
             println!("placed item: {item:?}");
         }
-        Message::RemoveItem { item } => {
+        Message::RemoveItem(item) => {
             println!("removed item {item:?}");
         }
     }
