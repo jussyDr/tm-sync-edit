@@ -92,6 +92,10 @@ class Library {
         Dev::Write(Dev::ReadUInt64(m_context + 8) + statusText.Length, uint8(0));
     }
 
+    void SetMapEditor(uint64 mapEditor) {
+        Dev::Write(m_context + 16, mapEditor);
+    }
+
     void OpenConnection(const string&in host, const string&in port) {
         m_openConnection.Call(m_context, host, port);
     }
@@ -107,5 +111,7 @@ class Library {
 
 enum State {
     Disconnected,
+    Connecting,
+    OpeningMapEditor,
     Connected,
 }

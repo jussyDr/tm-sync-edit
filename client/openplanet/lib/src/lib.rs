@@ -3,8 +3,9 @@ mod game;
 use std::{
     error::Error,
     ffi::{c_char, c_void, CStr},
-    future::Future,
+    future::{poll_fn, Future},
     net::{IpAddr, SocketAddr},
+    num::NonZeroUsize,
     panic,
     pin::Pin,
     str::FromStr,
@@ -65,7 +66,7 @@ unsafe extern "system" fn OpenConnection(
     host: *const c_char,
     port: *const c_char,
 ) {
-    (*context).state = State::Connected;
+    (*context).state = State::Connecting;
 
     let host = convert_c_string(host);
     let port = convert_c_string(port);
@@ -106,6 +107,8 @@ unsafe extern "system" fn CloseConnection(context: *mut Context) {
 struct Context {
     state: State,
     status_text_buf: Box<[u8; 256]>,
+    map_editor: Option<NonZeroUsize>,
+
     connection_future: Option<ConnectionFuture>,
 }
 
@@ -114,6 +117,7 @@ impl Context {
         Self {
             state: State::Disconnected,
             status_text_buf: Box::new([0; 256]),
+            map_editor: None,
             connection_future: None,
         }
     }
@@ -131,6 +135,8 @@ impl Context {
 #[repr(u8)]
 enum State {
     Disconnected,
+    Connecting,
+    OpeningMapEditor,
     Connected,
 }
 
@@ -151,6 +157,21 @@ async fn connection(
 
     let tcp_stream = TcpStream::connect(socket_addr).compat().await?;
 
+    context.map_editor = None;
+
+    context.state = State::OpeningMapEditor;
+    context.set_status_text("Opening map editor...");
+
+    poll_fn(|_cx| {
+        if context.map_editor.is_some() {
+            Poll::Ready(())
+        } else {
+            Poll::Pending
+        }
+    })
+    .await;
+
+    context.state = State::Connected;
     context.set_status_text("Connected");
 
     let mut framed_tcp_stream = LengthDelimitedCodec::new().framed(tcp_stream);

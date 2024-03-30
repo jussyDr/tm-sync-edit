@@ -35,6 +35,14 @@ void RenderInterface() {
             UI::LabelText("Host", Setting_Host);
             UI::LabelText("Port", Setting_Port);
 
+            if (UI::Button("Exit")) {
+                g_library.CloseConnection();
+                g_library.SetStatusText("Disconnected");
+            }
+        } else if (state == State::Connecting || state == State::OpeningMapEditor) {
+            UI::LabelText("Host", Setting_Host);
+            UI::LabelText("Port", Setting_Port);
+
             if (UI::Button("Cancel")) {
                 g_library.CloseConnection();
                 g_library.SetStatusText("Canceled");
@@ -67,7 +75,15 @@ void Update(float dt) {
 
     auto state = g_library.GetState();
 
-    if (state == State::Connected) {
+    if (state != State::Disconnected) {
+        if (state == State::OpeningMapEditor) {
+            OpenMapEditor();
+        }
+
         g_library.UpdateConnection();
     }
+}
+
+void OpenMapEditor() {
+    g_library.SetMapEditor(123456);
 }
