@@ -75,7 +75,7 @@ void Update(float dt) {
 
     auto state = g_library.GetState();
 
-    if (state == State::Connected && !IsInMapEditor()) {
+    if (state == State::Connected && !IsMapEditorOpen()) {
         g_library.CloseConnection();
         g_library.SetStatusText("Closed map editor");
         return;
@@ -92,22 +92,47 @@ void Update(float dt) {
 
 void OpenMapEditor() {
     auto maniaPlanet = cast<CGameManiaPlanet>(GetApp());
-    auto switcher = maniaPlanet.Switcher;
+    auto switcherModules = maniaPlanet.Switcher.ModuleStack;
 
-    if (switcher.ModuleStack.Length == 0) {
+    if (switcherModules.Length == 0) {
         return;
     }
 
-    auto currentSwitcherModule = switcher.ModuleStack[switcher.ModuleStack.Length - 1];
+    auto currentSwitcherModule = switcherModules[switcherModules.Length - 1];
 
-    auto mapEditor = cast<CGameCtnEditorFree>(currentSwitcherModule);
-
-    if (mapEditor !is null) {
-        g_library.SetMapEditor(mapEditor);
+    if (cast<CGameCtnEditorFree>(currentSwitcherModule) !is null) {
+        g_library.SetMapEditor(cast<CGameCtnEditorFree>(currentSwitcherModule));
+        return;
     }   
+
+    auto isMapEditorOpen = false;
+
+    for (auto i = 0; i < switcherModules.Length - 1; i++) {
+        if (cast<CGameCtnEditorFree>(switcherModules[i]) !is null) {
+            isMapEditorOpen = true;
+            break;
+        }
+    }
+
+    if (isMapEditorOpen) {
+        if (cast<CGameEditorMediaTracker>(currentSwitcherModule) !is null) {
+            cast<CGameEditorMediaTrackerPluginAPI>(cast<CGameEditorMediaTracker>(currentSwitcherModule).PluginAPI).Quit();
+            return;
+        } else if (cast<CGameEditorItem>(currentSwitcherModule) !is null) {
+            cast<CGameEditorItem>(currentSwitcherModule).Exit();
+            return;
+        }
+    } else {
+        if (cast<CTrackManiaMenus>(currentSwitcherModule) !is null) {
+            maniaPlanet.ManiaTitleControlScriptAPI.EditNewMap2("Stadium", "48x48Screen155Day", "", "CarSport", "", false, "", "");
+            return;
+        }
+    }
+
+    maniaPlanet.BackToMainMenu();
 }
 
-bool IsInMapEditor() {
+bool IsMapEditorOpen() {
     auto switcherModules = GetApp().Switcher.ModuleStack;
 
     for (auto i = 0; i < switcherModules.Length; i++) {
