@@ -83,7 +83,7 @@ class Library {
         return Dev::ReadCString(Dev::ReadUInt64(m_context + 8));
     }
 
-    void SetStatusText(string statusText) {
+    void SetStatusText(const string&in statusText) {
         if (statusText.Length >= 256) {
             return;
         }
@@ -92,8 +92,8 @@ class Library {
         Dev::Write(Dev::ReadUInt64(m_context + 8) + statusText.Length, uint8(0));
     }
 
-    void SetMapEditor(uint64 mapEditor) {
-        Dev::Write(m_context + 16, mapEditor);
+    void SetMapEditor(CGameCtnEditorFree@ mapEditor) {
+        Dev::Write(m_context + 16, Dev::ForceCast<uint64>(mapEditor).Get());
     }
 
     void OpenConnection(const string&in host, const string&in port) {

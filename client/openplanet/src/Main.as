@@ -75,6 +75,12 @@ void Update(float dt) {
 
     auto state = g_library.GetState();
 
+    if (state == State::Connected && !IsInMapEditor()) {
+        g_library.CloseConnection();
+        g_library.SetStatusText("Closed map editor");
+        return;
+    }
+
     if (state != State::Disconnected) {
         if (state == State::OpeningMapEditor) {
             OpenMapEditor();
@@ -85,5 +91,30 @@ void Update(float dt) {
 }
 
 void OpenMapEditor() {
-    g_library.SetMapEditor(123456);
+    auto maniaPlanet = cast<CGameManiaPlanet>(GetApp());
+    auto switcher = maniaPlanet.Switcher;
+
+    if (switcher.ModuleStack.Length == 0) {
+        return;
+    }
+
+    auto currentSwitcherModule = switcher.ModuleStack[switcher.ModuleStack.Length - 1];
+
+    auto mapEditor = cast<CGameCtnEditorFree>(currentSwitcherModule);
+
+    if (mapEditor !is null) {
+        g_library.SetMapEditor(mapEditor);
+    }   
+}
+
+bool IsInMapEditor() {
+    auto switcherModules = GetApp().Switcher.ModuleStack;
+
+    for (auto i = 0; i < switcherModules.Length; i++) {
+        if (cast<CGameCtnEditorFree>(switcherModules[i]) !is null) {
+            return true;
+        }
+    }
+
+    return false;
 }
