@@ -86,7 +86,7 @@ unsafe extern "system" fn UpdateConnection(context: *mut Context) {
     let connection_future = context
         .connection_future
         .as_mut()
-        .expect("no open connection");
+        .expect("No open connection");
 
     let mut task_context = task::Context::from_waker(noop_waker_ref());
 
@@ -127,7 +127,7 @@ impl Context {
 
     fn set_status_text(&mut self, status_text: &str) {
         if status_text.len() >= self.status_text_buf.len() {
-            panic!("status text is too long for buffer");
+            panic!("Status text is too long for buffer");
         }
 
         self.status_text_buf[..status_text.len()].copy_from_slice(status_text.as_bytes());
@@ -177,17 +177,18 @@ async fn connection(
     context.state = State::Connected;
     context.set_status_text("Connected");
 
-    let _place_block_hook = hook_place_block(place_block_callback)?;
-    let _remove_block_hook = hook_remove_block(remove_block_callback)?;
-    let _place_item_hook = hook_place_item(place_item_callback)?;
-    let _remove_item_hook = hook_remove_item(remove_item_callback)?;
+    let user_data = context as *mut Context as *mut u8;
+    let _place_block_hook = hook_place_block(user_data, place_block_callback)?;
+    let _remove_block_hook = hook_remove_block(user_data, remove_block_callback)?;
+    let _place_item_hook = hook_place_item(user_data, place_item_callback)?;
+    let _remove_item_hook = hook_remove_item(user_data, remove_item_callback)?;
 
     let mut framed_tcp_stream = LengthDelimitedCodec::new().framed(tcp_stream);
 
     loop {
         select! {
             result = framed_tcp_stream.try_next() => match result? {
-                None => return Err("server closed connection".into()),
+                None => return Err("Server closed connection".into()),
                 Some(_frame) => {}
             }
         }
@@ -196,19 +197,19 @@ async fn connection(
 
 // hook callbacks //
 
-unsafe extern "system" fn place_block_callback(_block: *mut Block) {}
+unsafe extern "system" fn place_block_callback(_user_data: *mut u8, _block: *mut Block) {}
 
-unsafe extern "system" fn remove_block_callback(_block: *mut Block) {}
+unsafe extern "system" fn remove_block_callback(_user_data: *mut u8, _block: *mut Block) {}
 
-unsafe extern "system" fn place_item_callback(_item_params: *mut ItemParams) {}
+unsafe extern "system" fn place_item_callback(_user_data: *mut u8, _item_params: *mut ItemParams) {}
 
-unsafe extern "system" fn remove_item_callback(_item: *mut Item) {}
+unsafe extern "system" fn remove_item_callback(_user_data: *mut u8, _item: *mut Item) {}
 
 // utils //
 
 unsafe fn convert_c_string(c_string: *const c_char) -> String {
     CStr::from_ptr(c_string)
         .to_str()
-        .expect("invalid UTF-8 string")
+        .expect("Invalid UTF-8 string")
         .to_owned()
 }

@@ -26,13 +26,13 @@ use windows_sys::Win32::{
 
 use super::{Block, Item, ItemParams};
 
-pub type PlaceBlockCallbackFn = unsafe extern "system" fn(*mut Block);
+pub type PlaceBlockCallbackFn = unsafe extern "system" fn(*mut u8, *mut Block);
 
-pub type RemoveBlockCallbackFn = unsafe extern "system" fn(*mut Block);
+pub type RemoveBlockCallbackFn = unsafe extern "system" fn(*mut u8, *mut Block);
 
-pub type PlaceItemCallbackFn = unsafe extern "system" fn(*mut ItemParams);
+pub type PlaceItemCallbackFn = unsafe extern "system" fn(*mut u8, *mut ItemParams);
 
-pub type RemoveItemCallbackFn = unsafe extern "system" fn(*mut Item);
+pub type RemoveItemCallbackFn = unsafe extern "system" fn(*mut u8, *mut Item);
 
 pub struct Hook {
     ptr: *const u8,
@@ -128,7 +128,10 @@ fn hook(
     })
 }
 
-pub fn hook_place_block(callback: PlaceBlockCallbackFn) -> Result<Hook, Box<dyn Error>> {
+pub fn hook_place_block(
+    user_data: *mut u8,
+    callback: PlaceBlockCallbackFn,
+) -> Result<Hook, Box<dyn Error>> {
     let code_pattern = &[
         0x4c, 0x8d, 0x9c, 0x24, 0xc0, 0x00, 0x00, 0x00, 0x49, 0x8b, 0x5b, 0x38, 0x49, 0x8b, 0x73,
         0x48, 0x49, 0x8b, 0xe3, 0x41, 0x5f, 0x41, 0x5e, 0x41, 0x5d, 0x5f, 0x5d, 0xc3,
@@ -143,7 +146,13 @@ pub fn hook_place_block(callback: PlaceBlockCallbackFn) -> Result<Hook, Box<dyn 
 
         trampoline_code.extend_from_slice(&[
             0x50, // push rax
-            0x48, 0x89, 0xc1, // mov rcx, rax
+            0x48, 0xb9, // mov rcx, ????????
+        ]);
+
+        trampoline_code.extend_from_slice(&(user_data as usize).to_le_bytes());
+
+        trampoline_code.extend_from_slice(&[
+            0x48, 0x89, 0xc2, // mov rdx, rax
             0x48, 0xb8, // mov rax, ????????
         ]);
 
@@ -183,7 +192,10 @@ pub fn hook_place_block(callback: PlaceBlockCallbackFn) -> Result<Hook, Box<dyn 
     )
 }
 
-pub fn hook_remove_block(callback: RemoveBlockCallbackFn) -> Result<Hook, Box<dyn Error>> {
+pub fn hook_remove_block(
+    user_data: *mut u8,
+    callback: RemoveBlockCallbackFn,
+) -> Result<Hook, Box<dyn Error>> {
     let code_pattern = &[
         0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x6c, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18,
         0x57, 0x48, 0x83, 0xec, 0x40, 0x83, 0x7c, 0x24, 0x70, 0x00,
@@ -202,7 +214,12 @@ pub fn hook_remove_block(callback: RemoveBlockCallbackFn) -> Result<Hook, Box<dy
             0x41, 0x50, // push r8
             0x41, 0x51, // push r9
             0x48, 0x83, 0xec, 0x28, // sub rsp, 40
-            0x48, 0x89, 0xd1, // mov rcx, rdx
+            0x48, 0xb9, // mov rcx, ????????
+        ]);
+
+        trampoline_code.extend_from_slice(&(user_data as usize).to_le_bytes());
+
+        trampoline_code.extend_from_slice(&[
             0x48, 0xb8, // mov rax, ????????
         ]);
 
@@ -252,7 +269,10 @@ pub fn hook_remove_block(callback: RemoveBlockCallbackFn) -> Result<Hook, Box<dy
     )
 }
 
-pub fn hook_place_item(callback: PlaceItemCallbackFn) -> Result<Hook, Box<dyn Error>> {
+pub fn hook_place_item(
+    user_data: *mut u8,
+    callback: PlaceItemCallbackFn,
+) -> Result<Hook, Box<dyn Error>> {
     let code_pattern = &[
         0x48, 0x89, 0x5c, 0x24, 0x10, 0x48, 0x89, 0x6c, 0x24, 0x18, 0x48, 0x89, 0x74, 0x24, 0x20,
         0x57, 0x48, 0x83, 0xec, 0x40, 0x49, 0x8b, 0xf9,
@@ -271,7 +291,12 @@ pub fn hook_place_item(callback: PlaceItemCallbackFn) -> Result<Hook, Box<dyn Er
             0x41, 0x50, // push r8
             0x41, 0x51, // push r9
             0x48, 0x83, 0xec, 0x28, // sub rsp, 40
-            0x48, 0x89, 0xd1, // mov rcx, rdx
+            0x48, 0xb9, // mov rcx, ????????
+        ]);
+
+        trampoline_code.extend_from_slice(&(user_data as usize).to_be_bytes());
+
+        trampoline_code.extend_from_slice(&[
             0x48, 0xb8, // mov rax, ????????
         ]);
 
@@ -321,7 +346,10 @@ pub fn hook_place_item(callback: PlaceItemCallbackFn) -> Result<Hook, Box<dyn Er
     )
 }
 
-pub fn hook_remove_item(callback: RemoveItemCallbackFn) -> Result<Hook, Box<dyn Error>> {
+pub fn hook_remove_item(
+    user_data: *mut u8,
+    callback: RemoveItemCallbackFn,
+) -> Result<Hook, Box<dyn Error>> {
     let code_pattern = &[
         0x48, 0x89, 0x5c, 0x24, 0x08, 0x57, 0x48, 0x83, 0xec, 0x30, 0x48, 0x8b, 0xfa, 0x48, 0x8b,
         0xd9, 0x48, 0x85, 0xd2, 0x0f, 0x84, 0xe6, 0x00, 0x00, 0x00,
@@ -340,7 +368,12 @@ pub fn hook_remove_item(callback: RemoveItemCallbackFn) -> Result<Hook, Box<dyn 
             0x41, 0x50, // push r8
             0x41, 0x51, // push r9
             0x48, 0x83, 0xec, 0x20, // sub rsp, 32
-            0x48, 0x89, 0xd1, // mov rcx, rdx
+            0x48, 0xb9, // mov rcx, ????????
+        ]);
+
+        trampoline_code.extend_from_slice(&(user_data as usize).to_le_bytes());
+
+        trampoline_code.extend_from_slice(&[
             0x48, 0xb8, // mov rax, ????????
         ]);
 
