@@ -34,6 +34,7 @@ pub enum Message {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Block {
+    pub is_custom: bool,
     pub x: u8,
     pub y: u8,
     pub z: u8,
@@ -63,6 +64,7 @@ pub enum ElemColor {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FreeBlock {
+    pub is_custom: bool,
     pub x: f32,
     pub y: f32,
     pub z: f32,

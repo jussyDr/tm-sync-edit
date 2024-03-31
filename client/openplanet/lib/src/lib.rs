@@ -213,16 +213,10 @@ async fn connection(
 // hook callbacks //
 
 unsafe extern "system" fn place_block_callback(user_data: *mut u8, block: *mut game::Block) {
-    let slice = std::slice::from_raw_parts(block as *mut u8, 444);
-
     let context = &mut *(user_data as *mut Context);
     let block = &*block;
 
-    let _ = MessageDialog::new()
-        .set_type(MessageType::Error)
-        .set_title(FILE_NAME)
-        .set_text(&format!("{:02X?}", slice))
-        .show_alert();
+    let is_custom = block.block_info().article().item_model_article().is_some();
 
     let direction = match block.direction {
         0 => Direction::North,
@@ -242,6 +236,7 @@ unsafe extern "system" fn place_block_callback(user_data: *mut u8, block: *mut g
 
     let message = if is_free {
         Message::PlaceFreeBlock(FreeBlock {
+            is_custom,
             x: block.x_pos,
             y: block.y_pos,
             z: block.z_pos,
@@ -252,6 +247,7 @@ unsafe extern "system" fn place_block_callback(user_data: *mut u8, block: *mut g
         })
     } else {
         Message::PlaceBlock(Block {
+            is_custom,
             x: block.x_coord as u8,
             y: block.y_coord as u8,
             z: block.z_coord as u8,
@@ -268,6 +264,8 @@ unsafe extern "system" fn place_block_callback(user_data: *mut u8, block: *mut g
 unsafe extern "system" fn remove_block_callback(user_data: *mut u8, block: *mut game::Block) {
     let context = &mut *(user_data as *mut Context);
     let block = &*block;
+
+    let is_custom = block.block_info().article().item_model_article().is_some();
 
     let direction = match block.direction {
         0 => Direction::North,
@@ -287,6 +285,7 @@ unsafe extern "system" fn remove_block_callback(user_data: *mut u8, block: *mut 
 
     let message = if is_free {
         Message::RemoveFreeBlock(FreeBlock {
+            is_custom,
             x: block.x_pos,
             y: block.y_pos,
             z: block.z_pos,
@@ -297,6 +296,7 @@ unsafe extern "system" fn remove_block_callback(user_data: *mut u8, block: *mut 
         })
     } else {
         Message::RemoveBlock(Block {
+            is_custom,
             x: block.x_coord as u8,
             y: block.y_coord as u8,
             z: block.z_coord as u8,
