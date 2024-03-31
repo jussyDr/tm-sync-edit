@@ -11,6 +11,7 @@ use autopad::autopad;
 autopad! {
     #[repr(C)]
     pub struct Block {
+        0x28 => pub block_info: *const BlockInfo,
         0x60 => pub x_coord: u32,
         0x64 => pub y_coord: u32,
         0x68 => pub z_coord: u32,
@@ -26,8 +27,17 @@ autopad! {
     }
 }
 
-#[repr(C)]
-pub struct Item;
+autopad! {
+    #[repr(C)]
+    pub struct BlockInfo {}
+}
 
-#[repr(C)]
-pub struct ItemParams;
+autopad! {
+    #[repr(C)]
+    pub struct Item {}
+}
+
+autopad! {
+    #[repr(C)]
+    pub struct ItemParams {}
+}
