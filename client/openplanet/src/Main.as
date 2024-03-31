@@ -17,6 +17,11 @@ void Main() {
     if (g_library is null) {
         return;
     }
+
+    auto blocks = cast<CGameCtnEditorFree>(GetApp().Editor).Challenge.Blocks;
+    auto block = blocks[blocks.Length - 1];
+    print(Text::FormatPointer(Dev::ForceCast<uint64>(cast<CGameCtnArticle>(block.BlockInfo.ArticlePtr).BlockItem_ItemModelArticle).Get()));
+    print(Text::FormatPointer(Dev::ForceCast<uint64>(cast<CGameCtnArticle>(block.BlockInfo.ArticlePtr).BlockItem_ItemModelArticle.LoadedNod).Get()));
 }
 
 void RenderInterface() {
