@@ -6,9 +6,43 @@ mod hook;
 
 pub use hook::*;
 
-use std::ffi::c_void;
+use std::{
+    borrow::Cow,
+    ffi::{c_char, c_void, CStr},
+    slice,
+};
 
 use autopad::autopad;
+
+autopad! {
+    #[repr(C)]
+    pub struct FidFile {}
+}
+
+autopad! {
+    #[repr(C)]
+    pub struct FidsFolder {
+        0x028 => leaves: *mut FidFile,
+        0x030 => leaves_len: u32,
+        0x038 => trees: *mut FidsFolder,
+        0x040 => trees_len: u32,
+        0x060 => dir_name: *const c_char,
+    }
+}
+
+impl FidsFolder {
+    pub fn leaves(&self) -> &[FidFile] {
+        unsafe { slice::from_raw_parts(self.leaves, self.leaves_len as usize) }
+    }
+
+    pub fn trees(&self) -> &[FidsFolder] {
+        unsafe { slice::from_raw_parts(self.trees, self.trees_len as usize) }
+    }
+
+    pub fn dir_name(&self) -> Cow<str> {
+        unsafe { CStr::from_ptr(self.dir_name) }.to_string_lossy()
+    }
+}
 
 autopad! {
     #[repr(C)]
@@ -56,7 +90,7 @@ impl Block {
 autopad! {
     #[repr(C)]
     pub struct BlockInfo {
-        0x018 =>     article: *mut Article
+        0x018 => article: *mut Article
     }
 }
 
