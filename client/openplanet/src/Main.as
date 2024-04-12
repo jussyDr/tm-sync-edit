@@ -17,14 +17,6 @@ void Main() {
     if (g_library is null) {
         return;
     }
-
-    auto folder = Fids::GetGameFolder("");
-    auto subfolder = Fids::GetGameFolder("GameData");
-
-    print(subfolder.Leaves.Length);
-
-    print(Text::FormatPointer(Dev::ForceCast<uint64>(folder).Get()));
-     print(Text::FormatPointer(Dev::ForceCast<uint64>(subfolder).Get()));
 }
 
 void RenderInterface() {

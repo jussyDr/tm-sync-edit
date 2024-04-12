@@ -37,7 +37,8 @@ Library@ LoadLibrary() {
         return null;
     }
 
-    auto context = createContext.CallPointer();
+    auto gameFolder = Fids::GetGameFolder("");
+    auto context = createContext.CallPointer(gameFolder);
 
     if (context == 0) {
         return null;

@@ -14,7 +14,7 @@ use std::{
 
 use async_compat::CompatExt;
 use futures::{executor::block_on, task::noop_waker_ref, SinkExt, TryStreamExt};
-use game::{hook_place_block, hook_place_item, hook_remove_block, hook_remove_item};
+use game::{hook_place_block, hook_place_item, hook_remove_block, hook_remove_item, FidsFolder};
 use native_dialog::{MessageDialog, MessageType};
 use shared::{
     deserialize, framed_tcp_stream, serialize, Block, Direction, ElemColor, FramedTcpStream,
@@ -52,7 +52,7 @@ unsafe extern "system" fn DllMain(
 // api //
 
 #[no_mangle]
-unsafe extern "system" fn CreateContext() -> *mut Context {
+unsafe extern "system" fn CreateContext(game_folder: *mut FidsFolder) -> *mut Context {
     let mut context = Context::new();
     context.set_status_text("Disconnected");
 

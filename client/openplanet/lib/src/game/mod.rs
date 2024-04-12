@@ -26,7 +26,7 @@ autopad! {
         0x030 => leaves_len: u32,
         0x038 => trees: *mut FidsFolder,
         0x040 => trees_len: u32,
-        0x060 => dir_name: *const c_char,
+        0x058 => dir_name: *const c_char,
     }
 }
 
