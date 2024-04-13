@@ -2,8 +2,10 @@
 //!
 //! A lot of items here depend on the current game version, and can break in the future.
 
+mod fns;
 mod hook;
 
+pub use fns::*;
 pub use hook::*;
 
 use std::{ffi::c_void, ops::Deref, slice, str};

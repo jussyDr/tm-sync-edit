@@ -17,7 +17,7 @@ use async_compat::CompatExt;
 use futures::{executor::block_on, task::noop_waker_ref, SinkExt, TryStreamExt};
 use game::{
     hook_place_block, hook_place_item, hook_remove_block, hook_remove_item, BlockInfo, FidsFolder,
-    ItemModel,
+    GameFns, ItemModel,
 };
 use native_dialog::{MessageDialog, MessageType};
 use shared::{
@@ -199,6 +199,8 @@ async fn connection(
     context.set_status_text("Connected");
 
     context.framed_tcp_stream = Some(framed_tcp_stream(tcp_stream));
+
+    let game_fns = GameFns::find()?;
 
     let user_data = context as *mut Context as *mut u8;
     let _place_block_hook = hook_place_block(user_data, place_block_callback)?;
