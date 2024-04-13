@@ -31,7 +31,7 @@ struct CompactString {
 
 impl CompactString {
     fn as_str(&self) -> &str {
-        if self.len as usize >= self.data.len() {
+        if self.len as usize >= self.data.len() || self.data[self.data.len() - 1] != 0 {
             let ptr = usize::from_le_bytes(self.data[..8].try_into().unwrap()) as *const u8;
             let bytes = unsafe { slice::from_raw_parts(ptr, self.len as usize) };
             str::from_utf8(bytes).expect("string is not valid UTF-8")

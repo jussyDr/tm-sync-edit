@@ -65,7 +65,6 @@ unsafe extern "system" fn CreateContext(game_folder: *mut FidsFolder) -> *mut Co
 
     let mut block_infos = HashMap::new();
     let mut item_models = HashMap::new();
-
     register_block_infos(block_info_folder, &mut block_infos);
     register_item_models(items_folder, &mut item_models);
 
@@ -378,8 +377,9 @@ fn find_fids_subfolder<'a>(folder: &'a FidsFolder, name: &str) -> Option<&'a Fid
 
 fn register_block_infos(folder: &FidsFolder, block_infos: &mut HashMap<String, *const BlockInfo>) {
     for fid in folder.leaves() {
-        let block_info = unsafe { fid.nod::<BlockInfo>().expect("nod not loaded") };
-        block_infos.insert(block_info.name().to_owned(), block_info);
+        if let Some(block_info) = unsafe { fid.nod::<BlockInfo>() } {
+            block_infos.insert(block_info.name().to_owned(), block_info);
+        }
     }
 
     for subfolder in folder.trees() {
@@ -389,8 +389,9 @@ fn register_block_infos(folder: &FidsFolder, block_infos: &mut HashMap<String, *
 
 fn register_item_models(folder: &FidsFolder, item_models: &mut HashMap<String, *const ItemModel>) {
     for fid in folder.leaves() {
-        let item_model = unsafe { fid.nod::<ItemModel>().expect("nod not loaded") };
-        item_models.insert(item_model.name().to_owned(), item_model);
+        if let Some(item_model) = unsafe { fid.nod::<ItemModel>() } {
+            item_models.insert(item_model.name().to_owned(), item_model);
+        }
     }
 
     for subfolder in folder.trees() {

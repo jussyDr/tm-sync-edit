@@ -13,10 +13,6 @@ Library@ g_library = null;
 
 void Main() {
     @g_library = LoadLibrary();
-
-    if (g_library is null) {
-        return;
-    }
 }
 
 void RenderInterface() {
