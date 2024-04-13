@@ -9,6 +9,7 @@ crate-type = ["cdylib"]
 [dependencies]
 shared = { path = "../../../shared" }
 
+ahash = "0.8.11"
 async-compat = "0.2.3"
 autopad = "1.0.0"
 futures = "0.3.30"

@@ -1,7 +1,6 @@
 mod game;
 
 use std::{
-    collections::HashMap,
     error::Error,
     ffi::{c_char, c_void, CStr},
     future::{poll_fn, Future},
@@ -13,6 +12,7 @@ use std::{
     task::{self, Poll},
 };
 
+use ahash::AHashMap;
 use async_compat::CompatExt;
 use futures::{executor::block_on, task::noop_waker_ref, SinkExt, TryStreamExt};
 use game::{
@@ -57,19 +57,17 @@ unsafe extern "system" fn DllMain(
 
 #[no_mangle]
 unsafe extern "system" fn CreateContext(game_folder: *mut FidsFolder) -> *mut Context {
+    let mut context = Context::new();
+    context.set_status_text("Disconnected");
+
     let game_folder = &*game_folder;
     let game_data_folder = find_fids_subfolder(game_folder, "GameData").unwrap();
     let stadium_folder = find_fids_subfolder(game_data_folder, "Stadium").unwrap();
     let block_info_folder = find_fids_subfolder(stadium_folder, "GameCtnBlockInfo").unwrap();
     let items_folder = find_fids_subfolder(stadium_folder, "Items").unwrap();
 
-    let mut block_infos = HashMap::new();
-    let mut item_models = HashMap::new();
-    register_block_infos(block_info_folder, &mut block_infos);
-    register_item_models(items_folder, &mut item_models);
-
-    let mut context = Context::new();
-    context.set_status_text("Disconnected");
+    register_block_infos(block_info_folder, &mut context.block_infos);
+    register_item_models(items_folder, &mut context.item_models);
 
     Box::into_raw(Box::new(context))
 }
@@ -129,6 +127,8 @@ struct Context {
     status_text_buf: Box<[u8; 256]>,
     map_editor: Option<NonZeroUsize>,
 
+    block_infos: AHashMap<String, *const BlockInfo>,
+    item_models: AHashMap<String, *const ItemModel>,
     connection_future: Option<ConnectionFuture>,
     framed_tcp_stream: Option<FramedTcpStream>,
 }
@@ -139,6 +139,8 @@ impl Context {
             state: State::Disconnected,
             status_text_buf: Box::new([0; 256]),
             map_editor: None,
+            block_infos: AHashMap::new(),
+            item_models: AHashMap::new(),
             connection_future: None,
             framed_tcp_stream: None,
         }
@@ -375,7 +377,7 @@ fn find_fids_subfolder<'a>(folder: &'a FidsFolder, name: &str) -> Option<&'a Fid
         .copied()
 }
 
-fn register_block_infos(folder: &FidsFolder, block_infos: &mut HashMap<String, *const BlockInfo>) {
+fn register_block_infos(folder: &FidsFolder, block_infos: &mut AHashMap<String, *const BlockInfo>) {
     for fid in folder.leaves() {
         if let Some(block_info) = unsafe { fid.nod::<BlockInfo>() } {
             block_infos.insert(block_info.name().to_owned(), block_info);
@@ -387,7 +389,7 @@ fn register_block_infos(folder: &FidsFolder, block_infos: &mut HashMap<String, *
     }
 }
 
-fn register_item_models(folder: &FidsFolder, item_models: &mut HashMap<String, *const ItemModel>) {
+fn register_item_models(folder: &FidsFolder, item_models: &mut AHashMap<String, *const ItemModel>) {
     for fid in folder.leaves() {
         if let Some(item_model) = unsafe { fid.nod::<ItemModel>() } {
             item_models.insert(item_model.name().to_owned(), item_model);
