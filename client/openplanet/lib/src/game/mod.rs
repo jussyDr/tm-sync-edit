@@ -6,7 +6,7 @@ mod hook;
 
 pub use hook::*;
 
-use std::{ffi::c_void, slice, str};
+use std::{ffi::c_void, ops::Deref, slice, str};
 
 use autopad::autopad;
 
@@ -101,6 +101,24 @@ impl Article {
 
 autopad! {
     #[repr(C)]
+    pub struct Collector {
+        0x018 => article: *mut Article,
+        0x048 => name: CompactString
+    }
+}
+
+impl Collector {
+    pub fn article(&self) -> &Article {
+        unsafe { &*self.article }
+    }
+
+    pub fn name(&self) -> &str {
+        self.name.as_str()
+    }
+}
+
+autopad! {
+    #[repr(C)]
     pub struct Block {
         0x028 =>     block_info: *mut BlockInfo,
         0x060 => pub x_coord: u32,
@@ -127,13 +145,15 @@ impl Block {
 autopad! {
     #[repr(C)]
     pub struct BlockInfo {
-        0x018 => article: *mut Article
+        collector: Collector
     }
 }
 
-impl BlockInfo {
-    pub fn article(&self) -> &Article {
-        unsafe { &*self.article }
+impl Deref for BlockInfo {
+    type Target = Collector;
+
+    fn deref(&self) -> &Collector {
+        &self.collector
     }
 }
 
@@ -145,4 +165,19 @@ autopad! {
 autopad! {
     #[repr(C)]
     pub struct ItemParams {}
+}
+
+autopad! {
+    #[repr(C)]
+    pub struct ItemModel {
+        collector: Collector
+    }
+}
+
+impl Deref for ItemModel {
+    type Target = Collector;
+
+    fn deref(&self) -> &Collector {
+        &self.collector
+    }
 }

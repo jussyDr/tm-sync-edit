@@ -67,9 +67,11 @@ CSystemFidsFolder@ FindSubfolder(CSystemFidsFolder@ folder, const string&in name
 void PreloadAllFidsInFolder(CSystemFidsFolder@ folder) {
     for (uint i = 0; i < folder.Leaves.Length; i++) {
         Fids::Preload(folder.Leaves[i]);
-    }
 
-    yield();
+        if (i % 200 == 199) {
+            yield();
+        }
+    }
 
     for (uint i = 0; i < folder.Trees.Length; i++) {
         PreloadAllFidsInFolder(folder.Trees[i]);

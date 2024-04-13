@@ -1,6 +1,7 @@
 mod game;
 
 use std::{
+    collections::HashMap,
     error::Error,
     ffi::{c_char, c_void, CStr},
     future::{poll_fn, Future},
@@ -14,7 +15,10 @@ use std::{
 
 use async_compat::CompatExt;
 use futures::{executor::block_on, task::noop_waker_ref, SinkExt, TryStreamExt};
-use game::{hook_place_block, hook_place_item, hook_remove_block, hook_remove_item, FidsFolder};
+use game::{
+    hook_place_block, hook_place_item, hook_remove_block, hook_remove_item, BlockInfo, FidsFolder,
+    ItemModel,
+};
 use native_dialog::{MessageDialog, MessageType};
 use shared::{
     deserialize, framed_tcp_stream, serialize, Block, Direction, ElemColor, FramedTcpStream,
@@ -58,6 +62,12 @@ unsafe extern "system" fn CreateContext(game_folder: *mut FidsFolder) -> *mut Co
     let stadium_folder = find_fids_subfolder(game_data_folder, "Stadium").unwrap();
     let block_info_folder = find_fids_subfolder(stadium_folder, "GameCtnBlockInfo").unwrap();
     let items_folder = find_fids_subfolder(stadium_folder, "Items").unwrap();
+
+    let mut block_infos = HashMap::new();
+    let mut item_models = HashMap::new();
+
+    register_block_infos(block_info_folder, &mut block_infos);
+    register_item_models(items_folder, &mut item_models);
 
     let mut context = Context::new();
     context.set_status_text("Disconnected");
@@ -364,4 +374,26 @@ fn find_fids_subfolder<'a>(folder: &'a FidsFolder, name: &str) -> Option<&'a Fid
         .iter()
         .find(|subfolder| subfolder.dir_name() == name)
         .copied()
+}
+
+fn register_block_infos(folder: &FidsFolder, block_infos: &mut HashMap<String, *const BlockInfo>) {
+    for fid in folder.leaves() {
+        let block_info = unsafe { fid.nod::<BlockInfo>().expect("nod not loaded") };
+        block_infos.insert(block_info.name().to_owned(), block_info);
+    }
+
+    for subfolder in folder.trees() {
+        register_block_infos(subfolder, block_infos);
+    }
+}
+
+fn register_item_models(folder: &FidsFolder, item_models: &mut HashMap<String, *const ItemModel>) {
+    for fid in folder.leaves() {
+        let item_model = unsafe { fid.nod::<ItemModel>().expect("nod not loaded") };
+        item_models.insert(item_model.name().to_owned(), item_model);
+    }
+
+    for subfolder in folder.trees() {
+        register_item_models(subfolder, item_models);
+    }
 }
