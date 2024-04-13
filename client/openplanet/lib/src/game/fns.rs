@@ -38,7 +38,13 @@ type PlaceBlockFn = unsafe extern "system" fn(
     param_20: u32,
 ) -> *mut Block;
 
-type RemoveBlockFn = unsafe extern "system" fn();
+type RemoveBlockFn = unsafe extern "system" fn(
+    editor: *mut Editor,
+    block: *mut Block,
+    param_3: u32,
+    param_4: *mut Block,
+    param_5: u32,
+) -> u32;
 
 type PlaceItemFn = unsafe extern "system" fn();
 
@@ -132,7 +138,7 @@ impl GameFns {
         let _ = native_dialog::MessageDialog::new()
             .set_type(native_dialog::MessageType::Error)
             .set_title("watawt")
-            .set_text(&format!("{:p}", place_block_fn))
+            .set_text(&format!("{:p}", place_item_fn))
             .show_alert();
 
         Ok(Self {
@@ -239,7 +245,9 @@ impl GameFns {
         }
     }
 
-    pub fn remove_block(&self) {}
+    pub fn remove_block(&self, editor: &mut Editor, block: &mut Block) -> u32 {
+        unsafe { (self.remove_block_fn)(editor, block, 1, block, 0) }
+    }
 
     pub fn place_item(&self) {}
 
