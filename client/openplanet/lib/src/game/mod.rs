@@ -44,6 +44,17 @@ impl CompactString {
 autopad! {
     #[repr(C)]
     pub struct FidFile {
+        0x080 => nod: *const u8
+    }
+}
+
+impl FidFile {
+    pub unsafe fn nod<T>(&self) -> Option<&T> {
+        if self.nod.is_null() {
+            None
+        } else {
+            Some(&*(self.nod as *const T))
+        }
     }
 }
 

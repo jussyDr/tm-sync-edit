@@ -107,7 +107,7 @@ void OpenMapEditor() {
 
     auto isMapEditorOpen = false;
 
-    for (auto i = 0; i < switcherModules.Length - 1; i++) {
+    for (uint i = 0; i < switcherModules.Length - 1; i++) {
         if (cast<CGameCtnEditorFree>(switcherModules[i]) !is null) {
             isMapEditorOpen = true;
             break;
@@ -135,7 +135,7 @@ void OpenMapEditor() {
 bool IsMapEditorOpen() {
     auto switcherModules = GetApp().Switcher.ModuleStack;
 
-    for (auto i = 0; i < switcherModules.Length; i++) {
+    for (uint i = 0; i < switcherModules.Length; i++) {
         if (cast<CGameCtnEditorFree>(switcherModules[i]) !is null) {
             return true;
         }

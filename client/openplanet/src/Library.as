@@ -38,6 +38,13 @@ Library@ LoadLibrary() {
     }
 
     auto gameFolder = Fids::GetGameFolder("");
+    auto gameDataFolder = FindSubfolder(gameFolder, "GameData");
+    auto stadiumFolder = FindSubfolder(gameDataFolder, "Stadium");
+    auto blockInfoFolder = FindSubfolder(stadiumFolder, "GameCtnBlockInfo");
+    auto itemsFolder = FindSubfolder(stadiumFolder, "Items");
+    PreloadAllFidsInFolder(blockInfoFolder);
+    PreloadAllFidsInFolder(itemsFolder);
+
     auto context = createContext.CallPointer(gameFolder);
 
     if (context == 0) {
@@ -45,6 +52,28 @@ Library@ LoadLibrary() {
     }
 
     return Library(importLibrary, context, destroyContext, openConnection, updateConnection, closeConnection);
+}
+
+CSystemFidsFolder@ FindSubfolder(CSystemFidsFolder@ folder, const string&in name) {
+    for (uint i = 0; i < folder.Trees.Length; i++) {
+        if (folder.Trees[i].DirName == name) {
+            return folder.Trees[i];
+        }
+    }
+
+    return null;
+}
+
+void PreloadAllFidsInFolder(CSystemFidsFolder@ folder) {
+    for (uint i = 0; i < folder.Leaves.Length; i++) {
+        Fids::Preload(folder.Leaves[i]);
+    }
+
+    yield();
+
+    for (uint i = 0; i < folder.Trees.Length; i++) {
+        PreloadAllFidsInFolder(folder.Trees[i]);
+    }
 }
 
 class Library {
