@@ -53,6 +53,16 @@ unsafe extern "system" fn DllMain(
 
 #[no_mangle]
 unsafe extern "system" fn CreateContext(game_folder: *mut FidsFolder) -> *mut Context {
+    let game_folder = &*game_folder;
+
+    for tree in game_folder.trees() {
+        let _ = MessageDialog::new()
+            .set_type(MessageType::Error)
+            .set_title(FILE_NAME)
+            .set_text(&format!("{}", tree.dir_name()))
+            .show_alert();
+    }
+
     let mut context = Context::new();
     context.set_status_text("Disconnected");
 

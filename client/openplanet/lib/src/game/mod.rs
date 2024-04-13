@@ -6,41 +6,67 @@ mod hook;
 
 pub use hook::*;
 
-use std::{
-    borrow::Cow,
-    ffi::{c_char, c_void, CStr},
-    slice,
-};
+use std::{ffi::c_void, slice, str};
 
 use autopad::autopad;
 
+#[repr(C)]
+struct Array<T> {
+    ptr: *const *const T,
+    len: u32,
+    cap: u32,
+}
+
+impl<T> Array<T> {
+    fn as_slice(&self) -> &[&T] {
+        unsafe { slice::from_raw_parts(self.ptr as _, self.len as usize) }
+    }
+}
+
+#[repr(C)]
+struct CompactString {
+    data: [u8; 12],
+    len: u32,
+}
+
+impl CompactString {
+    fn as_str(&self) -> &str {
+        if self.len as usize > self.data.len() {
+            let ptr = usize::from_le_bytes(self.data[..8].try_into().unwrap()) as *const u8;
+            let bytes = unsafe { slice::from_raw_parts(ptr, self.len as usize) };
+            str::from_utf8(bytes).expect("string is not valid UTF-8")
+        } else {
+            str::from_utf8(&self.data[..self.len as usize]).expect("string is not valid UTF-8")
+        }
+    }
+}
+
 autopad! {
     #[repr(C)]
-    pub struct FidFile {}
+    pub struct FidFile {
+    }
 }
 
 autopad! {
     #[repr(C)]
     pub struct FidsFolder {
-        0x028 => leaves: *mut FidFile,
-        0x030 => leaves_len: u32,
-        0x038 => trees: *mut FidsFolder,
-        0x040 => trees_len: u32,
-        0x058 => dir_name: *const c_char,
+        0x028 => leaves: Array< FidFile>,
+        0x038 => trees: Array< FidsFolder>,
+        0x058 => dir_name: CompactString
     }
 }
 
 impl FidsFolder {
-    pub fn leaves(&self) -> &[FidFile] {
-        unsafe { slice::from_raw_parts(self.leaves, self.leaves_len as usize) }
+    pub fn leaves(&self) -> &[&FidFile] {
+        self.leaves.as_slice()
     }
 
-    pub fn trees(&self) -> &[FidsFolder] {
-        unsafe { slice::from_raw_parts(self.trees, self.trees_len as usize) }
+    pub fn trees(&self) -> &[&FidsFolder] {
+        self.trees.as_slice()
     }
 
-    pub fn dir_name(&self) -> Cow<str> {
-        unsafe { CStr::from_ptr(self.dir_name) }.to_string_lossy()
+    pub fn dir_name(&self) -> &str {
+        self.dir_name.as_str()
     }
 }
 
