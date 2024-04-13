@@ -2,7 +2,7 @@ use std::{
     error::Error,
     io,
     mem::{size_of, transmute, MaybeUninit},
-    ptr::null,
+    ptr::{null, null_mut},
     slice,
 };
 
@@ -13,7 +13,30 @@ use windows_sys::Win32::System::{
     Threading::GetCurrentProcess,
 };
 
-type PlaceBlockFn = unsafe extern "system" fn();
+use super::{Block, BlockInfo, Editor};
+
+type PlaceBlockFn = unsafe extern "system" fn(
+    editor: *mut Editor,
+    block_info: *mut BlockInfo,
+    param_3: usize,
+    coord: *mut [u32; 3],
+    dir: u32,
+    elem_color: u8,
+    param_7: u8,
+    param_8: u32,
+    param_9: u32,
+    is_ghost: u32,
+    param_11: u32,
+    param_12: u32,
+    is_ground: u32,
+    param_14: u32,
+    is_ghost: u32,
+    param_16: usize,
+    is_free: u32,
+    transform: *mut [f32; 6],
+    param_19: u32,
+    param_20: u32,
+) -> *mut Block;
 
 type RemoveBlockFn = unsafe extern "system" fn();
 
@@ -106,6 +129,12 @@ impl GameFns {
         let remove_item_fn =
             unsafe { transmute(exe_module_memory.as_ptr().add(remove_item_fn_offset)) };
 
+        let _ = native_dialog::MessageDialog::new()
+            .set_type(native_dialog::MessageType::Error)
+            .set_title("watawt")
+            .set_text(&format!("{:p}", place_block_fn))
+            .show_alert();
+
         Ok(Self {
             place_block_fn,
             remove_block_fn,
@@ -113,4 +142,106 @@ impl GameFns {
             remove_item_fn,
         })
     }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn place_block(
+        &self,
+        editor: &mut Editor,
+        block_info: &mut BlockInfo,
+        x: u8,
+        y: u8,
+        z: u8,
+        dir: u32,
+        elem_color: u8,
+        is_ghost: u32,
+        is_ground: u32,
+    ) -> Option<&Block> {
+        let mut coord = [x as u32, y as u32, z as u32];
+
+        let block = unsafe {
+            (self.place_block_fn)(
+                editor,
+                block_info,
+                0,
+                &mut coord,
+                dir,
+                elem_color,
+                0,
+                0,
+                0xffffffff,
+                is_ghost,
+                1,
+                0,
+                is_ground,
+                0,
+                is_ghost,
+                0,
+                0,
+                null_mut(),
+                0xffffffff,
+                0,
+            )
+        };
+
+        if block.is_null() {
+            None
+        } else {
+            unsafe { Some(&*block) }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn place_free_block(
+        &self,
+        editor: &mut Editor,
+        block_info: &mut BlockInfo,
+        elem_color: u8,
+        x: f32,
+        y: f32,
+        z: f32,
+        yaw: f32,
+        pitch: f32,
+        roll: f32,
+    ) -> Option<&Block> {
+        let mut coord = [0xffffffff, 0, 0xffffffff];
+
+        let mut transform = [x, y, z, yaw, pitch, roll];
+
+        let block = unsafe {
+            (self.place_block_fn)(
+                editor,
+                block_info,
+                0,
+                &mut coord,
+                0,
+                elem_color,
+                0,
+                0,
+                0x3f,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                1,
+                &mut transform,
+                0xffffffff,
+                0,
+            )
+        };
+
+        if block.is_null() {
+            None
+        } else {
+            unsafe { Some(&*block) }
+        }
+    }
+
+    pub fn remove_block(&self) {}
+
+    pub fn place_item(&self) {}
+
+    pub fn remove_item(&self) {}
 }

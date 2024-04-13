@@ -183,3 +183,5 @@ impl Deref for ItemModel {
         &self.collector
     }
 }
+
+pub struct Editor;
