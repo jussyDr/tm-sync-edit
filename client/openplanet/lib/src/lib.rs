@@ -54,14 +54,10 @@ unsafe extern "system" fn DllMain(
 #[no_mangle]
 unsafe extern "system" fn CreateContext(game_folder: *mut FidsFolder) -> *mut Context {
     let game_folder = &*game_folder;
-
-    for tree in game_folder.trees() {
-        let _ = MessageDialog::new()
-            .set_type(MessageType::Error)
-            .set_title(FILE_NAME)
-            .set_text(&format!("{}", tree.dir_name()))
-            .show_alert();
-    }
+    let game_data_folder = find_fids_subfolder(game_folder, "GameData").unwrap();
+    let stadium_folder = find_fids_subfolder(game_data_folder, "Stadium").unwrap();
+    let block_info_folder = find_fids_subfolder(stadium_folder, "GameCtnBlockInfo").unwrap();
+    let items_folder = find_fids_subfolder(stadium_folder, "Items").unwrap();
 
     let mut context = Context::new();
     context.set_status_text("Disconnected");
@@ -360,4 +356,12 @@ unsafe fn convert_c_string(c_string: *const c_char) -> String {
         .to_str()
         .expect("Invalid UTF-8 string")
         .to_owned()
+}
+
+fn find_fids_subfolder<'a>(folder: &'a FidsFolder, name: &str) -> Option<&'a FidsFolder> {
+    folder
+        .trees()
+        .iter()
+        .find(|subfolder| subfolder.dir_name() == name)
+        .copied()
 }
