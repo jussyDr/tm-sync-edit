@@ -331,19 +331,45 @@ unsafe extern "system" fn remove_block_callback(user_data: *mut u8, block: *mut 
 
 unsafe extern "system" fn place_item_callback(
     user_data: *mut u8,
-    _item_params: *mut game::ItemParams,
+    item_model: *mut game::ItemModel,
+    item_params: *mut game::ItemParams,
 ) {
     let context = &mut *(user_data as *mut Context);
+    let item_params = &*item_params;
 
-    let message = Message::PlaceItem(Item);
+    let _ = MessageDialog::new()
+        .set_type(MessageType::Error)
+        .set_title(FILE_NAME)
+        .set_text(&format!(
+            "{}, {}, {}",
+            item_params.x_pos, item_params.y_pos, item_params.z_pos
+        ))
+        .show_alert();
+
+    let message = Message::PlaceItem(Item {
+        x: item_params.x_pos,
+        y: item_params.y_pos,
+        z: item_params.z_pos,
+        yaw: item_params.yaw,
+        pitch: item_params.pitch,
+        roll: item_params.roll,
+    });
 
     send_message(context, &message);
 }
 
-unsafe extern "system" fn remove_item_callback(user_data: *mut u8, _item: *mut game::Item) {
+unsafe extern "system" fn remove_item_callback(user_data: *mut u8, item: *mut game::Item) {
     let context = &mut *(user_data as *mut Context);
+    let item_params = &(*item).params;
 
-    let message = Message::RemoveItem(Item);
+    let message = Message::RemoveItem(Item {
+        x: item_params.x_pos,
+        y: item_params.y_pos,
+        z: item_params.z_pos,
+        yaw: item_params.yaw,
+        pitch: item_params.pitch,
+        roll: item_params.roll,
+    });
 
     send_message(context, &message);
 }

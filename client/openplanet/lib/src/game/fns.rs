@@ -7,13 +7,14 @@ use std::{
 };
 
 use memchr::memmem;
+use shared::Item;
 use windows_sys::Win32::System::{
     LibraryLoader::GetModuleHandleW,
     ProcessStatus::{GetModuleInformation, MODULEINFO},
     Threading::GetCurrentProcess,
 };
 
-use super::{Block, BlockInfo, Editor};
+use super::{Block, BlockInfo, Editor, ItemModel, ItemParams};
 
 type PlaceBlockFn = unsafe extern "system" fn(
     editor: *mut Editor,
@@ -46,9 +47,14 @@ type RemoveBlockFn = unsafe extern "system" fn(
     param_5: u32,
 ) -> u32;
 
-type PlaceItemFn = unsafe extern "system" fn();
+type PlaceItemFn = unsafe extern "system" fn(
+    editor: *mut Editor,
+    item_model: *mut ItemModel,
+    params: *mut ItemParams,
+    out_item: *mut *mut Item,
+) -> u32;
 
-type RemoveItemFn = unsafe extern "system" fn();
+type RemoveItemFn = unsafe extern "system" fn(editor: *mut Editor, item: *mut Item) -> u32;
 
 pub struct GameFns {
     place_block_fn: PlaceBlockFn,
@@ -138,7 +144,7 @@ impl GameFns {
         let _ = native_dialog::MessageDialog::new()
             .set_type(native_dialog::MessageType::Error)
             .set_title("watawt")
-            .set_text(&format!("{:p}", place_item_fn))
+            .set_text(&format!("{:p}", remove_item_fn))
             .show_alert();
 
         Ok(Self {
@@ -249,7 +255,48 @@ impl GameFns {
         unsafe { (self.remove_block_fn)(editor, block, 1, block, 0) }
     }
 
-    pub fn place_item(&self) {}
+    #[allow(clippy::too_many_arguments)]
+    pub fn place_item(
+        &self,
+        editor: &mut Editor,
+        item_model: &mut ItemModel,
+        yaw: f32,
+        pitch: f32,
+        roll: f32,
+        x: f32,
+        y: f32,
+        z: f32,
+    ) -> u32 {
+        let x_coord = x as u32;
+        let y_coord = y as u32;
+        let z_coord = z as u32;
 
-    pub fn remove_item(&self) {}
+        let mut params = ItemParams {
+            x_coord,
+            y_coord,
+            z_coord,
+            yaw,
+            pitch,
+            roll,
+            param_7: 0xffffffff,
+            x_pos: x,
+            y_pos: y,
+            z_pos: z,
+            param_11: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+            param_12: [0.0, 0.0, 0.0],
+            param_13: 1.0,
+            param_14: 1,
+            param_15: 0xffffffff,
+            param_16: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            param_17: [-1.0, -1.0, -1.0],
+            param_18: 0xfe000000,
+            param_19: 0,
+        };
+
+        unsafe { (self.place_item_fn)(editor, item_model, &mut params, null_mut()) }
+    }
+
+    pub fn remove_item(&self, editor: &mut Editor, item: &mut Item) -> u32 {
+        unsafe { (self.remove_item_fn)(editor, item) }
+    }
 }

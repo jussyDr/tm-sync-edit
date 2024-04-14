@@ -24,13 +24,13 @@ use windows_sys::Win32::{
     },
 };
 
-use super::{Block, Item, ItemParams};
+use super::{Block, Item, ItemModel, ItemParams};
 
 pub type PlaceBlockCallbackFn = unsafe extern "system" fn(*mut u8, *mut Block);
 
 pub type RemoveBlockCallbackFn = unsafe extern "system" fn(*mut u8, *mut Block);
 
-pub type PlaceItemCallbackFn = unsafe extern "system" fn(*mut u8, *mut ItemParams);
+pub type PlaceItemCallbackFn = unsafe extern "system" fn(*mut u8, *mut ItemModel, *mut ItemParams);
 
 pub type RemoveItemCallbackFn = unsafe extern "system" fn(*mut u8, *mut Item);
 

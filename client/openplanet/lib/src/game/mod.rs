@@ -161,12 +161,32 @@ impl Deref for BlockInfo {
 
 autopad! {
     #[repr(C)]
-    pub struct Item {}
+    pub struct Item {
+        0x028 => pub params: ItemParams
+    }
 }
 
-autopad! {
-    #[repr(C)]
-    pub struct ItemParams {}
+#[repr(C)]
+pub struct ItemParams {
+    pub x_coord: u32,
+    pub y_coord: u32,
+    pub z_coord: u32,
+    pub yaw: f32,
+    pub pitch: f32,
+    pub roll: f32,
+    pub param_7: u32,
+    pub x_pos: f32,
+    pub y_pos: f32,
+    pub z_pos: f32,
+    pub param_11: [f32; 9],
+    pub param_12: [f32; 3],
+    pub param_13: f32,
+    pub param_14: u32,
+    pub param_15: u32,
+    pub param_16: [u32; 10],
+    pub param_17: [f32; 3],
+    pub param_18: u32,
+    pub param_19: usize,
 }
 
 autopad! {
