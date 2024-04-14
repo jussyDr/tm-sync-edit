@@ -1,5 +1,6 @@
 use std::error::Error;
 
+use ordered_float::NotNan;
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpStream;
 use tokio_util::codec::{Decoder, Framed, LengthDelimitedCodec};
@@ -32,7 +33,7 @@ pub enum Message {
     RemoveItem(ItemDesc),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct BlockDesc {
     pub is_custom: bool,
     pub x: u8,
@@ -44,7 +45,7 @@ pub struct BlockDesc {
     pub elem_color: ElemColor,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub enum Direction {
     North,
     East,
@@ -52,7 +53,7 @@ pub enum Direction {
     West,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub enum ElemColor {
     Default,
     White,
@@ -62,24 +63,24 @@ pub enum ElemColor {
     Black,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct FreeBlockDesc {
     pub is_custom: bool,
-    pub x: f32,
-    pub y: f32,
-    pub z: f32,
-    pub yaw: f32,
-    pub pitch: f32,
-    pub roll: f32,
+    pub x: NotNan<f32>,
+    pub y: NotNan<f32>,
+    pub z: NotNan<f32>,
+    pub yaw: NotNan<f32>,
+    pub pitch: NotNan<f32>,
+    pub roll: NotNan<f32>,
     pub elem_color: ElemColor,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct ItemDesc {
-    pub x: f32,
-    pub y: f32,
-    pub z: f32,
-    pub yaw: f32,
-    pub pitch: f32,
-    pub roll: f32,
+    pub x: NotNan<f32>,
+    pub y: NotNan<f32>,
+    pub z: NotNan<f32>,
+    pub yaw: NotNan<f32>,
+    pub pitch: NotNan<f32>,
+    pub roll: NotNan<f32>,
 }

@@ -20,6 +20,7 @@ use game::{
     GameFns, ItemModel,
 };
 use native_dialog::{MessageDialog, MessageType};
+use ordered_float::NotNan;
 use shared::{
     deserialize, framed_tcp_stream, serialize, BlockDesc, Direction, ElemColor, FramedTcpStream,
     FreeBlockDesc, ItemDesc, Message,
@@ -218,21 +219,25 @@ async fn connection(
         select! {
             result = context.framed_tcp_stream.as_mut().unwrap().try_next() => match result? {
                 None => return Err("Server closed connection".into()),
-                Some(frame) => {
-                    let message = deserialize(&frame)?;
-
-                    match message {
-                        Message::PlaceBlock(..) => {}
-                        Message::RemoveBlock(..) => {}
-                        Message::PlaceFreeBlock(..) => {}
-                        Message::RemoveFreeBlock(..)=> {}
-                        Message::PlaceItem(..) => {}
-                        Message::RemoveItem(..) => {}
-                    }
-                }
+                Some(frame) => handle_frame(context, &frame).await?,
             }
         }
     }
+}
+
+async fn handle_frame(context: &mut Context, frame: &[u8]) -> Result<(), Box<dyn Error>> {
+    let message = deserialize(frame)?;
+
+    match message {
+        Message::PlaceBlock(..) => {}
+        Message::RemoveBlock(block_desc) => if let Some(block) = context.blocks.get(&block_desc) {},
+        Message::PlaceFreeBlock(..) => {}
+        Message::RemoveFreeBlock(..) => {}
+        Message::PlaceItem(..) => {}
+        Message::RemoveItem(..) => {}
+    }
+
+    Ok(())
 }
 
 // hook callbacks //
@@ -262,12 +267,12 @@ unsafe extern "system" fn place_block_callback(user_data: *mut u8, block: *mut g
     let message = if is_free {
         Message::PlaceFreeBlock(FreeBlockDesc {
             is_custom,
-            x: block.x_pos,
-            y: block.y_pos,
-            z: block.z_pos,
-            yaw: block.yaw,
-            pitch: block.pitch,
-            roll: block.roll,
+            x: NotNan::new(block.x_pos).unwrap(),
+            y: NotNan::new(block.y_pos).unwrap(),
+            z: NotNan::new(block.z_pos).unwrap(),
+            yaw: NotNan::new(block.yaw).unwrap(),
+            pitch: NotNan::new(block.pitch).unwrap(),
+            roll: NotNan::new(block.roll).unwrap(),
             elem_color,
         })
     } else {
@@ -311,12 +316,12 @@ unsafe extern "system" fn remove_block_callback(user_data: *mut u8, block: *mut 
     let message = if is_free {
         Message::RemoveFreeBlock(FreeBlockDesc {
             is_custom,
-            x: block.x_pos,
-            y: block.y_pos,
-            z: block.z_pos,
-            yaw: block.yaw,
-            pitch: block.pitch,
-            roll: block.roll,
+            x: NotNan::new(block.x_pos).unwrap(),
+            y: NotNan::new(block.y_pos).unwrap(),
+            z: NotNan::new(block.z_pos).unwrap(),
+            yaw: NotNan::new(block.yaw).unwrap(),
+            pitch: NotNan::new(block.pitch).unwrap(),
+            roll: NotNan::new(block.roll).unwrap(),
             elem_color,
         })
     } else {
@@ -344,12 +349,12 @@ unsafe extern "system" fn place_item_callback(
     let item_params = &*item_params;
 
     let message = Message::PlaceItem(ItemDesc {
-        x: item_params.x_pos,
-        y: item_params.y_pos,
-        z: item_params.z_pos,
-        yaw: item_params.yaw,
-        pitch: item_params.pitch,
-        roll: item_params.roll,
+        x: NotNan::new(item_params.x_pos).unwrap(),
+        y: NotNan::new(item_params.y_pos).unwrap(),
+        z: NotNan::new(item_params.z_pos).unwrap(),
+        yaw: NotNan::new(item_params.yaw).unwrap(),
+        pitch: NotNan::new(item_params.pitch).unwrap(),
+        roll: NotNan::new(item_params.roll).unwrap(),
     });
 
     send_message(context, &message);
@@ -360,12 +365,12 @@ unsafe extern "system" fn remove_item_callback(user_data: *mut u8, item: *mut ga
     let item_params = &(*item).params;
 
     let message = Message::RemoveItem(ItemDesc {
-        x: item_params.x_pos,
-        y: item_params.y_pos,
-        z: item_params.z_pos,
-        yaw: item_params.yaw,
-        pitch: item_params.pitch,
-        roll: item_params.roll,
+        x: NotNan::new(item_params.x_pos).unwrap(),
+        y: NotNan::new(item_params.y_pos).unwrap(),
+        z: NotNan::new(item_params.z_pos).unwrap(),
+        yaw: NotNan::new(item_params.yaw).unwrap(),
+        pitch: NotNan::new(item_params.pitch).unwrap(),
+        roll: NotNan::new(item_params.roll).unwrap(),
     });
 
     send_message(context, &message);
