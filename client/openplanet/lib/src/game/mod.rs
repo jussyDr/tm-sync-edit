@@ -51,11 +51,11 @@ autopad! {
 }
 
 impl FidFile {
-    pub unsafe fn nod<T>(&self) -> Option<&T> {
+    pub unsafe fn nod<T>(&self) -> Option<&mut T> {
         if self.nod.is_null() {
             None
         } else {
-            Some(&*(self.nod as *const T))
+            Some(&mut *(self.nod as *mut T))
         }
     }
 }

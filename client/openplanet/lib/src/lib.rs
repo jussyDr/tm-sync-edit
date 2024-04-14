@@ -16,8 +16,8 @@ use ahash::AHashMap;
 use async_compat::CompatExt;
 use futures::{executor::block_on, task::noop_waker_ref, SinkExt, TryStreamExt};
 use game::{
-    hook_place_block, hook_place_item, hook_remove_block, hook_remove_item, BlockInfo, FidsFolder,
-    GameFns, ItemModel,
+    hook_place_block, hook_place_item, hook_remove_block, hook_remove_item, BlockInfo, Editor,
+    FidsFolder, GameFns, ItemModel,
 };
 use native_dialog::{MessageDialog, MessageType};
 use ordered_float::NotNan;
@@ -128,8 +128,8 @@ struct Context {
     status_text_buf: Box<[u8; 256]>,
     map_editor: Option<NonZeroUsize>,
 
-    block_infos: AHashMap<String, *const BlockInfo>,
-    item_models: AHashMap<String, *const ItemModel>,
+    block_infos: AHashMap<String, *mut BlockInfo>,
+    item_models: AHashMap<String, *mut ItemModel>,
     connection_future: Option<ConnectionFuture>,
     framed_tcp_stream: Option<FramedTcpStream>,
     blocks: AHashMap<BlockDesc, *mut game::Block>,
@@ -219,22 +219,90 @@ async fn connection(
         select! {
             result = context.framed_tcp_stream.as_mut().unwrap().try_next() => match result? {
                 None => return Err("Server closed connection".into()),
-                Some(frame) => handle_frame(context, &frame).await?,
+                Some(frame) => handle_frame(context, &game_fns, &frame).await?,
             }
         }
     }
 }
 
-async fn handle_frame(context: &mut Context, frame: &[u8]) -> Result<(), Box<dyn Error>> {
+async fn handle_frame(
+    context: &mut Context,
+    game_fns: &GameFns,
+    frame: &[u8],
+) -> Result<(), Box<dyn Error>> {
     let message = deserialize(frame)?;
 
+    let editor = unsafe { &mut *(context.map_editor.unwrap().get() as *mut Editor) };
+
     match message {
-        Message::PlaceBlock(..) => {}
-        Message::RemoveBlock(block_desc) => if let Some(block) = context.blocks.get(&block_desc) {},
-        Message::PlaceFreeBlock(..) => {}
-        Message::RemoveFreeBlock(..) => {}
-        Message::PlaceItem(..) => {}
-        Message::RemoveItem(..) => {}
+        Message::PlaceBlock(block_desc) => {
+            let block_info = *context.block_infos.get(&block_desc.block_info_id).unwrap();
+
+            unsafe {
+                game_fns.place_block(
+                    editor,
+                    &mut *block_info,
+                    block_desc.x,
+                    block_desc.y,
+                    block_desc.z,
+                    block_desc.direction,
+                    block_desc.elem_color,
+                    block_desc.is_ghost,
+                    block_desc.is_ground,
+                )
+            };
+        }
+        Message::RemoveBlock(block_desc) => {
+            if let Some(&block) = context.blocks.get(&block_desc) {
+                unsafe { game_fns.remove_block(editor, &mut *block) };
+            }
+        }
+        Message::PlaceFreeBlock(free_block_desc) => {
+            let block_info = *context
+                .block_infos
+                .get(&free_block_desc.block_info_id)
+                .unwrap();
+
+            unsafe {
+                game_fns.place_free_block(
+                    editor,
+                    &mut *block_info,
+                    free_block_desc.elem_color,
+                    free_block_desc.x.into_inner(),
+                    free_block_desc.y.into_inner(),
+                    free_block_desc.z.into_inner(),
+                    free_block_desc.yaw.into_inner(),
+                    free_block_desc.pitch.into_inner(),
+                    free_block_desc.roll.into_inner(),
+                )
+            };
+        }
+        Message::RemoveFreeBlock(free_block_desc) => {
+            if let Some(&block) = context.free_blocks.get(&free_block_desc) {
+                unsafe { game_fns.remove_block(editor, &mut *block) };
+            }
+        }
+        Message::PlaceItem(item_desc) => {
+            let item_model = *context.item_models.get(&item_desc.item_model_id).unwrap();
+
+            unsafe {
+                game_fns.place_item(
+                    editor,
+                    &mut *item_model,
+                    item_desc.yaw.into_inner(),
+                    item_desc.pitch.into_inner(),
+                    item_desc.roll.into_inner(),
+                    item_desc.x.into_inner(),
+                    item_desc.y.into_inner(),
+                    item_desc.z.into_inner(),
+                )
+            };
+        }
+        Message::RemoveItem(item_desc) => {
+            if let Some(&item) = context.items.get(&item_desc) {
+                unsafe { game_fns.remove_item(editor, &mut *item) };
+            }
+        }
     }
 
     Ok(())
@@ -246,7 +314,9 @@ unsafe extern "system" fn place_block_callback(user_data: *mut u8, block: *mut g
     let context = &mut *(user_data as *mut Context);
     let block = &*block;
 
-    let is_custom = block.block_info().article().item_model_article().is_some();
+    let block_info_id = block.block_info().name().to_owned();
+
+    let block_info_is_custom = block.block_info().article().item_model_article().is_some();
 
     let direction = match block.direction {
         0 => Direction::North,
@@ -266,7 +336,8 @@ unsafe extern "system" fn place_block_callback(user_data: *mut u8, block: *mut g
 
     let message = if is_free {
         Message::PlaceFreeBlock(FreeBlockDesc {
-            is_custom,
+            block_info_id,
+            block_info_is_custom,
             x: NotNan::new(block.x_pos).unwrap(),
             y: NotNan::new(block.y_pos).unwrap(),
             z: NotNan::new(block.z_pos).unwrap(),
@@ -277,7 +348,8 @@ unsafe extern "system" fn place_block_callback(user_data: *mut u8, block: *mut g
         })
     } else {
         Message::PlaceBlock(BlockDesc {
-            is_custom,
+            block_info_id,
+            block_info_is_custom,
             x: block.x_coord as u8,
             y: block.y_coord as u8,
             z: block.z_coord as u8,
@@ -295,7 +367,9 @@ unsafe extern "system" fn remove_block_callback(user_data: *mut u8, block: *mut 
     let context = &mut *(user_data as *mut Context);
     let block = &*block;
 
-    let is_custom = block.block_info().article().item_model_article().is_some();
+    let block_info_id = block.block_info().name().to_owned();
+
+    let block_info_is_custom = block.block_info().article().item_model_article().is_some();
 
     let direction = match block.direction {
         0 => Direction::North,
@@ -315,7 +389,8 @@ unsafe extern "system" fn remove_block_callback(user_data: *mut u8, block: *mut 
 
     let message = if is_free {
         Message::RemoveFreeBlock(FreeBlockDesc {
-            is_custom,
+            block_info_id,
+            block_info_is_custom,
             x: NotNan::new(block.x_pos).unwrap(),
             y: NotNan::new(block.y_pos).unwrap(),
             z: NotNan::new(block.z_pos).unwrap(),
@@ -326,7 +401,8 @@ unsafe extern "system" fn remove_block_callback(user_data: *mut u8, block: *mut 
         })
     } else {
         Message::RemoveBlock(BlockDesc {
-            is_custom,
+            block_info_id,
+            block_info_is_custom,
             x: block.x_coord as u8,
             y: block.y_coord as u8,
             z: block.z_coord as u8,
@@ -348,7 +424,12 @@ unsafe extern "system" fn place_item_callback(
     let context = &mut *(user_data as *mut Context);
     let item_params = &*item_params;
 
+    let item_model_is_custom = false;
+    let item_model_id = "".to_owned();
+
     let message = Message::PlaceItem(ItemDesc {
+        item_model_id,
+        item_model_is_custom,
         x: NotNan::new(item_params.x_pos).unwrap(),
         y: NotNan::new(item_params.y_pos).unwrap(),
         z: NotNan::new(item_params.z_pos).unwrap(),
@@ -364,7 +445,12 @@ unsafe extern "system" fn remove_item_callback(user_data: *mut u8, item: *mut ga
     let context = &mut *(user_data as *mut Context);
     let item_params = &(*item).params;
 
+    let item_model_is_custom = false;
+    let item_model_id = "".to_owned();
+
     let message = Message::RemoveItem(ItemDesc {
+        item_model_id,
+        item_model_is_custom,
         x: NotNan::new(item_params.x_pos).unwrap(),
         y: NotNan::new(item_params.y_pos).unwrap(),
         z: NotNan::new(item_params.z_pos).unwrap(),
@@ -407,7 +493,7 @@ fn find_fids_subfolder<'a>(folder: &'a FidsFolder, name: &str) -> Option<&'a Fid
         .copied()
 }
 
-fn register_block_infos(folder: &FidsFolder, block_infos: &mut AHashMap<String, *const BlockInfo>) {
+fn register_block_infos(folder: &FidsFolder, block_infos: &mut AHashMap<String, *mut BlockInfo>) {
     for fid in folder.leaves() {
         if let Some(block_info) = unsafe { fid.nod::<BlockInfo>() } {
             block_infos.insert(block_info.name().to_owned(), block_info);
@@ -419,7 +505,7 @@ fn register_block_infos(folder: &FidsFolder, block_infos: &mut AHashMap<String, 
     }
 }
 
-fn register_item_models(folder: &FidsFolder, item_models: &mut AHashMap<String, *const ItemModel>) {
+fn register_item_models(folder: &FidsFolder, item_models: &mut AHashMap<String, *mut ItemModel>) {
     for fid in folder.leaves() {
         if let Some(item_model) = unsafe { fid.nod::<ItemModel>() } {
             item_models.insert(item_model.name().to_owned(), item_model);

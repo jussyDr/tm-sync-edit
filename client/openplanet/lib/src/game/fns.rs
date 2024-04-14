@@ -7,6 +7,7 @@ use std::{
 };
 
 use memchr::memmem;
+use shared::{Direction, ElemColor};
 use windows_sys::Win32::System::{
     LibraryLoader::GetModuleHandleW,
     ProcessStatus::{GetModuleInformation, MODULEINFO},
@@ -155,17 +156,17 @@ impl GameFns {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn place_block(
+    pub unsafe fn place_block(
         &self,
         editor: &mut Editor,
         block_info: &mut BlockInfo,
         x: u8,
         y: u8,
         z: u8,
-        dir: u32,
-        elem_color: u8,
-        is_ghost: u32,
-        is_ground: u32,
+        dir: Direction,
+        elem_color: ElemColor,
+        is_ghost: bool,
+        is_ground: bool,
     ) -> Option<&Block> {
         let mut coord = [x as u32, y as u32, z as u32];
 
@@ -175,17 +176,17 @@ impl GameFns {
                 block_info,
                 0,
                 &mut coord,
-                dir,
-                elem_color,
+                dir as u32,
+                elem_color as u8,
                 0,
                 0,
                 0xffffffff,
-                is_ghost,
+                is_ghost as u32,
                 1,
                 0,
-                is_ground,
+                is_ground as u32,
                 0,
-                is_ghost,
+                is_ghost as u32,
                 0,
                 0,
                 null_mut(),
@@ -202,11 +203,11 @@ impl GameFns {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn place_free_block(
+    pub unsafe fn place_free_block(
         &self,
         editor: &mut Editor,
         block_info: &mut BlockInfo,
-        elem_color: u8,
+        elem_color: ElemColor,
         x: f32,
         y: f32,
         z: f32,
@@ -225,7 +226,7 @@ impl GameFns {
                 0,
                 &mut coord,
                 0,
-                elem_color,
+                elem_color as u8,
                 0,
                 0,
                 0x3f,
@@ -250,12 +251,12 @@ impl GameFns {
         }
     }
 
-    pub fn remove_block(&self, editor: &mut Editor, block: &mut Block) -> u32 {
+    pub unsafe fn remove_block(&self, editor: &mut Editor, block: &mut Block) -> u32 {
         unsafe { (self.remove_block_fn)(editor, block, 1, block, 0) }
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn place_item(
+    pub unsafe fn place_item(
         &self,
         editor: &mut Editor,
         item_model: &mut ItemModel,
@@ -293,7 +294,7 @@ impl GameFns {
         unsafe { (self.place_item_fn)(editor, item_model, &mut params, null_mut()) }
     }
 
-    pub fn remove_item(&self, editor: &mut Editor, item: &mut Item) -> u32 {
+    pub unsafe fn remove_item(&self, editor: &mut Editor, item: &mut Item) -> u32 {
         unsafe { (self.remove_item_fn)(editor, item) }
     }
 }

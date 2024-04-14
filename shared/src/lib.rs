@@ -35,7 +35,8 @@ pub enum Message {
 
 #[derive(PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct BlockDesc {
-    pub is_custom: bool,
+    pub block_info_id: String,
+    pub block_info_is_custom: bool,
     pub x: u8,
     pub y: u8,
     pub z: u8,
@@ -65,7 +66,8 @@ pub enum ElemColor {
 
 #[derive(PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct FreeBlockDesc {
-    pub is_custom: bool,
+    pub block_info_id: String,
+    pub block_info_is_custom: bool,
     pub x: NotNan<f32>,
     pub y: NotNan<f32>,
     pub z: NotNan<f32>,
@@ -77,6 +79,8 @@ pub struct FreeBlockDesc {
 
 #[derive(PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct ItemDesc {
+    pub item_model_id: String,
+    pub item_model_is_custom: bool,
     pub x: NotNan<f32>,
     pub y: NotNan<f32>,
     pub z: NotNan<f32>,
