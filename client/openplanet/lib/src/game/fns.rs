@@ -267,14 +267,12 @@ impl GameFns {
         y: f32,
         z: f32,
     ) -> u32 {
-        let x_coord = x as u32;
-        let y_coord = y as u32;
-        let z_coord = z as u32;
+        let coord = coord_from_pos([x, y, z]);
 
         let mut params = ItemParams {
-            x_coord,
-            y_coord,
-            z_coord,
+            x_coord: coord[0],
+            y_coord: coord[1],
+            z_coord: coord[2],
             yaw,
             pitch,
             roll,
@@ -298,5 +296,31 @@ impl GameFns {
 
     pub fn remove_item(&self, editor: &mut Editor, item: &mut Item) -> u32 {
         unsafe { (self.remove_item_fn)(editor, item) }
+    }
+}
+
+fn coord_from_pos(pos: [f32; 3]) -> [u32; 3] {
+    [
+        (pos[0] as u32) / 32,
+        ((pos[1] + 64.0) as u32) / 8,
+        (pos[2] as u32) / 32,
+    ]
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn coord_from_pos() {
+        for (pos, expected_coord) in [
+            ([0.0, -56.0, 0.0], [0, 1, 0]),
+            ([31.0, -49.0, 31.0], [0, 1, 0]),
+            ([32.0, -48.0, 32.0], [1, 2, 1]),
+            ([1503.0, 247.0, 1503.0], [46, 38, 46]),
+            ([1504.0, 248.0, 1504.0], [47, 39, 47]),
+            ([1535.0, 255.0, 1535.0], [47, 39, 47]),
+        ] {
+            let actual_coord = super::coord_from_pos(pos);
+            assert_eq!(actual_coord, expected_coord);
+        }
     }
 }
