@@ -7,14 +7,13 @@ use std::{
 };
 
 use memchr::memmem;
-use shared::Item;
 use windows_sys::Win32::System::{
     LibraryLoader::GetModuleHandleW,
     ProcessStatus::{GetModuleInformation, MODULEINFO},
     Threading::GetCurrentProcess,
 };
 
-use super::{Block, BlockInfo, Editor, ItemModel, ItemParams};
+use super::{Block, BlockInfo, Editor, Item, ItemModel, ItemParams};
 
 type PlaceBlockFn = unsafe extern "system" fn(
     editor: *mut Editor,

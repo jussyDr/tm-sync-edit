@@ -21,8 +21,8 @@ use game::{
 };
 use native_dialog::{MessageDialog, MessageType};
 use shared::{
-    deserialize, framed_tcp_stream, serialize, Block, Direction, ElemColor, FramedTcpStream,
-    FreeBlock, Item, Message,
+    deserialize, framed_tcp_stream, serialize, BlockDesc, Direction, ElemColor, FramedTcpStream,
+    FreeBlockDesc, ItemDesc, Message,
 };
 use tokio::{net::TcpStream, select};
 use windows_sys::Win32::{
@@ -131,6 +131,9 @@ struct Context {
     item_models: AHashMap<String, *const ItemModel>,
     connection_future: Option<ConnectionFuture>,
     framed_tcp_stream: Option<FramedTcpStream>,
+    blocks: AHashMap<BlockDesc, *mut game::Block>,
+    free_blocks: AHashMap<FreeBlockDesc, *mut game::Block>,
+    items: AHashMap<ItemDesc, *mut game::Item>,
 }
 
 impl Context {
@@ -143,6 +146,9 @@ impl Context {
             item_models: AHashMap::new(),
             connection_future: None,
             framed_tcp_stream: None,
+            blocks: AHashMap::new(),
+            free_blocks: AHashMap::new(),
+            items: AHashMap::new(),
         }
     }
 
@@ -254,7 +260,7 @@ unsafe extern "system" fn place_block_callback(user_data: *mut u8, block: *mut g
     let elem_color = ElemColor::Default;
 
     let message = if is_free {
-        Message::PlaceFreeBlock(FreeBlock {
+        Message::PlaceFreeBlock(FreeBlockDesc {
             is_custom,
             x: block.x_pos,
             y: block.y_pos,
@@ -265,7 +271,7 @@ unsafe extern "system" fn place_block_callback(user_data: *mut u8, block: *mut g
             elem_color,
         })
     } else {
-        Message::PlaceBlock(Block {
+        Message::PlaceBlock(BlockDesc {
             is_custom,
             x: block.x_coord as u8,
             y: block.y_coord as u8,
@@ -303,7 +309,7 @@ unsafe extern "system" fn remove_block_callback(user_data: *mut u8, block: *mut 
     let elem_color = ElemColor::Default;
 
     let message = if is_free {
-        Message::RemoveFreeBlock(FreeBlock {
+        Message::RemoveFreeBlock(FreeBlockDesc {
             is_custom,
             x: block.x_pos,
             y: block.y_pos,
@@ -314,7 +320,7 @@ unsafe extern "system" fn remove_block_callback(user_data: *mut u8, block: *mut 
             elem_color,
         })
     } else {
-        Message::RemoveBlock(Block {
+        Message::RemoveBlock(BlockDesc {
             is_custom,
             x: block.x_coord as u8,
             y: block.y_coord as u8,
@@ -337,16 +343,7 @@ unsafe extern "system" fn place_item_callback(
     let context = &mut *(user_data as *mut Context);
     let item_params = &*item_params;
 
-    let _ = MessageDialog::new()
-        .set_type(MessageType::Error)
-        .set_title(FILE_NAME)
-        .set_text(&format!(
-            "{}, {}, {}",
-            item_params.x_pos, item_params.y_pos, item_params.z_pos
-        ))
-        .show_alert();
-
-    let message = Message::PlaceItem(Item {
+    let message = Message::PlaceItem(ItemDesc {
         x: item_params.x_pos,
         y: item_params.y_pos,
         z: item_params.z_pos,
@@ -362,7 +359,7 @@ unsafe extern "system" fn remove_item_callback(user_data: *mut u8, item: *mut ga
     let context = &mut *(user_data as *mut Context);
     let item_params = &(*item).params;
 
-    let message = Message::RemoveItem(Item {
+    let message = Message::RemoveItem(ItemDesc {
         x: item_params.x_pos,
         y: item_params.y_pos,
         z: item_params.z_pos,
