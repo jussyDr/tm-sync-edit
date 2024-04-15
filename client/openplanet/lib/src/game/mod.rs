@@ -50,6 +50,7 @@ autopad! {
     }
 }
 
+// CMwNod.
 #[repr(C)]
 pub struct Nod {
     vtable: *const NodVTable,
@@ -66,6 +67,7 @@ impl Nod {
 }
 
 autopad! {
+    // CSystemFidFile.
     #[repr(C)]
     pub struct FidFile {
         0x080 => pub nod: *mut Nod
@@ -73,6 +75,7 @@ autopad! {
 }
 
 autopad! {
+    // CSystemFidsFolder.
     #[repr(C)]
     pub struct FidsFolder {
         0x028 => leaves: Array< FidFile>,
@@ -96,6 +99,7 @@ impl FidsFolder {
 }
 
 autopad! {
+    // CGameCtnArticle.
     #[repr(C)]
     pub struct Article {
         0x080 => pub loaded_nod: *mut c_void,
@@ -114,6 +118,7 @@ impl Article {
 }
 
 autopad! {
+    // CGameCtnCollector.
     #[repr(C)]
     pub struct Collector {
         0x018 => article: *mut Article,
@@ -131,6 +136,7 @@ impl Collector {
     }
 }
 
+// CGameCtnBlockInfo.
 #[repr(C)]
 pub struct BlockInfo {
     collector: Collector,
@@ -144,6 +150,7 @@ impl Deref for BlockInfo {
     }
 }
 
+// CGameItemModel.
 #[repr(C)]
 pub struct ItemModel {
     collector: Collector,
@@ -158,6 +165,7 @@ impl Deref for ItemModel {
 }
 
 autopad! {
+    // CGameCtnBlock.
     #[repr(C)]
     pub struct Block {
         0x028 =>     block_info: *mut BlockInfo,
@@ -183,6 +191,7 @@ impl Block {
 }
 
 autopad! {
+    /// CGameCtnAnchoredObject.
     #[repr(C)]
     pub struct Item {
         0x028 => pub params: ItemParams
@@ -212,4 +221,5 @@ pub struct ItemParams {
     pub param_19: usize,
 }
 
+/// CGameCtnEditorFree.
 pub struct MapEditor;

@@ -16,8 +16,8 @@ use ahash::AHashMap;
 use async_compat::CompatExt;
 use futures::{executor::block_on, task::noop_waker_ref, SinkExt, TryStreamExt};
 use game::{
-    hook_place_block, hook_place_item, hook_remove_block, hook_remove_item, BlockInfo, FidsFolder,
-    GameFns, ItemModel, MapEditor,
+    hook_place_block, hook_place_item, hook_remove_block, hook_remove_item, Block, BlockInfo,
+    FidsFolder, GameFns, Item, ItemModel, ItemParams, MapEditor,
 };
 use native_dialog::{MessageDialog, MessageType};
 use ordered_float::NotNan;
@@ -132,9 +132,9 @@ struct Context {
     item_models: AHashMap<String, *mut ItemModel>,
     connection_future: Option<ConnectionFuture>,
     framed_tcp_stream: Option<FramedTcpStream>,
-    blocks: AHashMap<BlockDesc, *mut game::Block>,
-    free_blocks: AHashMap<FreeBlockDesc, *mut game::Block>,
-    items: AHashMap<ItemDesc, *mut game::Item>,
+    blocks: AHashMap<BlockDesc, *mut Block>,
+    free_blocks: AHashMap<FreeBlockDesc, *mut Block>,
+    items: AHashMap<ItemDesc, *mut Item>,
 }
 
 impl Context {
@@ -310,7 +310,7 @@ async fn handle_frame(
 
 // hook callbacks //
 
-unsafe extern "system" fn place_block_callback(user_data: *mut u8, block: *mut game::Block) {
+unsafe extern "system" fn place_block_callback(user_data: *mut u8, block: *mut Block) {
     let context = &mut *(user_data as *mut Context);
     let block = &*block;
 
@@ -363,7 +363,7 @@ unsafe extern "system" fn place_block_callback(user_data: *mut u8, block: *mut g
     send_message(context, &message);
 }
 
-unsafe extern "system" fn remove_block_callback(user_data: *mut u8, block: *mut game::Block) {
+unsafe extern "system" fn remove_block_callback(user_data: *mut u8, block: *mut Block) {
     let context = &mut *(user_data as *mut Context);
     let block = &*block;
 
@@ -418,8 +418,8 @@ unsafe extern "system" fn remove_block_callback(user_data: *mut u8, block: *mut 
 
 unsafe extern "system" fn place_item_callback(
     user_data: *mut u8,
-    item_model: *mut game::ItemModel,
-    item_params: *mut game::ItemParams,
+    item_model: *mut ItemModel,
+    item_params: *mut ItemParams,
 ) {
     let context = &mut *(user_data as *mut Context);
     let item_params = &*item_params;
@@ -441,7 +441,7 @@ unsafe extern "system" fn place_item_callback(
     send_message(context, &message);
 }
 
-unsafe extern "system" fn remove_item_callback(user_data: *mut u8, item: *mut game::Item) {
+unsafe extern "system" fn remove_item_callback(user_data: *mut u8, item: *mut Item) {
     let context = &mut *(user_data as *mut Context);
     let item_params = &(*item).params;
 
