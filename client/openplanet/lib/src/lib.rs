@@ -16,8 +16,8 @@ use ahash::AHashMap;
 use async_compat::CompatExt;
 use futures::{executor::block_on, task::noop_waker_ref, SinkExt, TryStreamExt};
 use game::{
-    hook_place_block, hook_place_item, hook_remove_block, hook_remove_item, BlockInfo, Editor,
-    FidsFolder, GameFns, ItemModel,
+    hook_place_block, hook_place_item, hook_remove_block, hook_remove_item, BlockInfo, FidsFolder,
+    GameFns, ItemModel, MapEditor,
 };
 use native_dialog::{MessageDialog, MessageType};
 use ordered_float::NotNan;
@@ -232,7 +232,7 @@ async fn handle_frame(
 ) -> Result<(), Box<dyn Error>> {
     let message = deserialize(frame)?;
 
-    let editor = unsafe { &mut *(context.map_editor.unwrap().get() as *mut Editor) };
+    let editor = unsafe { &mut *(context.map_editor.unwrap().get() as *mut MapEditor) };
 
     match message {
         Message::PlaceBlock(block_desc) => {
@@ -495,8 +495,19 @@ fn find_fids_subfolder<'a>(folder: &'a FidsFolder, name: &str) -> Option<&'a Fid
 
 fn register_block_infos(folder: &FidsFolder, block_infos: &mut AHashMap<String, *mut BlockInfo>) {
     for fid in folder.leaves() {
-        if let Some(block_info) = unsafe { fid.nod::<BlockInfo>() } {
-            block_infos.insert(block_info.name().to_owned(), block_info);
+        if !fid.nod.is_null() {
+            let class_id = unsafe { (*fid.nod).class_id() };
+
+            if class_id == 0x0304f000
+                || class_id == 0x03051000
+                || class_id == 0x03053000
+                || class_id == 0x03340000
+                || class_id == 0x0335B000
+            {
+                let block_info = unsafe { &mut *(fid.nod as *mut BlockInfo) };
+
+                block_infos.insert(block_info.name().to_owned(), block_info);
+            }
         }
     }
 
@@ -507,8 +518,14 @@ fn register_block_infos(folder: &FidsFolder, block_infos: &mut AHashMap<String, 
 
 fn register_item_models(folder: &FidsFolder, item_models: &mut AHashMap<String, *mut ItemModel>) {
     for fid in folder.leaves() {
-        if let Some(item_model) = unsafe { fid.nod::<ItemModel>() } {
-            item_models.insert(item_model.name().to_owned(), item_model);
+        if !fid.nod.is_null() {
+            let class_id = unsafe { (*fid.nod).class_id() };
+
+            if class_id == 0x2e002000 {
+                let item_model = unsafe { &mut *(fid.nod as *mut ItemModel) };
+
+                item_models.insert(item_model.name().to_owned(), item_model);
+            }
         }
     }
 

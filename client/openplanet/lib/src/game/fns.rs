@@ -14,10 +14,10 @@ use windows_sys::Win32::System::{
     Threading::GetCurrentProcess,
 };
 
-use super::{Block, BlockInfo, Editor, Item, ItemModel, ItemParams};
+use super::{Block, BlockInfo, Item, ItemModel, ItemParams, MapEditor};
 
 type PlaceBlockFn = unsafe extern "system" fn(
-    editor: *mut Editor,
+    map_editor: *mut MapEditor,
     block_info: *mut BlockInfo,
     param_3: usize,
     coord: *mut [u32; 3],
@@ -40,7 +40,7 @@ type PlaceBlockFn = unsafe extern "system" fn(
 ) -> *mut Block;
 
 type RemoveBlockFn = unsafe extern "system" fn(
-    editor: *mut Editor,
+    map_editor: *mut MapEditor,
     block: *mut Block,
     param_3: u32,
     param_4: *mut Block,
@@ -48,13 +48,13 @@ type RemoveBlockFn = unsafe extern "system" fn(
 ) -> u32;
 
 type PlaceItemFn = unsafe extern "system" fn(
-    editor: *mut Editor,
+    map_editor: *mut MapEditor,
     item_model: *mut ItemModel,
     params: *mut ItemParams,
     out_item: *mut *mut Item,
 ) -> u32;
 
-type RemoveItemFn = unsafe extern "system" fn(editor: *mut Editor, item: *mut Item) -> u32;
+type RemoveItemFn = unsafe extern "system" fn(map_editor: *mut MapEditor, item: *mut Item) -> u32;
 
 pub struct GameFns {
     place_block_fn: PlaceBlockFn,
@@ -141,12 +141,6 @@ impl GameFns {
         let remove_item_fn =
             unsafe { transmute(exe_module_memory.as_ptr().add(remove_item_fn_offset)) };
 
-        let _ = native_dialog::MessageDialog::new()
-            .set_type(native_dialog::MessageType::Error)
-            .set_title("watawt")
-            .set_text(&format!("{:p}", remove_item_fn))
-            .show_alert();
-
         Ok(Self {
             place_block_fn,
             remove_block_fn,
@@ -158,7 +152,7 @@ impl GameFns {
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn place_block(
         &self,
-        editor: &mut Editor,
+        map_editor: &mut MapEditor,
         block_info: &mut BlockInfo,
         x: u8,
         y: u8,
@@ -172,7 +166,7 @@ impl GameFns {
 
         let block = unsafe {
             (self.place_block_fn)(
-                editor,
+                map_editor,
                 block_info,
                 0,
                 &mut coord,
@@ -205,7 +199,7 @@ impl GameFns {
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn place_free_block(
         &self,
-        editor: &mut Editor,
+        map_editor: &mut MapEditor,
         block_info: &mut BlockInfo,
         elem_color: ElemColor,
         x: f32,
@@ -221,7 +215,7 @@ impl GameFns {
 
         let block = unsafe {
             (self.place_block_fn)(
-                editor,
+                map_editor,
                 block_info,
                 0,
                 &mut coord,
@@ -251,14 +245,14 @@ impl GameFns {
         }
     }
 
-    pub unsafe fn remove_block(&self, editor: &mut Editor, block: &mut Block) -> u32 {
-        unsafe { (self.remove_block_fn)(editor, block, 1, block, 0) }
+    pub unsafe fn remove_block(&self, map_editor: &mut MapEditor, block: &mut Block) -> u32 {
+        unsafe { (self.remove_block_fn)(map_editor, block, 1, block, 0) }
     }
 
     #[allow(clippy::too_many_arguments)]
     pub unsafe fn place_item(
         &self,
-        editor: &mut Editor,
+        map_editor: &mut MapEditor,
         item_model: &mut ItemModel,
         yaw: f32,
         pitch: f32,
@@ -291,11 +285,11 @@ impl GameFns {
             param_19: 0,
         };
 
-        unsafe { (self.place_item_fn)(editor, item_model, &mut params, null_mut()) }
+        unsafe { (self.place_item_fn)(map_editor, item_model, &mut params, null_mut()) }
     }
 
-    pub unsafe fn remove_item(&self, editor: &mut Editor, item: &mut Item) -> u32 {
-        unsafe { (self.remove_item_fn)(editor, item) }
+    pub unsafe fn remove_item(&self, map_editor: &mut MapEditor, item: &mut Item) -> u32 {
+        unsafe { (self.remove_item_fn)(map_editor, item) }
     }
 }
 

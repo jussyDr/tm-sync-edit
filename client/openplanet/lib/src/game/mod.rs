@@ -8,7 +8,7 @@ mod hook;
 pub use fns::*;
 pub use hook::*;
 
-use std::{ffi::c_void, ops::Deref, slice, str};
+use std::{ffi::c_void, mem::MaybeUninit, ops::Deref, slice, str};
 
 use autopad::autopad;
 
@@ -45,18 +45,30 @@ impl CompactString {
 
 autopad! {
     #[repr(C)]
-    pub struct FidFile {
-        0x080 => nod: *const u8
+    struct NodVTable {
+        0x018 => class_id: unsafe extern "system" fn(this: *mut Nod, class_id: *mut u32) -> *mut u32
     }
 }
 
-impl FidFile {
-    pub unsafe fn nod<T>(&self) -> Option<&mut T> {
-        if self.nod.is_null() {
-            None
-        } else {
-            Some(&mut *(self.nod as *mut T))
-        }
+#[repr(C)]
+pub struct Nod {
+    vtable: *const NodVTable,
+}
+
+impl Nod {
+    pub fn class_id(&mut self) -> u32 {
+        let mut class_id = MaybeUninit::uninit();
+
+        unsafe { ((*self.vtable).class_id)(self, class_id.as_mut_ptr()) };
+
+        unsafe { class_id.assume_init() }
+    }
+}
+
+autopad! {
+    #[repr(C)]
+    pub struct FidFile {
+        0x080 => pub nod: *mut Nod
     }
 }
 
@@ -119,6 +131,32 @@ impl Collector {
     }
 }
 
+#[repr(C)]
+pub struct BlockInfo {
+    collector: Collector,
+}
+
+impl Deref for BlockInfo {
+    type Target = Collector;
+
+    fn deref(&self) -> &Collector {
+        &self.collector
+    }
+}
+
+#[repr(C)]
+pub struct ItemModel {
+    collector: Collector,
+}
+
+impl Deref for ItemModel {
+    type Target = Collector;
+
+    fn deref(&self) -> &Collector {
+        &self.collector
+    }
+}
+
 autopad! {
     #[repr(C)]
     pub struct Block {
@@ -141,21 +179,6 @@ autopad! {
 impl Block {
     pub fn block_info(&self) -> &BlockInfo {
         unsafe { &*self.block_info }
-    }
-}
-
-autopad! {
-    #[repr(C)]
-    pub struct BlockInfo {
-        collector: Collector
-    }
-}
-
-impl Deref for BlockInfo {
-    type Target = Collector;
-
-    fn deref(&self) -> &Collector {
-        &self.collector
     }
 }
 
@@ -189,19 +212,4 @@ pub struct ItemParams {
     pub param_19: usize,
 }
 
-autopad! {
-    #[repr(C)]
-    pub struct ItemModel {
-        collector: Collector
-    }
-}
-
-impl Deref for ItemModel {
-    type Target = Collector;
-
-    fn deref(&self) -> &Collector {
-        &self.collector
-    }
-}
-
-pub struct Editor;
+pub struct MapEditor;
