@@ -61,14 +61,7 @@ unsafe extern "system" fn CreateContext(game_folder: *mut FidsFolder) -> *mut Co
     let mut context = Context::new();
     context.set_status_text("Disconnected");
 
-    let game_folder = &*game_folder;
-    let game_data_folder = find_fids_subfolder(game_folder, "GameData").unwrap();
-    let stadium_folder = find_fids_subfolder(game_data_folder, "Stadium").unwrap();
-    let block_info_folder = find_fids_subfolder(stadium_folder, "GameCtnBlockInfo").unwrap();
-    let items_folder = find_fids_subfolder(stadium_folder, "Items").unwrap();
-
-    register_block_infos(block_info_folder, &mut context.block_infos);
-    register_item_models(items_folder, &mut context.item_models);
+    load_game_objects(&*game_folder).unwrap();
 
     Box::into_raw(Box::new(context))
 }
@@ -485,7 +478,7 @@ unsafe fn convert_c_string(c_string: *const c_char) -> String {
         .to_owned()
 }
 
-fn find_fids_subfolder<'a>(folder: &'a FidsFolder, name: &str) -> Option<&'a FidsFolder> {
+fn get_fids_subfolder<'a>(folder: &'a FidsFolder, name: &str) -> Option<&'a FidsFolder> {
     folder
         .trees()
         .iter()
@@ -493,7 +486,29 @@ fn find_fids_subfolder<'a>(folder: &'a FidsFolder, name: &str) -> Option<&'a Fid
         .copied()
 }
 
-fn register_block_infos(folder: &FidsFolder, block_infos: &mut AHashMap<String, *mut BlockInfo>) {
+fn load_game_objects(game_folder: &FidsFolder) -> Result<(), Box<dyn Error>> {
+    let game_data_folder =
+        get_fids_subfolder(game_folder, "GameData").ok_or("could not find folder GameData")?;
+
+    let stadium_folder = get_fids_subfolder(game_data_folder, "Stadium")
+        .ok_or("could not find folder GameData/Stadium")?;
+
+    let block_infos_folder = get_fids_subfolder(stadium_folder, "GameCtnBlockInfo")
+        .ok_or("could not find folder GameData/Stadium/CGameCtnBlockInfo")?;
+
+    let items_folder = get_fids_subfolder(stadium_folder, "Items")
+        .ok_or("could to find folder GameData/Stadium/Items")?;
+
+    let mut block_infos = AHashMap::new();
+    load_game_block_infos(block_infos_folder, &mut block_infos);
+
+    let mut item_models = AHashMap::new();
+    load_game_item_models(items_folder, &mut item_models);
+
+    Ok(())
+}
+
+fn load_game_block_infos(folder: &FidsFolder, block_infos: &mut AHashMap<String, *mut BlockInfo>) {
     for fid in folder.leaves() {
         if !fid.nod.is_null() {
             let class_id = unsafe { (*fid.nod).class_id() };
@@ -512,11 +527,11 @@ fn register_block_infos(folder: &FidsFolder, block_infos: &mut AHashMap<String, 
     }
 
     for subfolder in folder.trees() {
-        register_block_infos(subfolder, block_infos);
+        load_game_block_infos(subfolder, block_infos);
     }
 }
 
-fn register_item_models(folder: &FidsFolder, item_models: &mut AHashMap<String, *mut ItemModel>) {
+fn load_game_item_models(folder: &FidsFolder, item_models: &mut AHashMap<String, *mut ItemModel>) {
     for fid in folder.leaves() {
         if !fid.nod.is_null() {
             let class_id = unsafe { (*fid.nod).class_id() };
@@ -530,6 +545,6 @@ fn register_item_models(folder: &FidsFolder, item_models: &mut AHashMap<String, 
     }
 
     for subfolder in folder.trees() {
-        register_item_models(subfolder, item_models);
+        load_game_item_models(subfolder, item_models);
     }
 }
