@@ -13,6 +13,14 @@ Library@ g_library = null;
 
 void Main() {
     @g_library = LoadLibrary();
+
+    auto gameFolder = Fids::GetGameFolder("");
+    auto gameDataFolder = FindSubfolder(gameFolder, "GameData");
+    auto stadiumFolder = FindSubfolder(gameDataFolder, "Stadium");
+    auto blockInfoFolder = FindSubfolder(stadiumFolder, "GameCtnBlockInfo");
+    auto itemsFolder = FindSubfolder(stadiumFolder, "Items");
+    PreloadAllFidsInFolder(blockInfoFolder);
+    PreloadAllFidsInFolder(itemsFolder);
 }
 
 void RenderInterface() {
@@ -48,7 +56,7 @@ void RenderInterface() {
             Setting_Port = UI::InputText("Port", Setting_Port, UI::InputTextFlags::CharsNoBlank);
 
             if (UI::Button("Join")) {
-                g_library.OpenConnection(Setting_Host, Setting_Port);
+                g_library.OpenConnection(Setting_Host, Setting_Port, Fids::GetGameFolder(""));
             }
         }
 
@@ -138,4 +146,28 @@ bool IsMapEditorOpen() {
     }
 
     return false;
+}
+
+CSystemFidsFolder@ FindSubfolder(CSystemFidsFolder@ folder, const string&in name) {
+    for (uint i = 0; i < folder.Trees.Length; i++) {
+        if (folder.Trees[i].DirName == name) {
+            return folder.Trees[i];
+        }
+    }
+
+    return null;
+}
+
+void PreloadAllFidsInFolder(CSystemFidsFolder@ folder) {
+    for (uint i = 0; i < folder.Leaves.Length; i++) {
+        Fids::Preload(folder.Leaves[i]);
+
+        if (i % 200 == 199) {
+            yield();
+        }
+    }
+
+    for (uint i = 0; i < folder.Trees.Length; i++) {
+        PreloadAllFidsInFolder(folder.Trees[i]);
+    }
 }

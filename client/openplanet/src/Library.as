@@ -37,45 +37,13 @@ Library@ LoadLibrary() {
         return null;
     }
 
-    auto gameFolder = Fids::GetGameFolder("");
-    auto gameDataFolder = FindSubfolder(gameFolder, "GameData");
-    auto stadiumFolder = FindSubfolder(gameDataFolder, "Stadium");
-    auto blockInfoFolder = FindSubfolder(stadiumFolder, "GameCtnBlockInfo");
-    auto itemsFolder = FindSubfolder(stadiumFolder, "Items");
-    PreloadAllFidsInFolder(blockInfoFolder);
-    PreloadAllFidsInFolder(itemsFolder);
-
-    auto context = createContext.CallPointer(gameFolder);
+    auto context = createContext.CallPointer();
 
     if (context == 0) {
         return null;
     }
 
     return Library(importLibrary, context, destroyContext, openConnection, updateConnection, closeConnection);
-}
-
-CSystemFidsFolder@ FindSubfolder(CSystemFidsFolder@ folder, const string&in name) {
-    for (uint i = 0; i < folder.Trees.Length; i++) {
-        if (folder.Trees[i].DirName == name) {
-            return folder.Trees[i];
-        }
-    }
-
-    return null;
-}
-
-void PreloadAllFidsInFolder(CSystemFidsFolder@ folder) {
-    for (uint i = 0; i < folder.Leaves.Length; i++) {
-        Fids::Preload(folder.Leaves[i]);
-
-        if (i % 200 == 199) {
-            yield();
-        }
-    }
-
-    for (uint i = 0; i < folder.Trees.Length; i++) {
-        PreloadAllFidsInFolder(folder.Trees[i]);
-    }
 }
 
 class Library {
@@ -128,8 +96,8 @@ class Library {
         Dev::Write(m_context + 16, Dev::ForceCast<uint64>(mapEditor).Get());
     }
 
-    void OpenConnection(const string&in host, const string&in port) {
-        m_openConnection.Call(m_context, host, port);
+    void OpenConnection(const string&in host, const string&in port, const CSystemFidsFolder@ gameFolder) {
+        m_openConnection.Call(m_context, host, port, gameFolder);
     }
 
     void UpdateConnection() {

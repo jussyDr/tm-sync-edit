@@ -31,10 +31,7 @@ use windows_sys::Win32::{
     System::SystemServices::DLL_PROCESS_ATTACH,
 };
 
-// main //
-
-const FILE_NAME: &str = "SyncEdit.dll";
-
+/// DLL entry point.
 #[no_mangle]
 unsafe extern "system" fn DllMain(
     _module: HINSTANCE,
@@ -45,7 +42,7 @@ unsafe extern "system" fn DllMain(
         panic::set_hook(Box::new(|panic_info| {
             let _ = MessageDialog::new()
                 .set_type(MessageType::Error)
-                .set_title(FILE_NAME)
+                .set_title("SyncEdit.dll")
                 .set_text(&panic_info.to_string())
                 .show_alert();
         }));
@@ -54,14 +51,10 @@ unsafe extern "system" fn DllMain(
     TRUE
 }
 
-// api //
-
 #[no_mangle]
-unsafe extern "system" fn CreateContext(game_folder: *mut FidsFolder) -> *mut Context {
+unsafe extern "system" fn CreateContext() -> *mut Context {
     let mut context = Context::new();
     context.set_status_text("Disconnected");
-
-    load_game_objects(&*game_folder).unwrap();
 
     Box::into_raw(Box::new(context))
 }
@@ -76,13 +69,14 @@ unsafe extern "system" fn OpenConnection(
     context: *mut Context,
     host: *const c_char,
     port: *const c_char,
+    game_folder: *const FidsFolder,
 ) {
     (*context).state = State::Connecting;
 
     let host = convert_c_string(host);
     let port = convert_c_string(port);
 
-    let connection_future = Box::pin(connection(&mut *context, host, port));
+    let connection_future = Box::pin(connection(&mut *context, host, port, &*game_folder));
 
     (*context).connection_future = Some(connection_future);
 }
@@ -172,6 +166,7 @@ async fn connection(
     context: &mut Context,
     host: String,
     port: String,
+    game_folder: &FidsFolder,
 ) -> Result<(), Box<dyn Error>> {
     let ip_addr = IpAddr::from_str(&host)?;
     let port = u16::from_str(&port)?;
@@ -199,6 +194,8 @@ async fn connection(
     context.set_status_text("Connected");
 
     context.framed_tcp_stream = Some(framed_tcp_stream(tcp_stream));
+
+    load_game_objects(game_folder).unwrap();
 
     let game_fns = GameFns::find()?;
 
@@ -478,6 +475,7 @@ unsafe fn convert_c_string(c_string: *const c_char) -> String {
         .to_owned()
 }
 
+/// Find a subfolder with the given `name` in the given `folder`.
 fn get_fids_subfolder<'a>(folder: &'a FidsFolder, name: &str) -> Option<&'a FidsFolder> {
     folder
         .trees()
@@ -486,6 +484,7 @@ fn get_fids_subfolder<'a>(folder: &'a FidsFolder, name: &str) -> Option<&'a Fids
         .copied()
 }
 
+/// Load all the block infos and item models that are internal to the game.
 fn load_game_objects(game_folder: &FidsFolder) -> Result<(), Box<dyn Error>> {
     let game_data_folder =
         get_fids_subfolder(game_folder, "GameData").ok_or("could not find folder GameData")?;
@@ -508,6 +507,7 @@ fn load_game_objects(game_folder: &FidsFolder) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Recursively load all the block infos in the given `folder`.
 fn load_game_block_infos(folder: &FidsFolder, block_infos: &mut AHashMap<String, *mut BlockInfo>) {
     for fid in folder.leaves() {
         if !fid.nod.is_null() {
@@ -531,6 +531,7 @@ fn load_game_block_infos(folder: &FidsFolder, block_infos: &mut AHashMap<String,
     }
 }
 
+/// Recursively load all the item models in the given `folder`.
 fn load_game_item_models(folder: &FidsFolder, item_models: &mut AHashMap<String, *mut ItemModel>) {
     for fid in folder.leaves() {
         if !fid.nod.is_null() {
