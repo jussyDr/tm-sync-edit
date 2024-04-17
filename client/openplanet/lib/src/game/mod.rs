@@ -103,45 +103,31 @@ impl FidsFolder {
     }
 }
 
-autopad! {
-    // CGameCtnCollector.
-    #[repr(C)]
-    pub struct Collector {
-        0x048 => name: CompactString
-    }
-}
-
-impl Collector {
-    pub fn name(&self) -> &str {
-        self.name.as_str()
-    }
-}
-
 // CGameCtnBlockInfo.
 #[repr(C)]
 pub struct BlockInfo {
-    collector: Collector,
+    nod: Nod,
 }
 
 impl Deref for BlockInfo {
-    type Target = Collector;
+    type Target = Nod;
 
-    fn deref(&self) -> &Collector {
-        &self.collector
+    fn deref(&self) -> &Nod {
+        &self.nod
     }
 }
 
 // CGameItemModel.
 #[repr(C)]
 pub struct ItemModel {
-    collector: Collector,
+    nod: Nod,
 }
 
 impl Deref for ItemModel {
-    type Target = Collector;
+    type Target = Nod;
 
-    fn deref(&self) -> &Collector {
-        &self.collector
+    fn deref(&self) -> &Nod {
+        &self.nod
     }
 }
 

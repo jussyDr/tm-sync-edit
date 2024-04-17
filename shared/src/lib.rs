@@ -33,7 +33,7 @@ pub enum Message {
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct BlockDesc {
-    pub block_info_name: String,
+    pub block_info_id_name: String,
     pub block_info_is_custom: bool,
     pub elem_color: ElemColor,
     pub kind: BlockDescKind,
@@ -81,7 +81,7 @@ pub enum ElemColor {
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct ItemDesc {
-    pub item_model_name: String,
+    pub item_model_id_name: String,
     pub item_model_is_custom: bool,
     pub x: NotNan<f32>,
     pub y: NotNan<f32>,

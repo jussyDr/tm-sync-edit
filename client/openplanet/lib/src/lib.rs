@@ -17,7 +17,7 @@ use async_compat::CompatExt;
 use futures::{executor::block_on, task::noop_waker_ref, SinkExt, TryStreamExt};
 use game::{
     hook_place_block, hook_place_item, hook_remove_block, hook_remove_item, Block, BlockInfo,
-    FidsFolder, GameFns, Item, ItemModel, ItemParams, MapEditor,
+    FidsFolder, GameFns, IdNameFn, Item, ItemModel, ItemParams, MapEditor,
 };
 use native_dialog::{MessageDialog, MessageType};
 use shared::{
@@ -118,6 +118,7 @@ struct Context {
     item_models: AHashMap<String, *mut ItemModel>,
     connection_future: Option<ConnectionFuture>,
     framed_tcp_stream: Option<FramedTcpStream>,
+    id_name_fn: Option<IdNameFn>,
     blocks: AHashMap<BlockDesc, *mut Block>,
     items: AHashMap<ItemDesc, *mut Item>,
 }
@@ -132,6 +133,7 @@ impl Context {
             item_models: AHashMap::new(),
             connection_future: None,
             framed_tcp_stream: None,
+            id_name_fn: None,
             blocks: AHashMap::new(),
             items: AHashMap::new(),
         }
@@ -192,6 +194,8 @@ async fn connection(
 
     context.framed_tcp_stream = Some(framed_tcp_stream(tcp_stream));
 
+    context.id_name_fn = Some(IdNameFn::get()?);
+
     load_game_objects(context, game_folder).unwrap();
 
     let game_fns = GameFns::find()?;
@@ -236,7 +240,7 @@ async fn handle_frame(
 unsafe extern "system" fn place_block_callback(user_data: *mut u8, block: *mut Block) {
     let context = &mut *(user_data as *mut Context);
 
-    let block_desc = block_desc_from_block(&*block, &context.block_infos);
+    let block_desc = block_desc_from_block(context, &*block);
 
     send_message(context, &Message::PlaceBlock(block_desc));
 }
@@ -244,7 +248,7 @@ unsafe extern "system" fn place_block_callback(user_data: *mut u8, block: *mut B
 unsafe extern "system" fn remove_block_callback(user_data: *mut u8, block: *mut Block) {
     let context = &mut *(user_data as *mut Context);
 
-    let block_desc = block_desc_from_block(&*block, &context.block_infos);
+    let block_desc = block_desc_from_block(context, &*block);
 
     send_message(context, &Message::RemoveBlock(block_desc));
 }
@@ -256,7 +260,7 @@ unsafe extern "system" fn place_item_callback(
 ) {
     let context = &mut *(user_data as *mut Context);
 
-    let item_desc = item_desc_from_item(&*item_model, &*item_params, &context.item_models);
+    let item_desc = item_desc_from_item(context, &*item_model, &*item_params);
 
     send_message(context, &Message::PlaceItem(item_desc));
 }
@@ -264,7 +268,7 @@ unsafe extern "system" fn place_item_callback(
 unsafe extern "system" fn remove_item_callback(user_data: *mut u8, item: *mut Item) {
     let context = &mut *(user_data as *mut Context);
 
-    let item_desc = item_desc_from_item((*item).model(), &(*item).params, &context.item_models);
+    let item_desc = item_desc_from_item(context, (*item).model(), &(*item).params);
 
     send_message(context, &Message::RemoveItem(item_desc));
 }
@@ -318,14 +322,14 @@ fn load_game_objects(
     let items_folder = get_fids_subfolder(stadium_folder, "Items")
         .ok_or("could to find folder GameData/Stadium/Items")?;
 
-    load_game_block_infos(block_infos_folder, &mut context.block_infos);
-    load_game_item_models(items_folder, &mut context.item_models);
+    load_game_block_infos(context, block_infos_folder);
+    load_game_item_models(context, items_folder);
 
     Ok(())
 }
 
 /// Recursively load all the block infos in the given `folder`.
-fn load_game_block_infos(folder: &FidsFolder, block_infos: &mut AHashMap<String, *mut BlockInfo>) {
+fn load_game_block_infos(context: &mut Context, folder: &FidsFolder) {
     for fid in folder.leaves() {
         if !fid.nod.is_null() {
             let class_id = unsafe { (*fid.nod).class_id() };
@@ -338,18 +342,22 @@ fn load_game_block_infos(folder: &FidsFolder, block_infos: &mut AHashMap<String,
             {
                 let block_info = unsafe { &mut *(fid.nod as *mut BlockInfo) };
 
-                block_infos.insert(block_info.name().to_owned(), block_info);
+                let block_info_id_name = context.id_name_fn.as_ref().unwrap().call(block_info.id);
+
+                context
+                    .block_infos
+                    .insert(block_info_id_name.to_owned(), block_info);
             }
         }
     }
 
     for subfolder in folder.trees() {
-        load_game_block_infos(subfolder, block_infos);
+        load_game_block_infos(context, subfolder);
     }
 }
 
 /// Recursively load all the item models in the given `folder`.
-fn load_game_item_models(folder: &FidsFolder, item_models: &mut AHashMap<String, *mut ItemModel>) {
+fn load_game_item_models(context: &mut Context, folder: &FidsFolder) {
     for fid in folder.leaves() {
         if !fid.nod.is_null() {
             let class_id = unsafe { (*fid.nod).class_id() };
@@ -357,22 +365,28 @@ fn load_game_item_models(folder: &FidsFolder, item_models: &mut AHashMap<String,
             if class_id == 0x2e002000 {
                 let item_model = unsafe { &mut *(fid.nod as *mut ItemModel) };
 
-                item_models.insert(item_model.name().to_owned(), item_model);
+                let item_model_id_name = context.id_name_fn.as_ref().unwrap().call(item_model.id);
+
+                context
+                    .item_models
+                    .insert(item_model_id_name.to_owned(), item_model);
             }
         }
     }
 
     for subfolder in folder.trees() {
-        load_game_item_models(subfolder, item_models);
+        load_game_item_models(context, subfolder);
     }
 }
 
-fn block_desc_from_block(
-    block: &Block,
-    block_infos: &AHashMap<String, *mut BlockInfo>,
-) -> BlockDesc {
-    let block_info_name = block.block_info().name().to_owned();
-    let block_info_is_custom = !block_infos.contains_key(&block_info_name);
+fn block_desc_from_block(context: &Context, block: &Block) -> BlockDesc {
+    let block_info_id_name = context
+        .id_name_fn
+        .as_ref()
+        .unwrap()
+        .call(block.block_info().id);
+
+    let block_info_is_custom = !context.block_infos.contains_key(block_info_id_name);
 
     let kind = if !block.flags.is_free() {
         BlockDescKind::Normal {
@@ -395,7 +409,7 @@ fn block_desc_from_block(
     };
 
     BlockDesc {
-        block_info_name,
+        block_info_id_name: block_info_id_name.to_owned(),
         block_info_is_custom,
         elem_color: block.elem_color,
         kind,
@@ -403,15 +417,16 @@ fn block_desc_from_block(
 }
 
 fn item_desc_from_item(
+    context: &Context,
     item_model: &ItemModel,
     item_params: &ItemParams,
-    item_models: &AHashMap<String, *mut ItemModel>,
 ) -> ItemDesc {
-    let item_model_name = item_model.name().to_owned();
-    let item_model_is_custom = !item_models.contains_key(&item_model_name);
+    let item_model_id_name = context.id_name_fn.as_ref().unwrap().call(item_model.id);
+
+    let item_model_is_custom = !context.item_models.contains_key(item_model_id_name);
 
     ItemDesc {
-        item_model_name,
+        item_model_id_name: item_model_id_name.to_owned(),
         item_model_is_custom,
         x: item_params.x_pos,
         y: item_params.y_pos,

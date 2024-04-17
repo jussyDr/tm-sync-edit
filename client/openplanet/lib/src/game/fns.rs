@@ -1,6 +1,6 @@
 use std::{
     error::Error,
-    ffi::c_char,
+    ffi::{c_char, CStr},
     io,
     mem::{size_of, transmute, MaybeUninit},
     ptr::{null, null_mut},
@@ -17,6 +17,53 @@ use windows_sys::Win32::System::{
 };
 
 use super::{Block, BlockInfo, Item, ItemModel, ItemParams, MapEditor};
+
+pub struct IdNameFn(unsafe extern "system" fn(id: *const u32) -> *mut c_char);
+
+impl IdNameFn {
+    pub fn get() -> Result<Self, Box<dyn Error>> {
+        let current_process = unsafe { GetCurrentProcess() };
+
+        let exe_module = unsafe { GetModuleHandleW(null()) };
+
+        let mut exe_module_info = MaybeUninit::uninit();
+
+        let success = unsafe {
+            GetModuleInformation(
+                current_process,
+                exe_module,
+                exe_module_info.as_mut_ptr(),
+                size_of::<MODULEINFO>() as u32,
+            )
+        };
+
+        if success == 0 {
+            return Err(io::Error::last_os_error().into());
+        }
+
+        let exe_module_info = unsafe { exe_module_info.assume_init() };
+
+        let exe_module_memory = unsafe {
+            slice::from_raw_parts(
+                exe_module_info.lpBaseOfDll as *const u8,
+                exe_module_info.SizeOfImage as usize,
+            )
+        };
+
+        let id_name_fn_offset = memmem::find(exe_module_memory, &[0x8b, 0x11, 0x8b, 0xc2, 0x25])
+            .ok_or("failed to find get id name fn pattern")?;
+
+        let id_name_fn = unsafe { transmute(exe_module_memory.as_ptr().add(id_name_fn_offset)) };
+
+        Ok(Self(id_name_fn))
+    }
+
+    pub fn call(&self, id: u32) -> &str {
+        let id_name = unsafe { (self.0)(&id) };
+
+        unsafe { CStr::from_ptr(id_name).to_str().unwrap() }
+    }
+}
 
 type PlaceBlockFn = unsafe extern "system" fn(
     map_editor: *mut MapEditor,
@@ -58,14 +105,11 @@ type PlaceItemFn = unsafe extern "system" fn(
 
 type RemoveItemFn = unsafe extern "system" fn(map_editor: *mut MapEditor, item: *mut Item) -> u32;
 
-type GetIdNameFn = unsafe extern "system" fn(id: *const u32) -> *mut c_char;
-
 pub struct GameFns {
     place_block_fn: PlaceBlockFn,
     remove_block_fn: RemoveBlockFn,
     place_item_fn: PlaceItemFn,
     remove_item_fn: RemoveItemFn,
-    get_id_name_fn: GetIdNameFn,
 }
 
 impl GameFns {
@@ -134,10 +178,6 @@ impl GameFns {
         )
         .ok_or("failed to find remove item fn pattern")?;
 
-        let get_id_name_fn_offset =
-            memmem::find(exe_module_memory, &[0x8b, 0x11, 0x8b, 0xc2, 0x25])
-                .ok_or("failed to find get id name fn pattern")?;
-
         let place_block_fn =
             unsafe { transmute(exe_module_memory.as_ptr().add(place_block_fn_offset)) };
 
@@ -150,15 +190,11 @@ impl GameFns {
         let remove_item_fn =
             unsafe { transmute(exe_module_memory.as_ptr().add(remove_item_fn_offset)) };
 
-        let get_id_name_fn =
-            unsafe { transmute(exe_module_memory.as_ptr().add(get_id_name_fn_offset)) };
-
         Ok(Self {
             place_block_fn,
             remove_block_fn,
             place_item_fn,
             remove_item_fn,
-            get_id_name_fn,
         })
     }
 
@@ -303,10 +339,6 @@ impl GameFns {
 
     pub unsafe fn remove_item(&self, map_editor: &mut MapEditor, item: &mut Item) -> u32 {
         unsafe { (self.remove_item_fn)(map_editor, item) }
-    }
-
-    pub unsafe fn get_id_name(&self, id: u32) -> *const c_char {
-        unsafe { (self.get_id_name_fn)(&id) }
     }
 }
 
