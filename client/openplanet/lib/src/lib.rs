@@ -7,7 +7,6 @@ use std::{
     net::{IpAddr, SocketAddr},
     num::NonZeroUsize,
     panic,
-    path::{Path, PathBuf},
     pin::Pin,
     str::FromStr,
     task::{self, Poll},
@@ -23,7 +22,7 @@ use game::{
 use native_dialog::{MessageDialog, MessageType};
 use shared::{
     deserialize, framed_tcp_stream, serialize, BlockDesc, BlockDescKind, FramedTcpStream, ItemDesc,
-    Message,
+    Message, ModelId,
 };
 use tokio::{net::TcpStream, select};
 use windows_sys::Win32::{
@@ -117,6 +116,8 @@ struct Context {
 
     block_infos: AHashMap<String, *mut BlockInfo>,
     item_models: AHashMap<String, *mut ItemModel>,
+    custom_block_model_hashes: AHashMap<u32, blake3::Hash>,
+    custom_item_model_hashes: AHashMap<u32, blake3::Hash>,
     connection_future: Option<ConnectionFuture>,
     framed_tcp_stream: Option<FramedTcpStream>,
     id_name_fn: Option<IdNameFn>,
@@ -132,6 +133,8 @@ impl Context {
             map_editor: None,
             block_infos: AHashMap::new(),
             item_models: AHashMap::new(),
+            custom_block_model_hashes: AHashMap::new(),
+            custom_item_model_hashes: AHashMap::new(),
             connection_future: None,
             framed_tcp_stream: None,
             id_name_fn: None,
@@ -231,6 +234,8 @@ async fn handle_frame(
         Message::RemoveBlock(block_desc) => {}
         Message::PlaceItem(item_desc) => {}
         Message::RemoveItem(item_desc) => {}
+        Message::AddBlockModel { .. } => {}
+        Message::AddItemModel { .. } => {}
     }
 
     Ok(())
@@ -385,7 +390,9 @@ fn block_desc_from_block(context: &Context, block: &Block) -> BlockDesc {
 
     let block_info_id_name = context.id_name_fn.as_ref().unwrap().call(block_info.id);
 
-    let block_info_is_custom = !context.block_infos.contains_key(block_info_id_name);
+    let model_id = ModelId::Game {
+        name: block_info_id_name.to_owned(),
+    };
 
     let kind = if !block.flags.is_free() {
         BlockDescKind::Normal {
@@ -408,30 +415,26 @@ fn block_desc_from_block(context: &Context, block: &Block) -> BlockDesc {
     };
 
     BlockDesc {
-        block_info_id_name: block_info_id_name.to_owned(),
-        block_info_is_custom,
+        model_id,
         elem_color: block.elem_color,
         kind,
     }
 }
 
-fn item_desc_from_item(
-    context: &Context,
-    item_model: &ItemModel,
-    item_params: &ItemParams,
-) -> ItemDesc {
-    let item_model_id_name = context.id_name_fn.as_ref().unwrap().call(item_model.id);
+fn item_desc_from_item(context: &Context, model: &ItemModel, params: &ItemParams) -> ItemDesc {
+    let item_model_id_name = context.id_name_fn.as_ref().unwrap().call(model.id);
 
-    let item_model_is_custom = !context.item_models.contains_key(item_model_id_name);
+    let model_id = ModelId::Game {
+        name: item_model_id_name.to_owned(),
+    };
 
     ItemDesc {
-        item_model_id_name: item_model_id_name.to_owned(),
-        item_model_is_custom,
-        x: item_params.x_pos,
-        y: item_params.y_pos,
-        z: item_params.z_pos,
-        yaw: item_params.yaw,
-        pitch: item_params.pitch,
-        roll: item_params.roll,
+        model_id,
+        x: params.x_pos,
+        y: params.y_pos,
+        z: params.z_pos,
+        yaw: params.yaw,
+        pitch: params.pitch,
+        roll: params.roll,
     }
 }

@@ -29,12 +29,19 @@ pub enum Message {
     RemoveBlock(BlockDesc),
     PlaceItem(ItemDesc),
     RemoveItem(ItemDesc),
+    AddBlockModel { bytes: Vec<u8> },
+    AddItemModel { bytes: Vec<u8> },
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+pub enum ModelId {
+    Game { name: String },
+    Custom { hash: blake3::Hash },
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct BlockDesc {
-    pub block_info_id_name: String,
-    pub block_info_is_custom: bool,
+    pub model_id: ModelId,
     pub elem_color: ElemColor,
     pub kind: BlockDescKind,
 }
@@ -81,8 +88,7 @@ pub enum ElemColor {
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct ItemDesc {
-    pub item_model_id_name: String,
-    pub item_model_is_custom: bool,
+    pub model_id: ModelId,
     pub x: NotNan<f32>,
     pub y: NotNan<f32>,
     pub z: NotNan<f32>,

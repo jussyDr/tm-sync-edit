@@ -140,6 +140,8 @@ async fn handle_frame(state: &Arc<Mutex<State>>, frame: Bytes) -> Result<(), Box
         Message::RemoveItem(item_desc) => {
             println!("removed item {item_desc:?}");
         }
+        Message::AddBlockModel { .. } => {}
+        Message::AddItemModel { .. } => {}
     }
 
     Ok(())

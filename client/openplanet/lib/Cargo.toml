@@ -12,6 +12,7 @@ shared = { path = "../../../shared" }
 ahash = "0.8.11"
 async-compat = "0.2.3"
 autopad = "1.0.0"
+blake3 = "1.5.1"
 futures = "0.3.30"
 futures-util = { version = "0.3.30", features = ["sink"] }
 memchr = "2.7.2"
