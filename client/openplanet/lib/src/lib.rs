@@ -301,7 +301,7 @@ fn get_fids_subfolder<'a>(folder: &'a FidsFolder, name: &str) -> Option<&'a Fids
     folder
         .trees()
         .iter()
-        .find(|subfolder| subfolder.dir_name() == name)
+        .find(|subfolder| subfolder.name() == name)
         .copied()
 }
 

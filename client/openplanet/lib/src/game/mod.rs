@@ -7,12 +7,12 @@ mod hook;
 
 pub use fns::*;
 pub use hook::*;
+
+use autopad::autopad;
 use ordered_float::NotNan;
 use shared::{Direction, ElemColor};
 
-use std::{mem::MaybeUninit, ops::Deref, slice, str};
-
-use autopad::autopad;
+use std::{ffi::c_char, mem::MaybeUninit, ops::Deref, slice, str};
 
 #[repr(C)]
 struct Array<T> {
@@ -57,7 +57,6 @@ autopad! {
     #[repr(C)]
     pub struct Nod {
                      vtable: *const NodVTable,
-        0x018 => article: *mut Article,
         0x028 => pub id: u32
     }
 }
@@ -76,7 +75,23 @@ autopad! {
     // CSystemFidFile.
     #[repr(C)]
     pub struct FidFile {
-        0x080 => pub nod: *mut Nod
+        0x018 =>     parent_folder: *mut FidsFolder,
+        0x080 => pub nod: *mut Nod,
+        0x0d0 =>     name: *const c_char,
+        0x0d8 =>     name_len: u32
+    }
+}
+
+impl FidFile {
+    pub fn parent_folder(&self) -> &FidsFolder {
+        unsafe { &*self.parent_folder }
+    }
+
+    pub fn name(&self) -> &str {
+        let bytes =
+            unsafe { slice::from_raw_parts(self.name as *const u8, self.name_len as usize) };
+
+        unsafe { str::from_utf8_unchecked(bytes) }
     }
 }
 
@@ -84,13 +99,22 @@ autopad! {
     // CSystemFidsFolder.
     #[repr(C)]
     pub struct FidsFolder {
+        0x018 => parent_folder: *mut FidsFolder,
         0x028 => leaves: Array<FidFile>,
         0x038 => trees: Array<FidsFolder>,
-        0x058 => dir_name: CompactString
+        0x058 => name: CompactString
     }
 }
 
 impl FidsFolder {
+    pub fn parent_folder(&self) -> Option<&FidsFolder> {
+        if self.parent_folder.is_null() {
+            None
+        } else {
+            Some(unsafe { &*self.parent_folder })
+        }
+    }
+
     pub fn leaves(&self) -> &[&FidFile] {
         self.leaves.as_slice()
     }
@@ -99,8 +123,8 @@ impl FidsFolder {
         self.trees.as_slice()
     }
 
-    pub fn dir_name(&self) -> &str {
-        self.dir_name.as_str()
+    pub fn name(&self) -> &str {
+        self.name.as_str()
     }
 }
 
@@ -108,11 +132,16 @@ autopad! {
     // CGameCtnArticle.
     #[repr(C)]
     pub struct Article {
+        0x018 =>                fid: *mut FidFile,
         0x108 => item_model_article: *mut Article
     }
 }
 
 impl Article {
+    pub fn fid(&self) -> &FidFile {
+        unsafe { &*self.fid }
+    }
+
     pub fn item_model_article(&self) -> Option<&Article> {
         if self.item_model_article.is_null() {
             None
