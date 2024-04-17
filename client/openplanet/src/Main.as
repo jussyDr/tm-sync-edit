@@ -13,7 +13,7 @@ Library@ g_library = null;
 
 void Main() {
     @g_library = LoadLibrary();
-    
+
     auto gameFolder = Fids::GetGameFolder("");
     auto gameDataFolder = FindSubfolder(gameFolder, "GameData");
     auto stadiumFolder = FindSubfolder(gameDataFolder, "Stadium");

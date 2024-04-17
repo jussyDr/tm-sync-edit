@@ -1,5 +1,6 @@
 use std::{
     error::Error,
+    ffi::c_char,
     io,
     mem::{size_of, transmute, MaybeUninit},
     ptr::{null, null_mut},
@@ -57,11 +58,14 @@ type PlaceItemFn = unsafe extern "system" fn(
 
 type RemoveItemFn = unsafe extern "system" fn(map_editor: *mut MapEditor, item: *mut Item) -> u32;
 
+type GetIdNameFn = unsafe extern "system" fn(id: *const u32) -> *mut c_char;
+
 pub struct GameFns {
     place_block_fn: PlaceBlockFn,
     remove_block_fn: RemoveBlockFn,
     place_item_fn: PlaceItemFn,
     remove_item_fn: RemoveItemFn,
+    get_id_name_fn: GetIdNameFn,
 }
 
 impl GameFns {
@@ -130,6 +134,10 @@ impl GameFns {
         )
         .ok_or("failed to find remove item fn pattern")?;
 
+        let get_id_name_fn_offset =
+            memmem::find(exe_module_memory, &[0x8b, 0x11, 0x8b, 0xc2, 0x25])
+                .ok_or("failed to find get id name fn pattern")?;
+
         let place_block_fn =
             unsafe { transmute(exe_module_memory.as_ptr().add(place_block_fn_offset)) };
 
@@ -142,11 +150,15 @@ impl GameFns {
         let remove_item_fn =
             unsafe { transmute(exe_module_memory.as_ptr().add(remove_item_fn_offset)) };
 
+        let get_id_name_fn =
+            unsafe { transmute(exe_module_memory.as_ptr().add(get_id_name_fn_offset)) };
+
         Ok(Self {
             place_block_fn,
             remove_block_fn,
             place_item_fn,
             remove_item_fn,
+            get_id_name_fn,
         })
     }
 
@@ -291,6 +303,10 @@ impl GameFns {
 
     pub unsafe fn remove_item(&self, map_editor: &mut MapEditor, item: &mut Item) -> u32 {
         unsafe { (self.remove_item_fn)(map_editor, item) }
+    }
+
+    pub unsafe fn get_id_name(&self, id: u32) -> *const c_char {
+        unsafe { (self.get_id_name_fn)(&id) }
     }
 }
 

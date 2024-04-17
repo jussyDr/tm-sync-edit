@@ -20,7 +20,6 @@ use game::{
     FidsFolder, GameFns, Item, ItemModel, ItemParams, MapEditor,
 };
 use native_dialog::{MessageDialog, MessageType};
-use ordered_float::NotNan;
 use shared::{
     deserialize, framed_tcp_stream, serialize, BlockDesc, BlockDescKind, FramedTcpStream, ItemDesc,
     Message,

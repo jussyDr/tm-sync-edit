@@ -52,10 +52,13 @@ autopad! {
     }
 }
 
-// CMwNod.
-#[repr(C)]
-pub struct Nod {
-    vtable: *const NodVTable,
+autopad! {
+    // CMwNod.
+    #[repr(C)]
+    pub struct Nod {
+        vtable: *const NodVTable,
+        0x040 => pub id: u32
+    }
 }
 
 impl Nod {
