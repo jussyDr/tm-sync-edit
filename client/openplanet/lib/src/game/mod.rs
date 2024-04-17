@@ -57,7 +57,7 @@ autopad! {
     #[repr(C)]
     pub struct Nod {
         vtable: *const NodVTable,
-        0x040 => pub id: u32
+        0x028 => pub id: u32
     }
 }
 
