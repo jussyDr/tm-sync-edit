@@ -56,7 +56,8 @@ autopad! {
     // CMwNod.
     #[repr(C)]
     pub struct Nod {
-        vtable: *const NodVTable,
+                     vtable: *const NodVTable,
+        0x018 => article: *mut Article,
         0x028 => pub id: u32
     }
 }
@@ -83,8 +84,8 @@ autopad! {
     // CSystemFidsFolder.
     #[repr(C)]
     pub struct FidsFolder {
-        0x028 => leaves: Array< FidFile>,
-        0x038 => trees: Array< FidsFolder>,
+        0x028 => leaves: Array<FidFile>,
+        0x038 => trees: Array<FidsFolder>,
         0x058 => dir_name: CompactString
     }
 }
@@ -100,6 +101,24 @@ impl FidsFolder {
 
     pub fn dir_name(&self) -> &str {
         self.dir_name.as_str()
+    }
+}
+
+autopad! {
+    // CGameCtnArticle.
+    #[repr(C)]
+    pub struct Article {
+        0x108 => item_model_article: *mut Article
+    }
+}
+
+impl Article {
+    pub fn item_model_article(&self) -> Option<&Article> {
+        if self.item_model_article.is_null() {
+            None
+        } else {
+            unsafe { Some(&*self.item_model_article) }
+        }
     }
 }
 
