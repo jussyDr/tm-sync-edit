@@ -10,7 +10,7 @@ pub use hook::*;
 use ordered_float::NotNan;
 use shared::{Direction, ElemColor};
 
-use std::{ffi::c_void, mem::MaybeUninit, ops::Deref, slice, str};
+use std::{mem::MaybeUninit, ops::Deref, slice, str};
 
 use autopad::autopad;
 
@@ -101,19 +101,9 @@ impl FidsFolder {
 }
 
 autopad! {
-    // CGameCtnArticle.
-    #[repr(C)]
-    pub struct Article {
-        0x080 => pub loaded_nod: *mut c_void,
-        0x108 =>     item_model_article: *mut Article
-    }
-}
-
-autopad! {
     // CGameCtnCollector.
     #[repr(C)]
     pub struct Collector {
-        0x018 => article: *mut Article,
         0x048 => name: CompactString
     }
 }
@@ -138,13 +128,10 @@ impl Deref for BlockInfo {
     }
 }
 
-autopad! {
-    // CGameItemModel.
-    #[repr(C)]
-    pub struct ItemModel {
-                     collector: Collector,
-        0x288 => pub entity_model: *mut Nod,
-    }
+// CGameItemModel.
+#[repr(C)]
+pub struct ItemModel {
+    collector: Collector,
 }
 
 impl Deref for ItemModel {

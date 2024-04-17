@@ -193,7 +193,7 @@ async fn connection(
 
     context.framed_tcp_stream = Some(framed_tcp_stream(tcp_stream));
 
-    load_game_objects(game_folder).unwrap();
+    load_game_objects(context, game_folder).unwrap();
 
     let game_fns = GameFns::find()?;
 
@@ -237,7 +237,7 @@ async fn handle_frame(
 unsafe extern "system" fn place_block_callback(user_data: *mut u8, block: *mut Block) {
     let context = &mut *(user_data as *mut Context);
 
-    let block_desc = block_desc_from_block(&*block);
+    let block_desc = block_desc_from_block(&*block, &context.block_infos);
 
     send_message(context, &Message::PlaceBlock(block_desc));
 }
@@ -245,7 +245,7 @@ unsafe extern "system" fn place_block_callback(user_data: *mut u8, block: *mut B
 unsafe extern "system" fn remove_block_callback(user_data: *mut u8, block: *mut Block) {
     let context = &mut *(user_data as *mut Context);
 
-    let block_desc = block_desc_from_block(&*block);
+    let block_desc = block_desc_from_block(&*block, &context.block_infos);
 
     send_message(context, &Message::RemoveBlock(block_desc));
 }
@@ -257,7 +257,7 @@ unsafe extern "system" fn place_item_callback(
 ) {
     let context = &mut *(user_data as *mut Context);
 
-    let item_desc = item_desc_from_item(&*item_model, &*item_params);
+    let item_desc = item_desc_from_item(&*item_model, &*item_params, &context.item_models);
 
     send_message(context, &Message::PlaceItem(item_desc));
 }
@@ -265,7 +265,7 @@ unsafe extern "system" fn place_item_callback(
 unsafe extern "system" fn remove_item_callback(user_data: *mut u8, item: *mut Item) {
     let context = &mut *(user_data as *mut Context);
 
-    let item_desc = item_desc_from_item((*item).model(), &(*item).params);
+    let item_desc = item_desc_from_item((*item).model(), &(*item).params, &context.item_models);
 
     send_message(context, &Message::RemoveItem(item_desc));
 }
@@ -303,7 +303,10 @@ fn get_fids_subfolder<'a>(folder: &'a FidsFolder, name: &str) -> Option<&'a Fids
 }
 
 /// Load all the block infos and item models that are internal to the game.
-fn load_game_objects(game_folder: &FidsFolder) -> Result<(), Box<dyn Error>> {
+fn load_game_objects(
+    context: &mut Context,
+    game_folder: &FidsFolder,
+) -> Result<(), Box<dyn Error>> {
     let game_data_folder =
         get_fids_subfolder(game_folder, "GameData").ok_or("could not find folder GameData")?;
 
@@ -316,11 +319,8 @@ fn load_game_objects(game_folder: &FidsFolder) -> Result<(), Box<dyn Error>> {
     let items_folder = get_fids_subfolder(stadium_folder, "Items")
         .ok_or("could to find folder GameData/Stadium/Items")?;
 
-    let mut block_infos = AHashMap::new();
-    load_game_block_infos(block_infos_folder, &mut block_infos);
-
-    let mut item_models = AHashMap::new();
-    load_game_item_models(items_folder, &mut item_models);
+    load_game_block_infos(block_infos_folder, &mut context.block_infos);
+    load_game_item_models(items_folder, &mut context.item_models);
 
     Ok(())
 }
@@ -368,8 +368,12 @@ fn load_game_item_models(folder: &FidsFolder, item_models: &mut AHashMap<String,
     }
 }
 
-fn block_desc_from_block(block: &Block) -> BlockDesc {
+fn block_desc_from_block(
+    block: &Block,
+    block_infos: &AHashMap<String, *mut BlockInfo>,
+) -> BlockDesc {
     let block_info_name = block.block_info().name().to_owned();
+    let block_info_is_custom = !block_infos.contains_key(&block_info_name);
 
     let kind = if !block.flags.is_free() {
         BlockDescKind::Normal {
@@ -393,16 +397,23 @@ fn block_desc_from_block(block: &Block) -> BlockDesc {
 
     BlockDesc {
         block_info_name,
-        block_info_is_custom: false,
+        block_info_is_custom,
         elem_color: block.elem_color,
         kind,
     }
 }
 
-fn item_desc_from_item(item_model: &ItemModel, item_params: &ItemParams) -> ItemDesc {
+fn item_desc_from_item(
+    item_model: &ItemModel,
+    item_params: &ItemParams,
+    item_models: &AHashMap<String, *mut ItemModel>,
+) -> ItemDesc {
+    let item_model_name = item_model.name().to_owned();
+    let item_model_is_custom = !item_models.contains_key(&item_model_name);
+
     ItemDesc {
-        item_model_id: String::new(),
-        item_model_is_custom: false,
+        item_model_name,
+        item_model_is_custom,
         x: item_params.x_pos,
         y: item_params.y_pos,
         z: item_params.z_pos,

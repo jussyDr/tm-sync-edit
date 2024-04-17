@@ -81,7 +81,7 @@ pub enum ElemColor {
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct ItemDesc {
-    pub item_model_id: String,
+    pub item_model_name: String,
     pub item_model_is_custom: bool,
     pub x: NotNan<f32>,
     pub y: NotNan<f32>,

@@ -13,12 +13,7 @@ Library@ g_library = null;
 
 void Main() {
     @g_library = LoadLibrary();
-
-    auto itemModel = cast<CGameCtnEditorFree>(GetApp().Editor).Challenge.AnchoredObjects[0].ItemModel;
-
-    print(Text::FormatPointer(Dev::ForceCast<uint64>(itemModel).Get()));
-    print(Text::FormatPointer(Dev::ForceCast<uint64>(itemModel.EntityModel).Get()));
-
+    
     auto gameFolder = Fids::GetGameFolder("");
     auto gameDataFolder = FindSubfolder(gameFolder, "GameData");
     auto stadiumFolder = FindSubfolder(gameDataFolder, "Stadium");
