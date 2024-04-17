@@ -54,7 +54,7 @@ begin
         clientQueues[self] := Tail(clientQueues[self]);
       end if;
     or
-      with block \in 1..NumBlockTypes do
+      with block \in 0..NumBlockTypes - 1 do
         serverQueue := Append(serverQueue, block);
       end with;
     end either;
@@ -62,7 +62,7 @@ begin
 end process;
 
 end algorithm *)
-\* BEGIN TRANSLATION (chksum(pcal) = "b975374d" /\ chksum(tla) = "9df0d421")
+\* BEGIN TRANSLATION (chksum(pcal) = "83d23bd2" /\ chksum(tla) = "7f43de36")
 \* Label Run of process Server at line 41 col 5 changed to Run_
 VARIABLES serverMap, serverQueue, clientMaps, clientQueues, pc
 
@@ -113,7 +113,7 @@ Run(self) == /\ pc[self] = "Run"
                          ELSE /\ TRUE
                               /\ UNCHANGED << clientMaps, clientQueues >>
                    /\ UNCHANGED serverQueue
-                \/ /\ \E block \in 1..NumBlockTypes:
+                \/ /\ \E block \in 0..NumBlockTypes - 1:
                         serverQueue' = Append(serverQueue, block)
                    /\ UNCHANGED <<clientMaps, clientQueues>>
              /\ pc' = [pc EXCEPT ![self] = "Run"]
