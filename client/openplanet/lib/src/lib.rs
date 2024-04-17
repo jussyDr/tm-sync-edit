@@ -7,6 +7,7 @@ use std::{
     net::{IpAddr, SocketAddr},
     num::NonZeroUsize,
     panic,
+    path::{Path, PathBuf},
     pin::Pin,
     str::FromStr,
     task::{self, Poll},
@@ -380,11 +381,9 @@ fn load_game_item_models(context: &mut Context, folder: &FidsFolder) {
 }
 
 fn block_desc_from_block(context: &Context, block: &Block) -> BlockDesc {
-    let block_info_id_name = context
-        .id_name_fn
-        .as_ref()
-        .unwrap()
-        .call(block.block_info().id);
+    let block_info = block.block_info();
+
+    let block_info_id_name = context.id_name_fn.as_ref().unwrap().call(block_info.id);
 
     let block_info_is_custom = !context.block_infos.contains_key(block_info_id_name);
 

@@ -57,11 +57,16 @@ autopad! {
     #[repr(C)]
     pub struct Nod {
                      vtable: *const NodVTable,
+        0x018 =>     article: *mut Article,
         0x028 => pub id: u32
     }
 }
 
 impl Nod {
+    pub fn article(&self) -> &Article {
+        unsafe { &*self.article }
+    }
+
     pub fn class_id(&mut self) -> u32 {
         let mut class_id = MaybeUninit::uninit();
 
