@@ -109,16 +109,6 @@ autopad! {
     }
 }
 
-impl Article {
-    pub fn item_model_article(&self) -> Option<&Article> {
-        if self.item_model_article.is_null() {
-            None
-        } else {
-            unsafe { Some(&*self.item_model_article) }
-        }
-    }
-}
-
 autopad! {
     // CGameCtnCollector.
     #[repr(C)]
@@ -129,10 +119,6 @@ autopad! {
 }
 
 impl Collector {
-    pub fn article(&self) -> &Article {
-        unsafe { &*self.article }
-    }
-
     pub fn name(&self) -> &str {
         self.name.as_str()
     }
@@ -152,10 +138,13 @@ impl Deref for BlockInfo {
     }
 }
 
-// CGameItemModel.
-#[repr(C)]
-pub struct ItemModel {
-    collector: Collector,
+autopad! {
+    // CGameItemModel.
+    #[repr(C)]
+    pub struct ItemModel {
+                     collector: Collector,
+        0x288 => pub entity_model: *mut Nod,
+    }
 }
 
 impl Deref for ItemModel {

@@ -370,7 +370,6 @@ fn load_game_item_models(folder: &FidsFolder, item_models: &mut AHashMap<String,
 
 fn block_desc_from_block(block: &Block) -> BlockDesc {
     let block_info_name = block.block_info().name().to_owned();
-    let block_info_is_custom = block.block_info().article().item_model_article().is_some();
 
     let kind = if !block.flags.is_free() {
         BlockDescKind::Normal {
@@ -394,7 +393,7 @@ fn block_desc_from_block(block: &Block) -> BlockDesc {
 
     BlockDesc {
         block_info_name,
-        block_info_is_custom,
+        block_info_is_custom: false,
         elem_color: block.elem_color,
         kind,
     }
