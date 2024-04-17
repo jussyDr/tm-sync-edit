@@ -1,43 +1,51 @@
 ---- MODULE Sync ---- 
-EXTENDS Sequences
+EXTENDS Integers, Sequences
+CONSTANTS MaxQueueLen
 
 (* --algorithm Sync
 
-variables
-  queue = <<>>;
-  total = 0;
- 
-process writer = 1
+variables 
+  serverQueue = <<>>;
+
+define QueueLenConstraint ==
+  Len(serverQueue) <= MaxQueueLen
+end define;
+
+process Server = 0 
 begin
-  AddToQueue:
-    queue := Append(queue, 1);
+  Run:
+    serverQueue := Append(serverQueue, 0);
+    goto Run;
 end process;
 
 end algorithm *)
-\* BEGIN TRANSLATION (chksum(pcal) = "d00eb236" /\ chksum(tla) = "bb6827c")
-VARIABLES queue, total, pc
+\* BEGIN TRANSLATION (chksum(pcal) = "f5d7fc90" /\ chksum(tla) = "776a6d4e")
+VARIABLES serverQueue, pc
 
-vars == << queue, total, pc >>
+(* define statement *)
+     QueueLenConstraint ==
+Len(serverQueue) <= MaxQueueLen
 
-ProcSet == {1}
+
+vars == << serverQueue, pc >>
+
+ProcSet == {0}
 
 Init == (* Global variables *)
-        /\ queue = <<>>
-        /\ total = 0
-        /\ pc = [self \in ProcSet |-> "AddToQueue"]
+        /\ serverQueue = <<>>
+        /\ pc = [self \in ProcSet |-> "Run"]
 
-AddToQueue == /\ pc[1] = "AddToQueue"
-              /\ queue' = Append(queue, 1)
-              /\ pc' = [pc EXCEPT ![1] = "Done"]
-              /\ total' = total
+Run == /\ pc[0] = "Run"
+       /\ serverQueue' = Append(serverQueue, 0)
+       /\ pc' = [pc EXCEPT ![0] = "Run"]
 
-writer == AddToQueue
+Server == Run
 
 (* Allow infinite stuttering to prevent deadlock on termination. *)
 Terminating == /\ \A self \in ProcSet: pc[self] = "Done"
                /\ UNCHANGED vars
 
-Next == writer
+Next == Server
            \/ Terminating
 
 Spec == Init /\ [][Next]_vars
