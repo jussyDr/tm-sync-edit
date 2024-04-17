@@ -27,26 +27,40 @@ pub fn deserialize<'de, T: Deserialize<'de>>(bytes: &'de [u8]) -> Result<T, Box<
 pub enum Message {
     PlaceBlock(BlockDesc),
     RemoveBlock(BlockDesc),
-    PlaceFreeBlock(FreeBlockDesc),
-    RemoveFreeBlock(FreeBlockDesc),
     PlaceItem(ItemDesc),
     RemoveItem(ItemDesc),
 }
 
-#[derive(PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct BlockDesc {
-    pub block_info_id: String,
+    pub block_info_name: String,
     pub block_info_is_custom: bool,
-    pub x: u8,
-    pub y: u8,
-    pub z: u8,
-    pub direction: Direction,
-    pub is_ground: bool,
-    pub is_ghost: bool,
     pub elem_color: ElemColor,
+    pub kind: BlockDescKind,
 }
 
-#[derive(PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+pub enum BlockDescKind {
+    Normal {
+        x: u8,
+        y: u8,
+        z: u8,
+        direction: Direction,
+        is_ground: bool,
+        is_ghost: bool,
+    },
+    Free {
+        x: NotNan<f32>,
+        y: NotNan<f32>,
+        z: NotNan<f32>,
+        yaw: NotNan<f32>,
+        pitch: NotNan<f32>,
+        roll: NotNan<f32>,
+    },
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+#[repr(u8)]
 pub enum Direction {
     North,
     East,
@@ -54,7 +68,8 @@ pub enum Direction {
     West,
 }
 
-#[derive(PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+#[repr(u8)]
 pub enum ElemColor {
     Default,
     White,
@@ -64,20 +79,7 @@ pub enum ElemColor {
     Black,
 }
 
-#[derive(PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-pub struct FreeBlockDesc {
-    pub block_info_id: String,
-    pub block_info_is_custom: bool,
-    pub x: NotNan<f32>,
-    pub y: NotNan<f32>,
-    pub z: NotNan<f32>,
-    pub yaw: NotNan<f32>,
-    pub pitch: NotNan<f32>,
-    pub roll: NotNan<f32>,
-    pub elem_color: ElemColor,
-}
-
-#[derive(PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct ItemDesc {
     pub item_model_id: String,
     pub item_model_is_custom: bool,

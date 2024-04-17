@@ -7,6 +7,7 @@ mod hook;
 
 pub use fns::*;
 pub use hook::*;
+use shared::{Direction, ElemColor};
 
 use std::{ffi::c_void, mem::MaybeUninit, ops::Deref, slice, str};
 
@@ -172,7 +173,7 @@ autopad! {
         0x060 => pub x_coord: u32,
         0x064 => pub y_coord: u32,
         0x068 => pub z_coord: u32,
-        0x06C => pub direction: u32,
+        0x06C => pub direction: Direction,
         0x074 => pub x_pos: f32,
         0x078 => pub y_pos: f32,
         0x07C => pub z_pos: f32,
@@ -180,7 +181,7 @@ autopad! {
         0x084 => pub pitch: f32,
         0x088 => pub roll: f32,
         0x08C => pub flags: u32,
-        0x09C => pub elem_color: u8
+        0x09C => pub elem_color: ElemColor
     }
 }
 
@@ -194,7 +195,14 @@ autopad! {
     /// CGameCtnAnchoredObject.
     #[repr(C)]
     pub struct Item {
-        0x028 => pub params: ItemParams
+        0x028 => pub params: ItemParams,
+        0x158 => model: *mut ItemModel
+    }
+}
+
+impl Item {
+    pub fn model(&self) -> &ItemModel {
+        unsafe { &*self.model }
     }
 }
 

@@ -10,7 +10,7 @@ use bytes::Bytes;
 use clap::Parser;
 use futures_util::{SinkExt, TryStreamExt};
 use log::LevelFilter;
-use shared::{deserialize, framed_tcp_stream, serialize, Message};
+use shared::{deserialize, framed_tcp_stream, Message};
 use tokio::{
     net::{TcpListener, TcpStream},
     runtime, select,
@@ -130,57 +130,15 @@ async fn handle_frame(state: &Arc<Mutex<State>>, frame: Bytes) -> Result<(), Box
     match message {
         Message::PlaceBlock(block_desc) => {
             println!("placed block: {block_desc:?}");
-
-            let frame = Bytes::from(serialize(&Message::RemoveBlock(block_desc))?);
-
-            for client in state.lock().await.clients.values() {
-                client.send(Bytes::clone(&frame))?;
-            }
         }
         Message::RemoveBlock(block_desc) => {
             println!("removed block: {block_desc:?}");
-
-            let frame = Bytes::from(serialize(&Message::PlaceBlock(block_desc))?);
-
-            for client in state.lock().await.clients.values() {
-                client.send(Bytes::clone(&frame))?;
-            }
-        }
-        Message::PlaceFreeBlock(free_block_desc) => {
-            println!("placed free block: {free_block_desc:?}");
-
-            let frame = Bytes::from(serialize(&Message::RemoveFreeBlock(free_block_desc))?);
-
-            for client in state.lock().await.clients.values() {
-                client.send(Bytes::clone(&frame))?;
-            }
-        }
-        Message::RemoveFreeBlock(free_block_desc) => {
-            println!("removed free block: {free_block_desc:?}");
-
-            let frame = Bytes::from(serialize(&Message::PlaceFreeBlock(free_block_desc))?);
-
-            for client in state.lock().await.clients.values() {
-                client.send(Bytes::clone(&frame))?;
-            }
         }
         Message::PlaceItem(item_desc) => {
             println!("placed item: {item_desc:?}");
-
-            let frame = Bytes::from(serialize(&Message::RemoveItem(item_desc))?);
-
-            for client in state.lock().await.clients.values() {
-                client.send(Bytes::clone(&frame))?;
-            }
         }
         Message::RemoveItem(item_desc) => {
             println!("removed item {item_desc:?}");
-
-            let frame = Bytes::from(serialize(&Message::PlaceItem(item_desc))?);
-
-            for client in state.lock().await.clients.values() {
-                client.send(Bytes::clone(&frame))?;
-            }
         }
     }
 
