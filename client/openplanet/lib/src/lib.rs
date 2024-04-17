@@ -237,7 +237,7 @@ async fn handle_frame(
 unsafe extern "system" fn place_block_callback(user_data: *mut u8, block: *mut Block) {
     let context = &mut *(user_data as *mut Context);
 
-    let block_desc = block_desc_from_block(&*block).unwrap();
+    let block_desc = block_desc_from_block(&*block);
 
     send_message(context, &Message::PlaceBlock(block_desc));
 }
@@ -245,7 +245,7 @@ unsafe extern "system" fn place_block_callback(user_data: *mut u8, block: *mut B
 unsafe extern "system" fn remove_block_callback(user_data: *mut u8, block: *mut Block) {
     let context = &mut *(user_data as *mut Context);
 
-    let block_desc = block_desc_from_block(&*block).unwrap();
+    let block_desc = block_desc_from_block(&*block);
 
     send_message(context, &Message::RemoveBlock(block_desc));
 }
@@ -257,7 +257,7 @@ unsafe extern "system" fn place_item_callback(
 ) {
     let context = &mut *(user_data as *mut Context);
 
-    let item_desc = item_desc_from_item(&*item_model, &*item_params).unwrap();
+    let item_desc = item_desc_from_item(&*item_model, &*item_params);
 
     send_message(context, &Message::PlaceItem(item_desc));
 }
@@ -265,7 +265,7 @@ unsafe extern "system" fn place_item_callback(
 unsafe extern "system" fn remove_item_callback(user_data: *mut u8, item: *mut Item) {
     let context = &mut *(user_data as *mut Context);
 
-    let item_desc = item_desc_from_item((*item).model(), &(*item).params).unwrap();
+    let item_desc = item_desc_from_item((*item).model(), &(*item).params);
 
     send_message(context, &Message::RemoveItem(item_desc));
 }
@@ -368,50 +368,47 @@ fn load_game_item_models(folder: &FidsFolder, item_models: &mut AHashMap<String,
     }
 }
 
-fn block_desc_from_block(block: &Block) -> Result<BlockDesc, Box<dyn Error>> {
+fn block_desc_from_block(block: &Block) -> BlockDesc {
     let block_info_name = block.block_info().name().to_owned();
     let block_info_is_custom = block.block_info().article().item_model_article().is_some();
 
-    let kind = if block.flags & 0x20000000 == 0 {
+    let kind = if !block.flags.is_free() {
         BlockDescKind::Normal {
             x: block.x_coord as u8,
             y: block.y_coord as u8,
             z: block.z_coord as u8,
             direction: block.direction,
-            is_ground: block.flags & 0x00001000 != 0,
-            is_ghost: block.flags & 0x10000000 != 0,
+            is_ground: block.flags.is_ground(),
+            is_ghost: block.flags.is_ghost(),
         }
     } else {
         BlockDescKind::Free {
-            x: NotNan::new(block.x_pos)?,
-            y: NotNan::new(block.y_pos)?,
-            z: NotNan::new(block.z_pos)?,
-            yaw: NotNan::new(block.yaw)?,
-            pitch: NotNan::new(block.pitch)?,
-            roll: NotNan::new(block.roll)?,
+            x: block.x_pos,
+            y: block.y_pos,
+            z: block.z_pos,
+            yaw: block.yaw,
+            pitch: block.pitch,
+            roll: block.roll,
         }
     };
 
-    Ok(BlockDesc {
+    BlockDesc {
         block_info_name,
         block_info_is_custom,
         elem_color: block.elem_color,
         kind,
-    })
+    }
 }
 
-fn item_desc_from_item(
-    item_model: &ItemModel,
-    item_params: &ItemParams,
-) -> Result<ItemDesc, Box<dyn Error>> {
-    Ok(ItemDesc {
+fn item_desc_from_item(item_model: &ItemModel, item_params: &ItemParams) -> ItemDesc {
+    ItemDesc {
         item_model_id: String::new(),
         item_model_is_custom: false,
-        x: NotNan::new(item_params.x_pos)?,
-        y: NotNan::new(item_params.y_pos)?,
-        z: NotNan::new(item_params.z_pos)?,
-        yaw: NotNan::new(item_params.yaw)?,
-        pitch: NotNan::new(item_params.pitch)?,
-        roll: NotNan::new(item_params.roll)?,
-    })
+        x: item_params.x_pos,
+        y: item_params.y_pos,
+        z: item_params.z_pos,
+        yaw: item_params.yaw,
+        pitch: item_params.pitch,
+        roll: item_params.roll,
+    }
 }

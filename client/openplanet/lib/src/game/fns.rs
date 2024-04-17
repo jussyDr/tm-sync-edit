@@ -7,6 +7,7 @@ use std::{
 };
 
 use memchr::memmem;
+use ordered_float::NotNan;
 use shared::{Direction, ElemColor};
 use windows_sys::Win32::System::{
     LibraryLoader::GetModuleHandleW,
@@ -254,14 +255,14 @@ impl GameFns {
         &self,
         map_editor: &mut MapEditor,
         item_model: &mut ItemModel,
-        yaw: f32,
-        pitch: f32,
-        roll: f32,
-        x: f32,
-        y: f32,
-        z: f32,
+        yaw: NotNan<f32>,
+        pitch: NotNan<f32>,
+        roll: NotNan<f32>,
+        x: NotNan<f32>,
+        y: NotNan<f32>,
+        z: NotNan<f32>,
     ) -> u32 {
-        let coord = coord_from_pos([x, y, z]);
+        let coord = coord_from_pos([x.into_inner(), y.into_inner(), z.into_inner()]);
 
         let mut params = ItemParams {
             x_coord: coord[0],

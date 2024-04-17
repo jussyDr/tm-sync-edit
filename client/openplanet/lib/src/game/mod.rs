@@ -7,6 +7,7 @@ mod hook;
 
 pub use fns::*;
 pub use hook::*;
+use ordered_float::NotNan;
 use shared::{Direction, ElemColor};
 
 use std::{ffi::c_void, mem::MaybeUninit, ops::Deref, slice, str};
@@ -174,13 +175,13 @@ autopad! {
         0x064 => pub y_coord: u32,
         0x068 => pub z_coord: u32,
         0x06C => pub direction: Direction,
-        0x074 => pub x_pos: f32,
-        0x078 => pub y_pos: f32,
-        0x07C => pub z_pos: f32,
-        0x080 => pub yaw: f32,
-        0x084 => pub pitch: f32,
-        0x088 => pub roll: f32,
-        0x08C => pub flags: u32,
+        0x074 => pub x_pos: NotNan<f32>,
+        0x078 => pub y_pos: NotNan<f32>,
+        0x07C => pub z_pos: NotNan<f32>,
+        0x080 => pub yaw: NotNan<f32>,
+        0x084 => pub pitch: NotNan<f32>,
+        0x088 => pub roll: NotNan<f32>,
+        0x08C => pub flags: BlockFlags,
         0x09C => pub elem_color: ElemColor
     }
 }
@@ -188,6 +189,23 @@ autopad! {
 impl Block {
     pub fn block_info(&self) -> &BlockInfo {
         unsafe { &*self.block_info }
+    }
+}
+
+#[repr(transparent)]
+pub struct BlockFlags(u32);
+
+impl BlockFlags {
+    pub fn is_ground(&self) -> bool {
+        self.0 & 0x00001000 != 0
+    }
+
+    pub fn is_ghost(&self) -> bool {
+        self.0 & 0x10000000 != 0
+    }
+
+    pub fn is_free(&self) -> bool {
+        self.0 & 0x20000000 != 0
     }
 }
 
@@ -211,13 +229,13 @@ pub struct ItemParams {
     pub x_coord: u32,
     pub y_coord: u32,
     pub z_coord: u32,
-    pub yaw: f32,
-    pub pitch: f32,
-    pub roll: f32,
+    pub yaw: NotNan<f32>,
+    pub pitch: NotNan<f32>,
+    pub roll: NotNan<f32>,
     pub param_7: u32,
-    pub x_pos: f32,
-    pub y_pos: f32,
-    pub z_pos: f32,
+    pub x_pos: NotNan<f32>,
+    pub y_pos: NotNan<f32>,
+    pub z_pos: NotNan<f32>,
     pub param_11: [f32; 9],
     pub param_12: [f32; 3],
     pub param_13: f32,
