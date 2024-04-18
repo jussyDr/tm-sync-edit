@@ -59,8 +59,9 @@ autopad! {
 autopad! {
     #[repr(C)]
     struct NodVTable {
-        0x018 => class_id: unsafe extern "system" fn(this: *const Nod, class_id: *mut u32) -> *mut u32,
-        0x020 => is_instance_of: unsafe extern "system" fn(this: *const Nod, class_id: u32) -> bool,
+        0x08 => destructor: unsafe extern "system" fn(this: *mut Nod, should_free: bool) -> *mut Nod,
+        0x18 => class_id: unsafe extern "system" fn(this: *const Nod, class_id: *mut u32) -> *mut u32,
+        0x20 => is_instance_of: unsafe extern "system" fn(this: *const Nod, class_id: u32) -> bool,
     }
 }
 
