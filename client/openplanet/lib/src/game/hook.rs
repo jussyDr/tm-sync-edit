@@ -15,7 +15,9 @@ use windows_sys::Win32::{
     System::{
         Diagnostics::Debug::WriteProcessMemory,
         LibraryLoader::GetModuleHandleW,
-        Memory::{VirtualAlloc, MEM_COMMIT, MEM_RESERVE, PAGE_EXECUTE_READWRITE},
+        Memory::{
+            VirtualAlloc, VirtualFree, MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_EXECUTE_READWRITE,
+        },
         ProcessStatus::{GetModuleInformation, MODULEINFO},
         Threading::{
             GetCurrentProcessId, OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_OPERATION,
@@ -37,6 +39,7 @@ pub type RemoveItemCallbackFn = unsafe extern "system" fn(*mut u8, *mut Item);
 pub struct Hook {
     ptr: *const u8,
     original_code: &'static [u8],
+    trampoline_ptr: *mut u8,
 }
 
 impl Drop for Hook {
@@ -51,6 +54,9 @@ impl Drop for Hook {
             )
             .unwrap()
         };
+
+        let success = unsafe { VirtualFree(self.trampoline_ptr as *mut c_void, 0, MEM_RELEASE) };
+        assert!(success != 0, "{}", io::Error::last_os_error());
     }
 }
 
@@ -105,14 +111,13 @@ fn hook(
             MEM_COMMIT | MEM_RESERVE,
             PAGE_EXECUTE_READWRITE,
         )
-    };
+    } as *mut u8;
 
     if trampoline_ptr.is_null() {
         return Err(io::Error::last_os_error().into());
     }
 
-    let trampoline =
-        unsafe { slice::from_raw_parts_mut(trampoline_ptr as *mut u8, trampoline_code.len()) };
+    let trampoline = unsafe { slice::from_raw_parts_mut(trampoline_ptr, trampoline_code.len()) };
 
     trampoline.copy_from_slice(&trampoline_code);
 
@@ -125,6 +130,7 @@ fn hook(
     Ok(Hook {
         ptr: hook_ptr,
         original_code,
+        trampoline_ptr,
     })
 }
 
