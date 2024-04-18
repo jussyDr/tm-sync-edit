@@ -4,7 +4,10 @@ use std::error::Error;
 
 use memchr::memmem;
 
-use crate::os::{ExecutableMemory, Process};
+use crate::{
+    os::{ExecutableMemory, Process},
+    Context,
+};
 
 use super::{Block, Item, ItemModel, ItemParams};
 
@@ -63,10 +66,10 @@ impl Drop for Hook {
     }
 }
 
-pub type PlaceBlockCallbackFn = unsafe extern "system" fn(*mut u8, *mut Block);
+pub type PlaceBlockCallbackFn = unsafe extern "system" fn(context: *mut Context, block: *mut Block);
 
 pub fn hook_place_block(
-    user_data: *mut u8,
+    context: *mut Context,
     callback: PlaceBlockCallbackFn,
 ) -> Result<Hook, Box<dyn Error>> {
     let code_pattern = &[
@@ -86,7 +89,7 @@ pub fn hook_place_block(
             0x48, 0xb9, // mov rcx, ????????
         ]);
 
-        trampoline_code.extend_from_slice(&(user_data as usize).to_le_bytes());
+        trampoline_code.extend_from_slice(&(context as usize).to_le_bytes());
 
         trampoline_code.extend_from_slice(&[
             0x48, 0x89, 0xc2, // mov rdx, rax
@@ -129,10 +132,11 @@ pub fn hook_place_block(
     )
 }
 
-pub type RemoveBlockCallbackFn = unsafe extern "system" fn(*mut u8, *mut Block);
+pub type RemoveBlockCallbackFn =
+    unsafe extern "system" fn(context: *mut Context, block: *mut Block);
 
 pub fn hook_remove_block(
-    user_data: *mut u8,
+    context: *mut Context,
     callback: RemoveBlockCallbackFn,
 ) -> Result<Hook, Box<dyn Error>> {
     let code_pattern = &[
@@ -156,7 +160,7 @@ pub fn hook_remove_block(
             0x48, 0xb9, // mov rcx, ????????
         ]);
 
-        trampoline_code.extend_from_slice(&(user_data as usize).to_le_bytes());
+        trampoline_code.extend_from_slice(&(context as usize).to_le_bytes());
 
         trampoline_code.extend_from_slice(&[
             0x48, 0xb8, // mov rax, ????????
@@ -208,10 +212,14 @@ pub fn hook_remove_block(
     )
 }
 
-pub type PlaceItemCallbackFn = unsafe extern "system" fn(*mut u8, *mut ItemModel, *mut ItemParams);
+pub type PlaceItemCallbackFn = unsafe extern "system" fn(
+    context: *mut Context,
+    model: *mut ItemModel,
+    params: *mut ItemParams,
+);
 
 pub fn hook_place_item(
-    user_data: *mut u8,
+    context: *mut Context,
     callback: PlaceItemCallbackFn,
 ) -> Result<Hook, Box<dyn Error>> {
     let code_pattern = &[
@@ -235,7 +243,7 @@ pub fn hook_place_item(
             0x48, 0xb9, // mov rcx, ????????
         ]);
 
-        trampoline_code.extend_from_slice(&(user_data as usize).to_le_bytes());
+        trampoline_code.extend_from_slice(&(context as usize).to_le_bytes());
 
         trampoline_code.extend_from_slice(&[
             0x48, 0xb8, // mov rax, ????????
@@ -287,10 +295,10 @@ pub fn hook_place_item(
     )
 }
 
-pub type RemoveItemCallbackFn = unsafe extern "system" fn(*mut u8, *mut Item);
+pub type RemoveItemCallbackFn = unsafe extern "system" fn(context: *mut Context, item: *mut Item);
 
 pub fn hook_remove_item(
-    user_data: *mut u8,
+    context: *mut Context,
     callback: RemoveItemCallbackFn,
 ) -> Result<Hook, Box<dyn Error>> {
     let code_pattern = &[
@@ -314,7 +322,7 @@ pub fn hook_remove_item(
             0x48, 0xb9, // mov rcx, ????????
         ]);
 
-        trampoline_code.extend_from_slice(&(user_data as usize).to_le_bytes());
+        trampoline_code.extend_from_slice(&(context as usize).to_le_bytes());
 
         trampoline_code.extend_from_slice(&[
             0x48, 0xb8, // mov rax, ????????

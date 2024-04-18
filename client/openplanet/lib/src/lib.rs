@@ -204,11 +204,10 @@ async fn connection(
 
     let game_fns = GameFns::find()?;
 
-    let user_data = context as *mut Context as *mut u8;
-    let _place_block_hook = hook_place_block(user_data, place_block_callback)?;
-    let _remove_block_hook = hook_remove_block(user_data, remove_block_callback)?;
-    let _place_item_hook = hook_place_item(user_data, place_item_callback)?;
-    let _remove_item_hook = hook_remove_item(user_data, remove_item_callback)?;
+    let _place_block_hook = hook_place_block(context, place_block_callback)?;
+    let _remove_block_hook = hook_remove_block(context, remove_block_callback)?;
+    let _place_item_hook = hook_place_item(context, place_item_callback)?;
+    let _remove_item_hook = hook_remove_item(context, remove_item_callback)?;
 
     loop {
         select! {
@@ -241,16 +240,16 @@ async fn handle_frame(
     Ok(())
 }
 
-unsafe extern "system" fn place_block_callback(user_data: *mut u8, block: *mut Block) {
-    let context = &mut *(user_data as *mut Context);
+unsafe extern "system" fn place_block_callback(context: *mut Context, block: *mut Block) {
+    let context = &mut *context;
 
     let block_desc = block_desc_from_block(context, &*block);
 
     send_message(context, &Message::PlaceBlock(block_desc));
 }
 
-unsafe extern "system" fn remove_block_callback(user_data: *mut u8, block: *mut Block) {
-    let context = &mut *(user_data as *mut Context);
+unsafe extern "system" fn remove_block_callback(context: *mut Context, block: *mut Block) {
+    let context = &mut *context;
 
     let block_desc = block_desc_from_block(context, &*block);
 
@@ -258,19 +257,19 @@ unsafe extern "system" fn remove_block_callback(user_data: *mut u8, block: *mut 
 }
 
 unsafe extern "system" fn place_item_callback(
-    user_data: *mut u8,
+    context: *mut Context,
     item_model: *mut ItemModel,
     item_params: *mut ItemParams,
 ) {
-    let context = &mut *(user_data as *mut Context);
+    let context = &mut *context;
 
     let item_desc = item_desc_from_item(context, &*item_model, &*item_params);
 
     send_message(context, &Message::PlaceItem(item_desc));
 }
 
-unsafe extern "system" fn remove_item_callback(user_data: *mut u8, item: *mut Item) {
-    let context = &mut *(user_data as *mut Context);
+unsafe extern "system" fn remove_item_callback(context: *mut Context, item: *mut Item) {
+    let context = &mut *context;
 
     let item_desc = item_desc_from_item(context, (*item).model(), &(*item).params);
 
