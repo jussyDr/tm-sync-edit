@@ -47,19 +47,19 @@ impl CompactString {
 }
 
 autopad! {
-    #[repr(C)]
-    struct NodVTable {
-        0x018 => class_id: unsafe extern "system" fn(this: *mut Nod, class_id: *mut u32) -> *mut u32
-    }
-}
-
-autopad! {
     // CMwNod.
     #[repr(C)]
     pub struct Nod {
                      vtable: *const NodVTable,
         0x018 =>     article: *mut Article,
         0x028 => pub id: u32
+    }
+}
+
+autopad! {
+    #[repr(C)]
+    struct NodVTable {
+        0x018 => class_id: unsafe extern "system" fn(this: *mut Nod, class_id: *mut u32) -> *mut u32
     }
 }
 

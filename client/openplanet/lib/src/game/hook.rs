@@ -8,18 +8,45 @@ use crate::os::{ExecutableMemory, Process};
 
 use super::{Block, Item, ItemModel, ItemParams};
 
-pub type PlaceBlockCallbackFn = unsafe extern "system" fn(*mut u8, *mut Block);
-
-pub type RemoveBlockCallbackFn = unsafe extern "system" fn(*mut u8, *mut Block);
-
-pub type PlaceItemCallbackFn = unsafe extern "system" fn(*mut u8, *mut ItemModel, *mut ItemParams);
-
-pub type RemoveItemCallbackFn = unsafe extern "system" fn(*mut u8, *mut Item);
-
 pub struct Hook {
     ptr: *const u8,
     original_code: &'static [u8],
     trampoline: ExecutableMemory,
+}
+
+impl Hook {
+    fn new(
+        code_pattern: &[u8],
+        code_pattern_offset: usize,
+        original_code: &'static [u8],
+        trampoline_code_fn: impl Fn(*const u8) -> Vec<u8>,
+        hook_code_fn: impl Fn(*const u8) -> Vec<u8>,
+    ) -> Result<Self, Box<dyn Error>> {
+        let current_process = Process::open_current()?;
+
+        let exe_module_memory = current_process.exe_module_memory()?;
+
+        let hook_offset = memmem::find(exe_module_memory, code_pattern)
+            .ok_or("failed to find code pattern")?
+            + code_pattern_offset;
+
+        let hook_ptr = unsafe { exe_module_memory.as_ptr().add(hook_offset) };
+        let hook_end_ptr = unsafe { hook_ptr.add(original_code.len()) };
+
+        let trampoline_code = trampoline_code_fn(hook_end_ptr);
+
+        let trampoline = ExecutableMemory::new(&trampoline_code)?;
+
+        let hook_code = hook_code_fn(trampoline.as_ptr() as *const u8);
+
+        unsafe { current_process.write_memory(hook_ptr as *mut u8, &hook_code)? };
+
+        Ok(Self {
+            ptr: hook_ptr,
+            original_code,
+            trampoline,
+        })
+    }
 }
 
 impl Drop for Hook {
@@ -36,38 +63,7 @@ impl Drop for Hook {
     }
 }
 
-fn hook(
-    code_pattern: &[u8],
-    code_pattern_offset: usize,
-    original_code: &'static [u8],
-    trampoline_code_fn: impl Fn(*const u8) -> Vec<u8>,
-    hook_code_fn: impl Fn(*const u8) -> Vec<u8>,
-) -> Result<Hook, Box<dyn Error>> {
-    let current_process = Process::open_current()?;
-
-    let exe_module_memory = current_process.exe_module_memory()?;
-
-    let hook_offset = memmem::find(exe_module_memory, code_pattern)
-        .ok_or("failed to find code pattern")?
-        + code_pattern_offset;
-
-    let hook_ptr = unsafe { exe_module_memory.as_ptr().add(hook_offset) };
-    let hook_end_ptr = unsafe { hook_ptr.add(original_code.len()) };
-
-    let trampoline_code = trampoline_code_fn(hook_end_ptr);
-
-    let trampoline = ExecutableMemory::new(&trampoline_code)?;
-
-    let hook_code = hook_code_fn(trampoline.as_ptr() as *const u8);
-
-    unsafe { current_process.write_memory(hook_ptr as *mut u8, &hook_code)? };
-
-    Ok(Hook {
-        ptr: hook_ptr,
-        original_code,
-        trampoline,
-    })
-}
+pub type PlaceBlockCallbackFn = unsafe extern "system" fn(*mut u8, *mut Block);
 
 pub fn hook_place_block(
     user_data: *mut u8,
@@ -124,7 +120,7 @@ pub fn hook_place_block(
         hook_code
     };
 
-    hook(
+    Hook::new(
         code_pattern,
         16,
         original_code,
@@ -132,6 +128,8 @@ pub fn hook_place_block(
         hook_code_fn,
     )
 }
+
+pub type RemoveBlockCallbackFn = unsafe extern "system" fn(*mut u8, *mut Block);
 
 pub fn hook_remove_block(
     user_data: *mut u8,
@@ -201,7 +199,7 @@ pub fn hook_remove_block(
         hook_code
     };
 
-    hook(
+    Hook::new(
         code_pattern,
         0,
         original_code,
@@ -209,6 +207,8 @@ pub fn hook_remove_block(
         hook_code_fn,
     )
 }
+
+pub type PlaceItemCallbackFn = unsafe extern "system" fn(*mut u8, *mut ItemModel, *mut ItemParams);
 
 pub fn hook_place_item(
     user_data: *mut u8,
@@ -278,7 +278,7 @@ pub fn hook_place_item(
         hook_code
     };
 
-    hook(
+    Hook::new(
         code_pattern,
         0,
         original_code,
@@ -286,6 +286,8 @@ pub fn hook_place_item(
         hook_code_fn,
     )
 }
+
+pub type RemoveItemCallbackFn = unsafe extern "system" fn(*mut u8, *mut Item);
 
 pub fn hook_remove_item(
     user_data: *mut u8,
@@ -355,7 +357,7 @@ pub fn hook_remove_item(
         hook_code
     };
 
-    hook(
+    Hook::new(
         code_pattern,
         0,
         original_code,
