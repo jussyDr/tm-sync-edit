@@ -139,27 +139,3 @@ bool IsMapEditorOpen() {
 
     return false;
 }
-
-CSystemFidsFolder@ FindSubfolder(CSystemFidsFolder@ folder, const string&in name) {
-    for (uint i = 0; i < folder.Trees.Length; i++) {
-        if (folder.Trees[i].DirName == name) {
-            return folder.Trees[i];
-        }
-    }
-
-    return null;
-}
-
-void PreloadAllFidsInFolder(CSystemFidsFolder@ folder) {
-    for (uint i = 0; i < folder.Leaves.Length; i++) {
-        Fids::Preload(folder.Leaves[i]);
-
-        if (i % 200 == 199) {
-            yield();
-        }
-    }
-
-    for (uint i = 0; i < folder.Trees.Length; i++) {
-        PreloadAllFidsInFolder(folder.Trees[i]);
-    }
-}
