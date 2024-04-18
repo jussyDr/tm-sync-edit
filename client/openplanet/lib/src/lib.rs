@@ -90,7 +90,7 @@ unsafe extern "system" fn UpdateConnection(context: *mut Context) {
     let connection_future = context
         .connection_future
         .as_mut()
-        .expect("No open connection");
+        .expect("no open connection");
 
     let mut task_context = task::Context::from_waker(noop_waker_ref());
 
@@ -146,7 +146,7 @@ impl Context {
 
     fn set_status_text(&mut self, status_text: &str) {
         if status_text.len() >= self.status_text_buf.len() {
-            panic!("Status text is too long for buffer");
+            panic!("status text is too long for buffer");
         }
 
         self.status_text_buf[..status_text.len()].copy_from_slice(status_text.as_bytes());
@@ -212,7 +212,7 @@ async fn connection(
     loop {
         select! {
             result = context.framed_tcp_stream.as_mut().unwrap().try_next() => match result? {
-                None => return Err("Server closed connection".into()),
+                None => return Err("server closed connection".into()),
                 Some(frame) => handle_frame(context, &game_fns, &frame).await?,
             }
         }
@@ -277,7 +277,7 @@ unsafe extern "system" fn remove_item_callback(user_data: *mut u8, item: *mut It
 }
 
 fn send_message(context: &mut Context, message: &Message) {
-    let frame = serialize(&message).expect("Failed to serialize message");
+    let frame = serialize(&message).expect("failed to serialize message");
 
     block_on(async {
         context
@@ -286,14 +286,14 @@ fn send_message(context: &mut Context, message: &Message) {
             .expect("TCP stream not initialized")
             .send(frame.into())
             .await
-            .expect("Failed to send frame");
+            .expect("failed to send frame");
     });
 }
 
 unsafe fn convert_c_string(c_string: *const c_char) -> String {
     CStr::from_ptr(c_string)
         .to_str()
-        .expect("Invalid UTF-8 string")
+        .expect("invalid UTF-8 string")
         .to_owned()
 }
 
