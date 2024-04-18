@@ -240,37 +240,29 @@ async fn handle_frame(
     Ok(())
 }
 
-unsafe extern "system" fn place_block_callback(context: *mut Context, block: *mut Block) {
-    let context = &mut *context;
-
+unsafe extern "system" fn place_block_callback(context: &mut Context, block: *mut Block) {
     let block_desc = block_desc_from_block(context, &*block);
 
     send_message(context, &Message::PlaceBlock(block_desc));
 }
 
-unsafe extern "system" fn remove_block_callback(context: *mut Context, block: *mut Block) {
-    let context = &mut *context;
-
+unsafe extern "system" fn remove_block_callback(context: &mut Context, block: *mut Block) {
     let block_desc = block_desc_from_block(context, &*block);
 
     send_message(context, &Message::RemoveBlock(block_desc));
 }
 
 unsafe extern "system" fn place_item_callback(
-    context: *mut Context,
+    context: &mut Context,
     item_model: *mut ItemModel,
     item_params: *mut ItemParams,
 ) {
-    let context = &mut *context;
-
     let item_desc = item_desc_from_item(context, &*item_model, &*item_params);
 
     send_message(context, &Message::PlaceItem(item_desc));
 }
 
-unsafe extern "system" fn remove_item_callback(context: *mut Context, item: *mut Item) {
-    let context = &mut *context;
-
+unsafe extern "system" fn remove_item_callback(context: &mut Context, item: *mut Item) {
     let item_desc = item_desc_from_item(context, (*item).model(), &(*item).params);
 
     send_message(context, &Message::RemoveItem(item_desc));
