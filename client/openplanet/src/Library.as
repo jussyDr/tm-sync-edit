@@ -37,7 +37,9 @@ Library@ LoadLibrary() {
         return null;
     }
 
-    auto context = createContext.CallPointer();
+    auto fid = Fids::GetGame("GameData/Stadium/Items/CypressDirtTall.Item.Gbx");
+
+    auto context = createContext.CallPointer(fid);
 
     if (context == 0) {
         return null;

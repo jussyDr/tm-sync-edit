@@ -13,14 +13,6 @@ Library@ g_library = null;
 
 void Main() {
     @g_library = LoadLibrary();
-
-    auto gameFolder = Fids::GetGameFolder("");
-    auto gameDataFolder = FindSubfolder(gameFolder, "GameData");
-    auto stadiumFolder = FindSubfolder(gameDataFolder, "Stadium");
-    auto blockInfoFolder = FindSubfolder(stadiumFolder, "GameCtnBlockInfo");
-    auto itemsFolder = FindSubfolder(stadiumFolder, "Items");
-    PreloadAllFidsInFolder(blockInfoFolder);
-    PreloadAllFidsInFolder(itemsFolder);
 }
 
 void RenderInterface() {

@@ -16,7 +16,66 @@ use windows_sys::Win32::System::{
     Threading::GetCurrentProcess,
 };
 
-use super::{Block, BlockInfo, Item, ItemModel, ItemParams, MapEditor};
+use super::{Block, BlockInfo, FidFile, Item, ItemModel, ItemParams, MapEditor, Nod};
+
+pub struct FidLoadFn(
+    unsafe extern "system" fn(ret_nod: *mut *mut Nod, fid: *mut FidFile, nod: *mut u8),
+);
+
+impl FidLoadFn {
+    pub fn get() -> Result<Self, Box<dyn Error>> {
+        let current_process = unsafe { GetCurrentProcess() };
+
+        let exe_module = unsafe { GetModuleHandleW(null()) };
+
+        let mut exe_module_info = MaybeUninit::uninit();
+
+        let success = unsafe {
+            GetModuleInformation(
+                current_process,
+                exe_module,
+                exe_module_info.as_mut_ptr(),
+                size_of::<MODULEINFO>() as u32,
+            )
+        };
+
+        if success == 0 {
+            return Err(io::Error::last_os_error().into());
+        }
+
+        let exe_module_info = unsafe { exe_module_info.assume_init() };
+
+        let exe_module_memory = unsafe {
+            slice::from_raw_parts(
+                exe_module_info.lpBaseOfDll as *const u8,
+                exe_module_info.SizeOfImage as usize,
+            )
+        };
+
+        let id_name_fn_offset = memmem::find(
+            exe_module_memory,
+            &[
+                0x40, 0x53, 0x56, 0x57, 0x48, 0x81, 0xec, 0xb0, 0x00, 0x00, 0x00, 0x48, 0x8b, 0x05,
+                0x9e, 0x50, 0x55, 0x01, 0x48, 0x33, 0xc4, 0x48, 0x89, 0x84, 0x24, 0xa0, 0x00, 0x00,
+                0x00, 0x49, 0x8b, 0xf8,
+            ],
+        )
+        .ok_or("failed to find get load fid fn pattern")?;
+
+        let id_name_fn = unsafe { transmute(exe_module_memory.as_ptr().add(id_name_fn_offset)) };
+
+        Ok(Self(id_name_fn))
+    }
+
+    pub fn call(&self, fid: *mut FidFile) -> *mut Nod {
+        let mut ret_nod = MaybeUninit::uninit();
+        let mut nod = [0; 32];
+
+        unsafe { (self.0)(ret_nod.as_mut_ptr(), fid, nod.as_mut_ptr()) };
+
+        unsafe { ret_nod.assume_init() }
+    }
+}
 
 pub struct IdNameFn(unsafe extern "system" fn(id: *const u32) -> *mut c_char);
 

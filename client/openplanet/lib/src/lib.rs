@@ -17,7 +17,7 @@ use async_compat::CompatExt;
 use futures::{executor::block_on, task::noop_waker_ref, SinkExt, TryStreamExt};
 use game::{
     hook_place_block, hook_place_item, hook_remove_block, hook_remove_item, Block, BlockInfo,
-    FidsFolder, GameFns, IdNameFn, Item, ItemModel, ItemParams, MapEditor,
+    FidFile, FidLoadFn, FidsFolder, GameFns, IdNameFn, Item, ItemModel, ItemParams, MapEditor,
 };
 use native_dialog::{MessageDialog, MessageType};
 use shared::{
@@ -51,7 +51,9 @@ unsafe extern "system" fn DllMain(
 }
 
 #[no_mangle]
-unsafe extern "system" fn CreateContext() -> *mut Context {
+unsafe extern "system" fn CreateContext(fid: *mut FidFile) -> *mut Context {
+    let nod = FidLoadFn::get().unwrap().call(fid);
+
     let mut context = Context::new();
     context.set_status_text("Disconnected");
 
