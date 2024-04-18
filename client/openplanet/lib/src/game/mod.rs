@@ -59,7 +59,8 @@ autopad! {
 autopad! {
     #[repr(C)]
     struct NodVTable {
-        0x018 => class_id: unsafe extern "system" fn(this: *mut Nod, class_id: *mut u32) -> *mut u32
+        0x018 => class_id: unsafe extern "system" fn(this: *const Nod, class_id: *mut u32) -> *mut u32,
+        0x020 => is_instance_of: unsafe extern "system" fn(this: *const Nod, class_id: u32) -> bool,
     }
 }
 
@@ -68,12 +69,16 @@ impl Nod {
         unsafe { &*self.article }
     }
 
-    pub fn class_id(&mut self) -> u32 {
-        let mut class_id = MaybeUninit::uninit();
+    pub fn class_id(&self) -> u32 {
+        let mut class_id: MaybeUninit<u32> = MaybeUninit::uninit();
 
         unsafe { ((*self.vtable).class_id)(self, class_id.as_mut_ptr()) };
 
         unsafe { class_id.assume_init() }
+    }
+
+    pub fn is_instance_of(&self, class_id: u32) -> bool {
+        unsafe { ((*self.vtable).is_instance_of)(self, class_id) }
     }
 }
 
