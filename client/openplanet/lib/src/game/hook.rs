@@ -1,9 +1,8 @@
 //! Functionality for hooking into the game.
 
-use std::{error::Error, ffi::c_void, io, ptr::null_mut};
+use std::error::Error;
 
 use memchr::memmem;
-use windows_sys::Win32::System::Diagnostics::Debug::WriteProcessMemory;
 
 use crate::os::{ExecutableMemory, Process};
 
@@ -28,13 +27,10 @@ impl Drop for Hook {
         let current_process = Process::open_current().unwrap();
 
         unsafe {
-            write_process_memory(
-                current_process.as_handle(),
-                self.ptr as *const c_void,
-                self.original_code,
-            )
-            .unwrap()
-        };
+            current_process
+                .write_memory(self.ptr as *mut u8, self.original_code)
+                .unwrap()
+        }
 
         let _ = self.trampoline;
     }
@@ -64,13 +60,7 @@ fn hook(
 
     let hook_code = hook_code_fn(trampoline.as_ptr() as *const u8);
 
-    unsafe {
-        write_process_memory(
-            current_process.as_handle(),
-            hook_ptr as *const c_void,
-            &hook_code,
-        )?
-    };
+    unsafe { current_process.write_memory(hook_ptr as *mut u8, &hook_code)? };
 
     Ok(Hook {
         ptr: hook_ptr,
@@ -372,26 +362,4 @@ pub fn hook_remove_item(
         trampoline_code_fn,
         hook_code_fn,
     )
-}
-
-unsafe fn write_process_memory(
-    process: isize,
-    base_addr: *const c_void,
-    buf: &[u8],
-) -> io::Result<()> {
-    let result = unsafe {
-        WriteProcessMemory(
-            process,
-            base_addr,
-            buf.as_ptr() as *const c_void,
-            buf.len(),
-            null_mut(),
-        )
-    };
-
-    if result == 0 {
-        return Err(io::Error::last_os_error());
-    }
-
-    Ok(())
 }

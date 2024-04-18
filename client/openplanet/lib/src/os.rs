@@ -3,13 +3,14 @@ use std::{
     io::{Error, Result},
     mem::{size_of, MaybeUninit},
     num::NonZeroIsize,
-    ptr::{self, null, NonNull},
+    ptr::{self, null, null_mut, NonNull},
     slice,
 };
 
 use windows_sys::Win32::{
     Foundation::{CloseHandle, FALSE},
     System::{
+        Diagnostics::Debug::WriteProcessMemory,
         LibraryLoader::GetModuleHandleW,
         Memory::{
             VirtualAlloc, VirtualFree, MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_EXECUTE_READWRITE,
@@ -46,10 +47,6 @@ impl Process {
         Ok(Self { handle })
     }
 
-    pub fn as_handle(&self) -> isize {
-        self.handle.get()
-    }
-
     pub fn exe_module_memory(&self) -> Result<&[u8]> {
         let exe_module = unsafe { GetModuleHandleW(null()) };
 
@@ -78,6 +75,24 @@ impl Process {
         };
 
         Ok(exe_module_memory)
+    }
+
+    pub unsafe fn write_memory(&self, ptr: *mut u8, bytes: &[u8]) -> Result<()> {
+        let result = unsafe {
+            WriteProcessMemory(
+                self.handle.get(),
+                ptr as *mut c_void,
+                bytes.as_ptr() as *const c_void,
+                bytes.len(),
+                null_mut(),
+            )
+        };
+
+        if result == 0 {
+            return Err(Error::last_os_error());
+        }
+
+        Ok(())
     }
 }
 
