@@ -1,29 +1,11 @@
 //! Functionality for hooking into the game.
 
-use std::{
-    error::Error,
-    ffi::c_void,
-    io,
-    mem::{size_of, MaybeUninit},
-    ptr::{null, null_mut},
-    slice,
-};
+use std::{error::Error, ffi::c_void, io, ptr::null_mut};
 
 use memchr::memmem;
-use windows_sys::Win32::{
-    Foundation::{CloseHandle, FALSE},
-    System::{
-        Diagnostics::Debug::WriteProcessMemory,
-        LibraryLoader::GetModuleHandleW,
-        ProcessStatus::{GetModuleInformation, MODULEINFO},
-        Threading::{
-            GetCurrentProcessId, OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_OPERATION,
-            PROCESS_VM_READ, PROCESS_VM_WRITE,
-        },
-    },
-};
+use windows_sys::Win32::System::Diagnostics::Debug::WriteProcessMemory;
 
-use crate::os::ExecutableMemory;
+use crate::os::{ExecutableMemory, Process};
 
 use super::{Block, Item, ItemModel, ItemParams};
 
@@ -43,11 +25,11 @@ pub struct Hook {
 
 impl Drop for Hook {
     fn drop(&mut self) {
-        let current_process = unsafe { open_current_process().unwrap() };
+        let current_process = Process::open_current().unwrap();
 
         unsafe {
             write_process_memory(
-                current_process,
+                current_process.as_handle(),
                 self.ptr as *const c_void,
                 self.original_code,
             )
@@ -65,33 +47,9 @@ fn hook(
     trampoline_code_fn: impl Fn(*const u8) -> Vec<u8>,
     hook_code_fn: impl Fn(*const u8) -> Vec<u8>,
 ) -> Result<Hook, Box<dyn Error>> {
-    let current_process = unsafe { open_current_process()? };
+    let current_process = Process::open_current()?;
 
-    let exe_module = unsafe { GetModuleHandleW(null()) };
-
-    let mut exe_module_info = MaybeUninit::uninit();
-
-    let success = unsafe {
-        GetModuleInformation(
-            current_process,
-            exe_module,
-            exe_module_info.as_mut_ptr(),
-            size_of::<MODULEINFO>() as u32,
-        )
-    };
-
-    if success == 0 {
-        return Err(io::Error::last_os_error().into());
-    }
-
-    let exe_module_info = unsafe { exe_module_info.assume_init() };
-
-    let exe_module_memory = unsafe {
-        slice::from_raw_parts(
-            exe_module_info.lpBaseOfDll as *const u8,
-            exe_module_info.SizeOfImage as usize,
-        )
-    };
+    let exe_module_memory = current_process.exe_module_memory()?;
 
     let hook_offset = memmem::find(exe_module_memory, code_pattern)
         .ok_or("failed to find code pattern")?
@@ -106,9 +64,13 @@ fn hook(
 
     let hook_code = hook_code_fn(trampoline.as_ptr() as *const u8);
 
-    unsafe { write_process_memory(current_process, hook_ptr as *const c_void, &hook_code)? };
-
-    unsafe { CloseHandle(current_process) };
+    unsafe {
+        write_process_memory(
+            current_process.as_handle(),
+            hook_ptr as *const c_void,
+            &hook_code,
+        )?
+    };
 
     Ok(Hook {
         ptr: hook_ptr,
@@ -410,24 +372,6 @@ pub fn hook_remove_item(
         trampoline_code_fn,
         hook_code_fn,
     )
-}
-
-unsafe fn open_current_process() -> io::Result<isize> {
-    let current_process_id = unsafe { GetCurrentProcessId() };
-
-    let current_process = unsafe {
-        OpenProcess(
-            PROCESS_QUERY_INFORMATION | PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE,
-            FALSE,
-            current_process_id,
-        )
-    };
-
-    if current_process == 0 {
-        return Err(io::Error::last_os_error());
-    }
-
-    Ok(current_process)
 }
 
 unsafe fn write_process_memory(

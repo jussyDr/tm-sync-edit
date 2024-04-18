@@ -1,20 +1,15 @@
 use std::{
     error::Error,
     ffi::{c_char, CStr},
-    io,
-    mem::{size_of, transmute, MaybeUninit},
-    ptr::{null, null_mut},
-    slice,
+    mem::{transmute, MaybeUninit},
+    ptr::null_mut,
 };
 
 use memchr::memmem;
 use ordered_float::NotNan;
 use shared::{Direction, ElemColor};
-use windows_sys::Win32::System::{
-    LibraryLoader::GetModuleHandleW,
-    ProcessStatus::{GetModuleInformation, MODULEINFO},
-    Threading::GetCurrentProcess,
-};
+
+use crate::os::Process;
 
 use super::{Block, BlockInfo, FidFile, Item, ItemModel, ItemParams, MapEditor, Nod};
 
@@ -24,33 +19,9 @@ pub struct LoadFidFn(
 
 impl LoadFidFn {
     pub fn get() -> Result<Self, Box<dyn Error>> {
-        let current_process = unsafe { GetCurrentProcess() };
+        let current_process = Process::open_current()?;
 
-        let exe_module = unsafe { GetModuleHandleW(null()) };
-
-        let mut exe_module_info = MaybeUninit::uninit();
-
-        let success = unsafe {
-            GetModuleInformation(
-                current_process,
-                exe_module,
-                exe_module_info.as_mut_ptr(),
-                size_of::<MODULEINFO>() as u32,
-            )
-        };
-
-        if success == 0 {
-            return Err(io::Error::last_os_error().into());
-        }
-
-        let exe_module_info = unsafe { exe_module_info.assume_init() };
-
-        let exe_module_memory = unsafe {
-            slice::from_raw_parts(
-                exe_module_info.lpBaseOfDll as *const u8,
-                exe_module_info.SizeOfImage as usize,
-            )
-        };
+        let exe_module_memory = current_process.exe_module_memory()?;
 
         let id_name_fn_offset = memmem::find(
             exe_module_memory,
@@ -80,33 +51,9 @@ pub struct IdNameFn(unsafe extern "system" fn(id: *const u32) -> *mut c_char);
 
 impl IdNameFn {
     pub fn get() -> Result<Self, Box<dyn Error>> {
-        let current_process = unsafe { GetCurrentProcess() };
+        let current_process = Process::open_current()?;
 
-        let exe_module = unsafe { GetModuleHandleW(null()) };
-
-        let mut exe_module_info = MaybeUninit::uninit();
-
-        let success = unsafe {
-            GetModuleInformation(
-                current_process,
-                exe_module,
-                exe_module_info.as_mut_ptr(),
-                size_of::<MODULEINFO>() as u32,
-            )
-        };
-
-        if success == 0 {
-            return Err(io::Error::last_os_error().into());
-        }
-
-        let exe_module_info = unsafe { exe_module_info.assume_init() };
-
-        let exe_module_memory = unsafe {
-            slice::from_raw_parts(
-                exe_module_info.lpBaseOfDll as *const u8,
-                exe_module_info.SizeOfImage as usize,
-            )
-        };
+        let exe_module_memory = current_process.exe_module_memory()?;
 
         let id_name_fn_offset = memmem::find(exe_module_memory, &[0x8b, 0x11, 0x8b, 0xc2, 0x25])
             .ok_or("failed to find get id name fn pattern")?;
@@ -172,33 +119,9 @@ pub struct GameFns {
 
 impl GameFns {
     pub fn find() -> Result<Self, Box<dyn Error>> {
-        let current_process = unsafe { GetCurrentProcess() };
+        let current_process = Process::open_current()?;
 
-        let exe_module = unsafe { GetModuleHandleW(null()) };
-
-        let mut exe_module_info = MaybeUninit::uninit();
-
-        let success = unsafe {
-            GetModuleInformation(
-                current_process,
-                exe_module,
-                exe_module_info.as_mut_ptr(),
-                size_of::<MODULEINFO>() as u32,
-            )
-        };
-
-        if success == 0 {
-            return Err(io::Error::last_os_error().into());
-        }
-
-        let exe_module_info = unsafe { exe_module_info.assume_init() };
-
-        let exe_module_memory = unsafe {
-            slice::from_raw_parts(
-                exe_module_info.lpBaseOfDll as *const u8,
-                exe_module_info.SizeOfImage as usize,
-            )
-        };
+        let exe_module_memory = current_process.exe_module_memory()?;
 
         let place_block_fn_offset = memmem::find(
             exe_module_memory,
