@@ -34,12 +34,6 @@ pub enum Message {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-pub enum ModelId {
-    Game { name: String },
-    Custom { hash: blake3::Hash },
-}
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct BlockDesc {
     pub model_id: ModelId,
     pub elem_color: ElemColor,
@@ -66,6 +60,23 @@ pub enum BlockDescKind {
     },
 }
 
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+pub struct ItemDesc {
+    pub model_id: ModelId,
+    pub x: NotNan<f32>,
+    pub y: NotNan<f32>,
+    pub z: NotNan<f32>,
+    pub yaw: NotNan<f32>,
+    pub pitch: NotNan<f32>,
+    pub roll: NotNan<f32>,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+pub enum ModelId {
+    Game { name: String },
+    Custom { hash: blake3::Hash },
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum Direction {
@@ -84,15 +95,4 @@ pub enum ElemColor {
     Blue,
     Red,
     Black,
-}
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-pub struct ItemDesc {
-    pub model_id: ModelId,
-    pub x: NotNan<f32>,
-    pub y: NotNan<f32>,
-    pub z: NotNan<f32>,
-    pub yaw: NotNan<f32>,
-    pub pitch: NotNan<f32>,
-    pub roll: NotNan<f32>,
 }

@@ -38,6 +38,7 @@ unsafe extern "system" fn DllMain(
     _reserved: *mut c_void,
 ) -> BOOL {
     if call_reason == DLL_PROCESS_ATTACH {
+        // Display an error message box when panicking.
         panic::set_hook(Box::new(|panic_info| {
             let _ = MessageDialog::new()
                 .set_type(MessageType::Error)
@@ -50,6 +51,7 @@ unsafe extern "system" fn DllMain(
     TRUE
 }
 
+/// Create a new context.
 #[no_mangle]
 unsafe extern "system" fn CreateContext() -> *mut Context {
     let mut context = Context::new();
@@ -58,6 +60,7 @@ unsafe extern "system" fn CreateContext() -> *mut Context {
     Box::into_raw(Box::new(context))
 }
 
+/// Destroy the given `context`.
 #[no_mangle]
 unsafe extern "system" fn DestroyContext(context: *mut Context) {
     drop(Box::from_raw(context));
@@ -105,8 +108,6 @@ unsafe extern "system" fn CloseConnection(context: *mut Context) {
     context.connection_future = None;
     context.framed_tcp_stream = None;
 }
-
-// context //
 
 #[repr(C)]
 struct Context {
@@ -160,8 +161,6 @@ enum State {
     OpeningMapEditor,
     Connected,
 }
-
-// connection //
 
 type ConnectionFuture = Pin<Box<dyn Future<Output = Result<(), Box<dyn Error>>>>>;
 
@@ -241,8 +240,6 @@ async fn handle_frame(
     Ok(())
 }
 
-// hook callbacks //
-
 unsafe extern "system" fn place_block_callback(user_data: *mut u8, block: *mut Block) {
     let context = &mut *(user_data as *mut Context);
 
@@ -293,8 +290,6 @@ fn send_message(context: &mut Context, message: &Message) {
     });
 }
 
-// utils //
-
 unsafe fn convert_c_string(c_string: *const c_char) -> String {
     CStr::from_ptr(c_string)
         .to_str()
@@ -302,7 +297,6 @@ unsafe fn convert_c_string(c_string: *const c_char) -> String {
         .to_owned()
 }
 
-/// Find a subfolder with the given `name` in the given `folder`.
 fn get_fids_subfolder<'a>(folder: &'a FidsFolder, name: &str) -> Option<&'a FidsFolder> {
     folder
         .trees()
@@ -311,7 +305,6 @@ fn get_fids_subfolder<'a>(folder: &'a FidsFolder, name: &str) -> Option<&'a Fids
         .copied()
 }
 
-/// Load all the block infos and item models that are internal to the game.
 fn load_game_objects(
     context: &mut Context,
     game_folder: &FidsFolder,
@@ -334,7 +327,6 @@ fn load_game_objects(
     Ok(())
 }
 
-/// Recursively load all the block infos in the given `folder`.
 fn load_game_block_infos(context: &mut Context, folder: &FidsFolder) {
     for fid in folder.leaves() {
         if !fid.nod.is_null() {
@@ -362,7 +354,6 @@ fn load_game_block_infos(context: &mut Context, folder: &FidsFolder) {
     }
 }
 
-/// Recursively load all the item models in the given `folder`.
 fn load_game_item_models(context: &mut Context, folder: &FidsFolder) {
     for fid in folder.leaves() {
         if !fid.nod.is_null() {
