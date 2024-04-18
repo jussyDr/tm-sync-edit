@@ -18,11 +18,11 @@ use windows_sys::Win32::System::{
 
 use super::{Block, BlockInfo, FidFile, Item, ItemModel, ItemParams, MapEditor, Nod};
 
-pub struct FidLoadFn(
+pub struct LoadFidFn(
     unsafe extern "system" fn(ret_nod: *mut *mut Nod, fid: *mut FidFile, nod: *mut u8),
 );
 
-impl FidLoadFn {
+impl LoadFidFn {
     pub fn get() -> Result<Self, Box<dyn Error>> {
         let current_process = unsafe { GetCurrentProcess() };
 
@@ -55,12 +55,11 @@ impl FidLoadFn {
         let id_name_fn_offset = memmem::find(
             exe_module_memory,
             &[
-                0x40, 0x53, 0x56, 0x57, 0x48, 0x81, 0xec, 0xb0, 0x00, 0x00, 0x00, 0x48, 0x8b, 0x05,
-                0x9e, 0x50, 0x55, 0x01, 0x48, 0x33, 0xc4, 0x48, 0x89, 0x84, 0x24, 0xa0, 0x00, 0x00,
-                0x00, 0x49, 0x8b, 0xf8,
+                0x48, 0x33, 0xc4, 0x48, 0x89, 0x84, 0x24, 0xa0, 0x00, 0x00, 0x00, 0x49, 0x8b, 0xf8,
             ],
         )
-        .ok_or("failed to find get load fid fn pattern")?;
+        .ok_or("failed to find get load fid fn pattern")?
+            - 18;
 
         let id_name_fn = unsafe { transmute(exe_module_memory.as_ptr().add(id_name_fn_offset)) };
 
