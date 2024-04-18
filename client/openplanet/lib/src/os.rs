@@ -23,11 +23,13 @@ use windows_sys::Win32::{
     },
 };
 
+/// Handle to a process.
 pub struct Process {
     handle: NonZeroIsize,
 }
 
 impl Process {
+    /// Open a handle to the current process.
     pub fn open_current() -> Result<Self> {
         let pid = unsafe { GetCurrentProcessId() };
 
@@ -106,6 +108,7 @@ impl Drop for Process {
     }
 }
 
+/// A slice of executable memory.
 pub struct ExecutableMemory {
     ptr: NonNull<u8>,
 }
