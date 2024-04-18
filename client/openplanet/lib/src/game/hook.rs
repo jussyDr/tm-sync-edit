@@ -15,9 +15,6 @@ use windows_sys::Win32::{
     System::{
         Diagnostics::Debug::WriteProcessMemory,
         LibraryLoader::GetModuleHandleW,
-        Memory::{
-            VirtualAlloc, VirtualFree, MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_EXECUTE_READWRITE,
-        },
         ProcessStatus::{GetModuleInformation, MODULEINFO},
         Threading::{
             GetCurrentProcessId, OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_OPERATION,
@@ -25,6 +22,8 @@ use windows_sys::Win32::{
         },
     },
 };
+
+use crate::os::ExecutableMemory;
 
 use super::{Block, Item, ItemModel, ItemParams};
 
@@ -39,7 +38,7 @@ pub type RemoveItemCallbackFn = unsafe extern "system" fn(*mut u8, *mut Item);
 pub struct Hook {
     ptr: *const u8,
     original_code: &'static [u8],
-    trampoline_ptr: *mut u8,
+    trampoline: ExecutableMemory,
 }
 
 impl Drop for Hook {
@@ -55,8 +54,7 @@ impl Drop for Hook {
             .unwrap()
         };
 
-        let success = unsafe { VirtualFree(self.trampoline_ptr as *mut c_void, 0, MEM_RELEASE) };
-        assert!(success != 0, "{}", io::Error::last_os_error());
+        let _ = self.trampoline;
     }
 }
 
@@ -104,24 +102,9 @@ fn hook(
 
     let trampoline_code = trampoline_code_fn(hook_end_ptr);
 
-    let trampoline_ptr = unsafe {
-        VirtualAlloc(
-            null(),
-            trampoline_code.len(),
-            MEM_COMMIT | MEM_RESERVE,
-            PAGE_EXECUTE_READWRITE,
-        )
-    } as *mut u8;
+    let trampoline = ExecutableMemory::new(&trampoline_code)?;
 
-    if trampoline_ptr.is_null() {
-        return Err(io::Error::last_os_error().into());
-    }
-
-    let trampoline = unsafe { slice::from_raw_parts_mut(trampoline_ptr, trampoline_code.len()) };
-
-    trampoline.copy_from_slice(&trampoline_code);
-
-    let hook_code = hook_code_fn(trampoline_ptr as *const u8);
+    let hook_code = hook_code_fn(trampoline.as_ptr() as *const u8);
 
     unsafe { write_process_memory(current_process, hook_ptr as *const c_void, &hook_code)? };
 
@@ -130,7 +113,7 @@ fn hook(
     Ok(Hook {
         ptr: hook_ptr,
         original_code,
-        trampoline_ptr,
+        trampoline,
     })
 }
 

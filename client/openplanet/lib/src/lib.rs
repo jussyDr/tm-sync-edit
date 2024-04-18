@@ -1,4 +1,5 @@
 mod game;
+mod os;
 
 use std::{
     error::Error,
