@@ -15,15 +15,15 @@ use std::{
 
 use ahash::AHashMap;
 use async_compat::CompatExt;
-use futures::{task::noop_waker_ref, TryStreamExt};
+use futures::{executor::block_on, task::noop_waker_ref, SinkExt, TryStreamExt};
 use game::{
     hook_place_block, hook_place_item, hook_remove_block, hook_remove_item, Block, BlockInfo,
     FidsFolder, GameFns, IdNameFn, Item, ItemModel, ItemParams,
 };
 use native_dialog::{MessageDialog, MessageType};
 use shared::{
-    deserialize, framed_tcp_stream, BlockDesc, BlockDescKind, FramedTcpStream, ItemDesc, Message,
-    ModelId,
+    deserialize, framed_tcp_stream, serialize, BlockDesc, BlockDescKind, FramedTcpStream, ItemDesc,
+    Message, ModelId,
 };
 use tokio::{net::TcpStream, select};
 use windows_sys::Win32::{
@@ -117,15 +117,8 @@ struct Context {
     status_text_buf: Box<[u8; 256]>,
     map_editor: Option<NonZeroUsize>,
 
-    block_infos: AHashMap<String, *mut BlockInfo>,
-    item_models: AHashMap<String, *mut ItemModel>,
-    custom_block_model_hashes: AHashMap<u32, blake3::Hash>,
-    custom_item_model_hashes: AHashMap<u32, blake3::Hash>,
     connection_future: Option<ConnectionFuture>,
     framed_tcp_stream: Option<FramedTcpStream>,
-    id_name_fn: Option<IdNameFn>,
-    blocks: AHashMap<BlockDesc, *mut Block>,
-    items: AHashMap<ItemDesc, *mut Item>,
 }
 
 impl Context {
@@ -134,15 +127,9 @@ impl Context {
             state: State::Disconnected,
             status_text_buf: Box::new([0; 256]),
             map_editor: None,
-            block_infos: AHashMap::new(),
-            item_models: AHashMap::new(),
-            custom_block_model_hashes: AHashMap::new(),
-            custom_item_model_hashes: AHashMap::new(),
+
             connection_future: None,
             framed_tcp_stream: None,
-            id_name_fn: None,
-            blocks: AHashMap::new(),
-            items: AHashMap::new(),
         }
     }
 
@@ -180,8 +167,6 @@ async fn connection(
 
     let tcp_stream = TcpStream::connect(socket_addr).compat().await?;
 
-    context.map_editor = None;
-
     context.set_status_text("Opening map editor...");
 
     open_map_editor(context).await;
@@ -190,12 +175,6 @@ async fn connection(
     context.set_status_text("Connected");
 
     context.framed_tcp_stream = Some(framed_tcp_stream(tcp_stream));
-
-    context.id_name_fn = Some(IdNameFn::get()?);
-
-    load_game_objects(context, game_folder).unwrap();
-
-    let game_fns = GameFns::find()?;
 
     let _place_block_hook = hook_place_block(context, place_block_callback)?;
     let _remove_block_hook = hook_remove_block(context, remove_block_callback)?;
@@ -206,7 +185,7 @@ async fn connection(
         select! {
             result = context.framed_tcp_stream.as_mut().unwrap().try_next() => match result? {
                 None => return Err("server closed connection".into()),
-                Some(frame) => handle_frame(context, &game_fns, &frame).await?,
+                Some(frame) => handle_frame(context, &frame).await?,
             }
         }
     }
@@ -227,11 +206,7 @@ async fn open_map_editor(context: &mut Context) {
     future.await;
 }
 
-async fn handle_frame(
-    context: &mut Context,
-    game_fns: &GameFns,
-    frame: &[u8],
-) -> Result<(), Box<dyn Error>> {
+async fn handle_frame(context: &mut Context, frame: &[u8]) -> Result<(), Box<dyn Error>> {
     let message = deserialize(frame)?;
 
     match message {
@@ -246,7 +221,7 @@ async fn handle_frame(
     Ok(())
 }
 
-unsafe extern "system" fn place_block_callback(context: &mut Context, block: *mut Block) {}
+unsafe extern "system" fn place_block_callback(context: &mut Context, block: Option<&Block>) {}
 
 unsafe extern "system" fn remove_block_callback(context: &mut Context, block: *mut Block) {}
 
@@ -308,11 +283,11 @@ fn load_game_block_infos(context: &mut Context, folder: &FidsFolder) {
             {
                 let block_info = unsafe { &mut *(fid.nod as *mut BlockInfo) };
 
-                let block_info_id_name = context.id_name_fn.as_ref().unwrap().call(block_info.id);
+                // let block_info_id_name = context.id_name_fn.as_ref().unwrap().call(block_info.id);
 
-                context
-                    .block_infos
-                    .insert(block_info_id_name.to_owned(), block_info);
+                // context
+                //     .block_infos
+                //     .insert(block_info_id_name.to_owned(), block_info);
             }
         }
     }
@@ -330,11 +305,11 @@ fn load_game_item_models(context: &mut Context, folder: &FidsFolder) {
             if class_id == 0x2e002000 {
                 let item_model = unsafe { &mut *(fid.nod as *mut ItemModel) };
 
-                let item_model_id_name = context.id_name_fn.as_ref().unwrap().call(item_model.id);
+                // let item_model_id_name = context.id_name_fn.as_ref().unwrap().call(item_model.id);
 
-                context
-                    .item_models
-                    .insert(item_model_id_name.to_owned(), item_model);
+                // context
+                //     .item_models
+                //     .insert(item_model_id_name.to_owned(), item_model);
             }
         }
     }
@@ -347,10 +322,10 @@ fn load_game_item_models(context: &mut Context, folder: &FidsFolder) {
 fn block_desc_from_block(context: &Context, block: &Block) -> BlockDesc {
     let block_info = block.block_info();
 
-    let block_info_id_name = context.id_name_fn.as_ref().unwrap().call(block_info.id);
+    // let block_info_id_name = context.id_name_fn.as_ref().unwrap().call(block_info.id);
 
     let model_id = ModelId::Game {
-        name: block_info_id_name.to_owned(),
+        name: "".to_owned(),
     };
 
     let kind = if !block.flags.is_free() {
@@ -381,10 +356,10 @@ fn block_desc_from_block(context: &Context, block: &Block) -> BlockDesc {
 }
 
 fn item_desc_from_item(context: &Context, model: &ItemModel, params: &ItemParams) -> ItemDesc {
-    let item_model_id_name = context.id_name_fn.as_ref().unwrap().call(model.id);
+    // let item_model_id_name = context.id_name_fn.as_ref().unwrap().call(model.id);
 
     let model_id = ModelId::Game {
-        name: item_model_id_name.to_owned(),
+        name: "".to_owned(),
     };
 
     ItemDesc {

@@ -66,7 +66,8 @@ impl Drop for Hook {
     }
 }
 
-pub type PlaceBlockCallbackFn = unsafe extern "system" fn(context: &mut Context, block: *mut Block);
+pub type PlaceBlockCallbackFn =
+    unsafe extern "system" fn(context: &mut Context, block: Option<&Block>);
 
 pub fn hook_place_block(
     context: &mut Context,
