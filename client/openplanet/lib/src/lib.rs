@@ -15,15 +15,15 @@ use std::{
 
 use ahash::AHashMap;
 use async_compat::CompatExt;
-use futures::{executor::block_on, task::noop_waker_ref, SinkExt, TryStreamExt};
+use futures::{task::noop_waker_ref, TryStreamExt};
 use game::{
     hook_place_block, hook_place_item, hook_remove_block, hook_remove_item, Block, BlockInfo,
-    FidsFolder, GameFns, IdNameFn, Item, ItemModel, ItemParams, MapEditor,
+    FidsFolder, GameFns, IdNameFn, Item, ItemModel, ItemParams,
 };
 use native_dialog::{MessageDialog, MessageType};
 use shared::{
-    deserialize, framed_tcp_stream, serialize, BlockDesc, BlockDescKind, FramedTcpStream, ItemDesc,
-    Message, ModelId,
+    deserialize, framed_tcp_stream, BlockDesc, BlockDescKind, FramedTcpStream, ItemDesc, Message,
+    ModelId,
 };
 use tokio::{net::TcpStream, select};
 use windows_sys::Win32::{
@@ -76,8 +76,8 @@ unsafe extern "system" fn OpenConnection(
 ) {
     (*context).state = State::Connecting;
 
-    let host = convert_c_string(host);
-    let port = convert_c_string(port);
+    let host = str_from_c_str(host).to_owned();
+    let port = str_from_c_str(port).to_owned();
 
     let connection_future = Box::pin(connection(&mut *context, host, port, &*game_folder));
 
@@ -85,9 +85,7 @@ unsafe extern "system" fn OpenConnection(
 }
 
 #[no_mangle]
-unsafe extern "system" fn UpdateConnection(context: *mut Context) {
-    let context = &mut *context;
-
+unsafe extern "system" fn UpdateConnection(context: &mut Context) {
     let connection_future = context
         .connection_future
         .as_mut()
@@ -95,9 +93,12 @@ unsafe extern "system" fn UpdateConnection(context: *mut Context) {
 
     let mut task_context = task::Context::from_waker(noop_waker_ref());
 
-    if let Poll::Ready(Err(error)) = connection_future.as_mut().poll(&mut task_context) {
+    if let Poll::Ready(result) = connection_future.as_mut().poll(&mut task_context) {
         context.state = State::Disconnected;
-        context.set_status_text(&error.to_string());
+
+        if let Err(err) = result {
+            context.set_status_text(&err.to_string());
+        }
     }
 }
 
@@ -233,8 +234,6 @@ async fn handle_frame(
 ) -> Result<(), Box<dyn Error>> {
     let message = deserialize(frame)?;
 
-    let editor = unsafe { &mut *(context.map_editor.unwrap().get() as *mut MapEditor) };
-
     match message {
         Message::PlaceBlock(block_desc) => {}
         Message::RemoveBlock(block_desc) => {}
@@ -247,53 +246,23 @@ async fn handle_frame(
     Ok(())
 }
 
-unsafe extern "system" fn place_block_callback(context: &mut Context, block: *mut Block) {
-    let block_desc = block_desc_from_block(context, &*block);
+unsafe extern "system" fn place_block_callback(context: &mut Context, block: *mut Block) {}
 
-    send_message(context, &Message::PlaceBlock(block_desc));
-}
-
-unsafe extern "system" fn remove_block_callback(context: &mut Context, block: *mut Block) {
-    let block_desc = block_desc_from_block(context, &*block);
-
-    send_message(context, &Message::RemoveBlock(block_desc));
-}
+unsafe extern "system" fn remove_block_callback(context: &mut Context, block: *mut Block) {}
 
 unsafe extern "system" fn place_item_callback(
     context: &mut Context,
     item_model: *mut ItemModel,
     item_params: *mut ItemParams,
 ) {
-    let item_desc = item_desc_from_item(context, &*item_model, &*item_params);
-
-    send_message(context, &Message::PlaceItem(item_desc));
 }
 
-unsafe extern "system" fn remove_item_callback(context: &mut Context, item: *mut Item) {
-    let item_desc = item_desc_from_item(context, (*item).model(), &(*item).params);
+unsafe extern "system" fn remove_item_callback(context: &mut Context, item: *mut Item) {}
 
-    send_message(context, &Message::RemoveItem(item_desc));
-}
-
-fn send_message(context: &mut Context, message: &Message) {
-    let frame = serialize(&message).expect("failed to serialize message");
-
-    block_on(async {
-        context
-            .framed_tcp_stream
-            .as_mut()
-            .expect("TCP stream not initialized")
-            .send(frame.into())
-            .await
-            .expect("failed to send frame");
-    });
-}
-
-unsafe fn convert_c_string(c_string: *const c_char) -> String {
+unsafe fn str_from_c_str<'a>(c_string: *const c_char) -> &'a str {
     CStr::from_ptr(c_string)
         .to_str()
         .expect("invalid UTF-8 string")
-        .to_owned()
 }
 
 fn get_fids_subfolder<'a>(folder: &'a FidsFolder, name: &str) -> Option<&'a FidsFolder> {
