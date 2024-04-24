@@ -181,17 +181,9 @@ async fn connection(
 
     context.map_editor = None;
 
-    context.state = State::OpeningMapEditor;
     context.set_status_text("Opening map editor...");
 
-    poll_fn(|_cx| {
-        if context.map_editor.is_some() {
-            Poll::Ready(())
-        } else {
-            Poll::Pending
-        }
-    })
-    .await;
+    open_map_editor(context).await;
 
     context.state = State::Connected;
     context.set_status_text("Connected");
@@ -217,6 +209,21 @@ async fn connection(
             }
         }
     }
+}
+
+async fn open_map_editor(context: &mut Context) {
+    context.map_editor = None;
+    context.state = State::OpeningMapEditor;
+
+    let future = poll_fn(|_cx| {
+        if context.map_editor.is_some() {
+            Poll::Ready(())
+        } else {
+            Poll::Pending
+        }
+    });
+
+    future.await;
 }
 
 async fn handle_frame(
