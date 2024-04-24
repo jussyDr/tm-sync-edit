@@ -13,18 +13,14 @@ use std::{
     task::{self, Poll},
 };
 
-use ahash::AHashMap;
 use async_compat::CompatExt;
-use futures::{executor::block_on, task::noop_waker_ref, SinkExt, TryStreamExt};
+use futures::{task::noop_waker_ref, TryStreamExt};
 use game::{
-    hook_place_block, hook_place_item, hook_remove_block, hook_remove_item, Block, BlockInfo,
-    FidsFolder, GameFns, IdNameFn, Item, ItemModel, ItemParams,
+    hook_place_block, hook_place_item, hook_remove_block, hook_remove_item, Block, FidsFolder,
+    Item, ItemModel, ItemParams,
 };
 use native_dialog::{MessageDialog, MessageType};
-use shared::{
-    deserialize, framed_tcp_stream, serialize, BlockDesc, BlockDescKind, FramedTcpStream, ItemDesc,
-    Message, ModelId,
-};
+use shared::{deserialize, framed_tcp_stream, FramedTcpStream, Message};
 use tokio::{net::TcpStream, select};
 use windows_sys::Win32::{
     Foundation::{BOOL, HINSTANCE, TRUE},
@@ -210,10 +206,10 @@ async fn handle_frame(context: &mut Context, frame: &[u8]) -> Result<(), Box<dyn
     let message = deserialize(frame)?;
 
     match message {
-        Message::PlaceBlock(block_desc) => {}
-        Message::RemoveBlock(block_desc) => {}
-        Message::PlaceItem(item_desc) => {}
-        Message::RemoveItem(item_desc) => {}
+        Message::PlaceBlock(..) => {}
+        Message::RemoveBlock(..) => {}
+        Message::PlaceItem(..) => {}
+        Message::RemoveItem(..) => {}
         Message::AddBlockModel { .. } => {}
         Message::AddItemModel { .. } => {}
     }
@@ -238,137 +234,4 @@ unsafe fn str_from_c_str<'a>(c_string: *const c_char) -> &'a str {
     CStr::from_ptr(c_string)
         .to_str()
         .expect("invalid UTF-8 string")
-}
-
-fn get_fids_subfolder<'a>(folder: &'a FidsFolder, name: &str) -> Option<&'a FidsFolder> {
-    folder
-        .trees()
-        .iter()
-        .find(|subfolder| subfolder.name() == name)
-        .copied()
-}
-
-fn load_game_objects(
-    context: &mut Context,
-    game_folder: &FidsFolder,
-) -> Result<(), Box<dyn Error>> {
-    let game_data_folder =
-        get_fids_subfolder(game_folder, "GameData").ok_or("could not find folder GameData")?;
-
-    let stadium_folder = get_fids_subfolder(game_data_folder, "Stadium")
-        .ok_or("could not find folder GameData/Stadium")?;
-
-    let block_infos_folder = get_fids_subfolder(stadium_folder, "GameCtnBlockInfo")
-        .ok_or("could not find folder GameData/Stadium/CGameCtnBlockInfo")?;
-
-    let items_folder = get_fids_subfolder(stadium_folder, "Items")
-        .ok_or("could to find folder GameData/Stadium/Items")?;
-
-    load_game_block_infos(context, block_infos_folder);
-    load_game_item_models(context, items_folder);
-
-    Ok(())
-}
-
-fn load_game_block_infos(context: &mut Context, folder: &FidsFolder) {
-    for fid in folder.leaves() {
-        if !fid.nod.is_null() {
-            let class_id = unsafe { (*fid.nod).class_id() };
-
-            if class_id == 0x0304f000
-                || class_id == 0x03051000
-                || class_id == 0x03053000
-                || class_id == 0x03340000
-                || class_id == 0x0335B000
-            {
-                let block_info = unsafe { &mut *(fid.nod as *mut BlockInfo) };
-
-                // let block_info_id_name = context.id_name_fn.as_ref().unwrap().call(block_info.id);
-
-                // context
-                //     .block_infos
-                //     .insert(block_info_id_name.to_owned(), block_info);
-            }
-        }
-    }
-
-    for subfolder in folder.trees() {
-        load_game_block_infos(context, subfolder);
-    }
-}
-
-fn load_game_item_models(context: &mut Context, folder: &FidsFolder) {
-    for fid in folder.leaves() {
-        if !fid.nod.is_null() {
-            let class_id = unsafe { (*fid.nod).class_id() };
-
-            if class_id == 0x2e002000 {
-                let item_model = unsafe { &mut *(fid.nod as *mut ItemModel) };
-
-                // let item_model_id_name = context.id_name_fn.as_ref().unwrap().call(item_model.id);
-
-                // context
-                //     .item_models
-                //     .insert(item_model_id_name.to_owned(), item_model);
-            }
-        }
-    }
-
-    for subfolder in folder.trees() {
-        load_game_item_models(context, subfolder);
-    }
-}
-
-fn block_desc_from_block(context: &Context, block: &Block) -> BlockDesc {
-    let block_info = block.block_info();
-
-    // let block_info_id_name = context.id_name_fn.as_ref().unwrap().call(block_info.id);
-
-    let model_id = ModelId::Game {
-        name: "".to_owned(),
-    };
-
-    let kind = if !block.flags.is_free() {
-        BlockDescKind::Normal {
-            x: block.x_coord as u8,
-            y: block.y_coord as u8,
-            z: block.z_coord as u8,
-            direction: block.direction,
-            is_ground: block.flags.is_ground(),
-            is_ghost: block.flags.is_ghost(),
-        }
-    } else {
-        BlockDescKind::Free {
-            x: block.x_pos,
-            y: block.y_pos,
-            z: block.z_pos,
-            yaw: block.yaw,
-            pitch: block.pitch,
-            roll: block.roll,
-        }
-    };
-
-    BlockDesc {
-        model_id,
-        elem_color: block.elem_color,
-        kind,
-    }
-}
-
-fn item_desc_from_item(context: &Context, model: &ItemModel, params: &ItemParams) -> ItemDesc {
-    // let item_model_id_name = context.id_name_fn.as_ref().unwrap().call(model.id);
-
-    let model_id = ModelId::Game {
-        name: "".to_owned(),
-    };
-
-    ItemDesc {
-        model_id,
-        x: params.x_pos,
-        y: params.y_pos,
-        z: params.z_pos,
-        yaw: params.yaw,
-        pitch: params.pitch,
-        roll: params.roll,
-    }
 }
