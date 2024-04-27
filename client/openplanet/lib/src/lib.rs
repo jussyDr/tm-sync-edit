@@ -48,7 +48,6 @@ unsafe extern "system" fn DllMain(
     TRUE
 }
 
-/// Create a new context.
 #[no_mangle]
 unsafe extern "system" fn CreateContext() -> *mut Context {
     let mut context = Context::new();
@@ -57,7 +56,6 @@ unsafe extern "system" fn CreateContext() -> *mut Context {
     Box::into_raw(Box::new(context))
 }
 
-/// Destroy the given `context`.
 #[no_mangle]
 unsafe extern "system" fn DestroyContext(context: *mut Context) {
     drop(Box::from_raw(context));
@@ -75,7 +73,7 @@ unsafe extern "system" fn OpenConnection(
     let host = str_from_c_str(host).to_owned();
     let port = str_from_c_str(port).to_owned();
 
-    let connection_future = Box::pin(connection(&mut *context, host, port, &*game_folder));
+    let connection_future = Box::pin(connection(&mut *context, host, port));
 
     (*context).connection_future = Some(connection_future);
 }
@@ -99,10 +97,9 @@ unsafe extern "system" fn UpdateConnection(context: &mut Context) {
 }
 
 #[no_mangle]
-unsafe extern "system" fn CloseConnection(context: *mut Context) {
-    let context = &mut *context;
-
+unsafe extern "system" fn CloseConnection(context: &mut Context) {
     context.state = State::Disconnected;
+    context.map_editor = None;
     context.connection_future = None;
     context.framed_tcp_stream = None;
 }
@@ -112,6 +109,7 @@ struct Context {
     state: State,
     status_text_buf: Box<[u8; 256]>,
     map_editor: Option<NonZeroUsize>,
+    should_open_editor: bool,
 
     connection_future: Option<ConnectionFuture>,
     framed_tcp_stream: Option<FramedTcpStream>,
@@ -123,6 +121,7 @@ impl Context {
             state: State::Disconnected,
             status_text_buf: Box::new([0; 256]),
             map_editor: None,
+            should_open_editor: false,
 
             connection_future: None,
             framed_tcp_stream: None,
@@ -143,7 +142,6 @@ impl Context {
 enum State {
     Disconnected,
     Connecting,
-    OpeningMapEditor,
     Connected,
 }
 
@@ -153,7 +151,6 @@ async fn connection(
     context: &mut Context,
     host: String,
     port: String,
-    game_folder: &FidsFolder,
 ) -> Result<(), Box<dyn Error>> {
     let ip_addr = IpAddr::from_str(&host)?;
     let port = u16::from_str(&port)?;
@@ -189,10 +186,12 @@ async fn connection(
 
 async fn open_map_editor(context: &mut Context) {
     context.map_editor = None;
-    context.state = State::OpeningMapEditor;
+    context.should_open_editor = true;
 
     let future = poll_fn(|_cx| {
         if context.map_editor.is_some() {
+            context.should_open_editor = false;
+
             Poll::Ready(())
         } else {
             Poll::Pending

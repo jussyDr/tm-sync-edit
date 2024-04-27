@@ -35,7 +35,7 @@ void RenderInterface() {
                 g_library.CloseConnection();
                 g_library.SetStatusText("Disconnected");
             }
-        } else if (state == State::Connecting || state == State::OpeningMapEditor) {
+        } else if (state == State::Connecting) {
             UI::LabelText("Host", Setting_Host);
             UI::LabelText("Port", Setting_Port);
 
@@ -77,11 +77,11 @@ void Update(float dt) {
         return;
     }
 
-    if (state != State::Disconnected) {
-        if (state == State::OpeningMapEditor) {
-            OpenMapEditor();
-        }
+    if (g_library.ShouldOpenEditor()) {
+        OpenMapEditor();
+    }
 
+    if (state != State::Disconnected) {
         g_library.UpdateConnection();
     }
 }

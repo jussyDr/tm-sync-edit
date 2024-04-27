@@ -92,6 +92,10 @@ class Library {
         Dev::Write(m_context + 16, Dev::ForceCast<uint64>(mapEditor).Get());
     }
 
+    bool ShouldOpenEditor() {
+        return Dev::ReadUInt8(m_context + 24) != 0;
+    }
+
     void OpenConnection(const string&in host, const string&in port, const CSystemFidsFolder@ gameFolder) {
         m_openConnection.Call(m_context, host, port, gameFolder);
     }
@@ -108,6 +112,5 @@ class Library {
 enum State {
     Disconnected,
     Connecting,
-    OpeningMapEditor,
     Connected,
 }
