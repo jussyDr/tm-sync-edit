@@ -188,6 +188,7 @@ async fn connection(
     }
 }
 
+/// Load all the [BlockInfo]'s and [ItemModel]'s that are internal to the game.
 fn load_game_models(game_folder: &FidsFolder) -> Result<(), Box<dyn Error>> {
     let preload_fid_fn = PreloadFidFn::get()?;
     let id_name_fn = IdNameFn::get()?;
@@ -232,6 +233,7 @@ fn load_game_models(game_folder: &FidsFolder) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Recursively load all the [BlockInfo]'s in the given `folder`.
 fn load_block_infos(
     folder: &FidsFolder,
     block_infos: &mut AHashMap<String, NodRef<BlockInfo>>,
@@ -259,6 +261,7 @@ fn load_block_infos(
     Ok(())
 }
 
+/// Recursively load all the [ItemModel]'s in the given `folder`.
 fn load_item_models(
     folder: &FidsFolder,
     item_models: &mut AHashMap<String, NodRef<ItemModel>>,
