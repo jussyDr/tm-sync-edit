@@ -13,11 +13,12 @@ use crate::os::Process;
 
 use super::{Block, BlockInfo, FidFile, Item, ItemModel, ItemParams, MapEditor, Nod};
 
-pub struct LoadFidFn(
+#[derive(Clone, Copy)]
+pub struct PreloadFidFn(
     unsafe extern "system" fn(ret_nod: *mut *mut Nod, fid: *mut FidFile, nod: *mut u8),
 );
 
-impl LoadFidFn {
+impl PreloadFidFn {
     pub fn get() -> Result<Self, Box<dyn Error>> {
         let current_process = Process::open_current()?;
 

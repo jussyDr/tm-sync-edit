@@ -17,7 +17,7 @@ use async_compat::CompatExt;
 use futures::{task::noop_waker_ref, TryStreamExt};
 use game::{
     hook_place_block, hook_place_item, hook_remove_block, hook_remove_item, Block, FidsFolder,
-    Item, ItemModel, ItemParams,
+    Item, ItemModel, ItemParams, PreloadFidFn,
 };
 use native_dialog::{MessageDialog, MessageType};
 use shared::{deserialize, framed_tcp_stream, FramedTcpStream, Message};
@@ -73,7 +73,7 @@ unsafe extern "system" fn OpenConnection(
     let host = str_from_c_str(host).to_owned();
     let port = str_from_c_str(port).to_owned();
 
-    let connection_future = Box::pin(connection(&mut *context, host, port));
+    let connection_future = Box::pin(connection(&mut *context, host, port, &*game_folder));
 
     (*context).connection_future = Some(connection_future);
 }
@@ -151,6 +151,7 @@ async fn connection(
     context: &mut Context,
     host: String,
     port: String,
+    game_folder: &FidsFolder,
 ) -> Result<(), Box<dyn Error>> {
     let ip_addr = IpAddr::from_str(&host)?;
     let port = u16::from_str(&port)?;
@@ -163,6 +164,8 @@ async fn connection(
     context.set_status_text("Opening map editor...");
 
     open_map_editor(context).await;
+
+    load_game_models(game_folder)?;
 
     context.state = State::Connected;
     context.set_status_text("Connected");
@@ -182,6 +185,70 @@ async fn connection(
             }
         }
     }
+}
+
+fn load_game_models(game_folder: &FidsFolder) -> Result<(), Box<dyn Error>> {
+    let preload_fid_fn = PreloadFidFn::get()?;
+
+    let game_data_folder = game_folder
+        .trees()
+        .iter()
+        .find(|folder| folder.name() == "GameData")
+        .ok_or("failed to find GameData folder")?;
+
+    let stadium_folder = game_data_folder
+        .trees()
+        .iter()
+        .find(|folder| folder.name() == "Stadium")
+        .ok_or("failed to find Stadium folder")?;
+
+    let block_info_folder = stadium_folder
+        .trees()
+        .iter()
+        .find(|folder| folder.name() == "GameCtnBlockInfo")
+        .ok_or("failed to find GameCtnBlockInfo folder")?;
+
+    load_block_models(block_info_folder, preload_fid_fn)?;
+
+    let items_folder = stadium_folder
+        .trees()
+        .iter()
+        .find(|folder| folder.name() == "Items")
+        .ok_or("failed to find Items folder")?;
+
+    load_item_models(items_folder, preload_fid_fn)?;
+
+    Ok(())
+}
+
+fn load_block_models(
+    folder: &FidsFolder,
+    preload_fid_fn: PreloadFidFn,
+) -> Result<(), Box<dyn Error>> {
+    for subfolder in folder.trees() {
+        load_block_models(subfolder, preload_fid_fn)?;
+    }
+
+    for file in folder.leaves() {
+        let nod = preload_fid_fn.call(*file as *const _ as _);
+    }
+
+    Ok(())
+}
+
+fn load_item_models(
+    folder: &FidsFolder,
+    preload_fid_fn: PreloadFidFn,
+) -> Result<(), Box<dyn Error>> {
+    for subfolder in folder.trees() {
+        load_item_models(subfolder, preload_fid_fn)?;
+    }
+
+    for file in folder.leaves() {
+        let nod = preload_fid_fn.call(*file as *const _ as _);
+    }
+
+    Ok(())
 }
 
 async fn open_map_editor(context: &mut Context) {

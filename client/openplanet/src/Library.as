@@ -96,8 +96,8 @@ class Library {
         return Dev::ReadUInt8(m_context + 24) != 0;
     }
 
-    void OpenConnection(const string&in host, const string&in port, const CSystemFidsFolder@ gameFolder) {
-        m_openConnection.Call(m_context, host, port, gameFolder);
+    void OpenConnection(const string&in host, const string&in port) {
+        m_openConnection.Call(m_context, host, port, Fids::GetGameFolder(""));
     }
 
     void UpdateConnection() {

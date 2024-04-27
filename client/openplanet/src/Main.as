@@ -48,7 +48,7 @@ void RenderInterface() {
             Setting_Port = UI::InputText("Port", Setting_Port, UI::InputTextFlags::CharsNoBlank);
 
             if (UI::Button("Join")) {
-                g_library.OpenConnection(Setting_Host, Setting_Port, Fids::GetGameFolder(""));
+                g_library.OpenConnection(Setting_Host, Setting_Port);
             }
         }
 
