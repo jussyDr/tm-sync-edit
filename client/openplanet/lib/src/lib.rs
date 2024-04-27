@@ -21,7 +21,7 @@ use game::{
     BlockInfo, FidsFolder, IdNameFn, Item, ItemModel, ItemParams, NodRef, PreloadFidFn,
 };
 use native_dialog::{MessageDialog, MessageType};
-use shared::{deserialize, framed_tcp_stream, FramedTcpStream, Message};
+use shared::{deserialize, framed_tcp_stream, FramedTcpStream, MapDesc, Message};
 use tokio::{net::TcpStream, select};
 use windows_sys::Win32::{
     Foundation::{BOOL, HINSTANCE, TRUE},
@@ -102,7 +102,6 @@ unsafe extern "system" fn CloseConnection(context: &mut Context) {
     context.state = State::Disconnected;
     context.map_editor = None;
     context.connection_future = None;
-    context.framed_tcp_stream = None;
 }
 
 #[repr(C)]
@@ -113,7 +112,6 @@ struct Context {
     should_open_editor: bool,
 
     connection_future: Option<ConnectionFuture>,
-    framed_tcp_stream: Option<FramedTcpStream>,
 }
 
 impl Context {
@@ -125,7 +123,6 @@ impl Context {
             should_open_editor: false,
 
             connection_future: None,
-            framed_tcp_stream: None,
         }
     }
 
@@ -162,6 +159,15 @@ async fn connection(
 
     let tcp_stream = TcpStream::connect(socket_addr).compat().await?;
 
+    let mut framed_tcp_stream = framed_tcp_stream(tcp_stream);
+
+    let frame = framed_tcp_stream
+        .try_next()
+        .await?
+        .ok_or("server closed connection")?;
+
+    let map_desc: MapDesc = deserialize(&frame)?;
+
     context.set_status_text("Opening map editor...");
 
     open_map_editor(context).await;
@@ -171,8 +177,6 @@ async fn connection(
     context.state = State::Connected;
     context.set_status_text("Connected");
 
-    context.framed_tcp_stream = Some(framed_tcp_stream(tcp_stream));
-
     let _place_block_hook = hook_place_block(context, place_block_callback)?;
     let _remove_block_hook = hook_remove_block(context, remove_block_callback)?;
     let _place_item_hook = hook_place_item(context, place_item_callback)?;
@@ -180,7 +184,7 @@ async fn connection(
 
     loop {
         select! {
-            result = context.framed_tcp_stream.as_mut().unwrap().try_next() => match result? {
+            result = framed_tcp_stream.try_next() => match result? {
                 None => return Err("server closed connection".into()),
                 Some(frame) => handle_frame(context, &frame).await?,
             }

@@ -24,6 +24,9 @@ pub fn deserialize<'de, T: Deserialize<'de>>(bytes: &'de [u8]) -> Result<T, Box<
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct MapDesc;
+
+#[derive(Serialize, Deserialize)]
 pub enum Message {
     PlaceBlock(BlockDesc),
     RemoveBlock(BlockDesc),

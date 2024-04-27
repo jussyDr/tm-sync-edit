@@ -97,7 +97,13 @@ void OpenMapEditor() {
     auto currentSwitcherModule = switcherModules[switcherModules.Length - 1];
 
     if (cast<CGameCtnEditorFree>(currentSwitcherModule) !is null) {
-        g_library.SetMapEditor(cast<CGameCtnEditorFree>(currentSwitcherModule));
+        auto mapEditor = cast<CGameCtnEditorFree>(currentSwitcherModule);
+        auto plugin = cast<CGameEditorPluginMap>(mapEditor.PluginMapType);
+
+        plugin.RemoveAll();
+
+        g_library.SetMapEditor(mapEditor);
+
         return;
     }   
 

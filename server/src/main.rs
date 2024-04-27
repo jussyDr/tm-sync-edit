@@ -10,7 +10,7 @@ use bytes::Bytes;
 use clap::Parser;
 use futures_util::{SinkExt, TryStreamExt};
 use log::LevelFilter;
-use shared::{deserialize, framed_tcp_stream, Message};
+use shared::{deserialize, framed_tcp_stream, serialize, MapDesc, Message};
 use tokio::{
     net::{TcpListener, TcpStream},
     runtime, select,
@@ -107,6 +107,12 @@ async fn handle_client(
     mut receiver: mpsc::UnboundedReceiver<Bytes>,
 ) -> Result<(), Box<dyn Error>> {
     let mut framed_tcp_stream = framed_tcp_stream(tcp_stream);
+
+    let map_desc = MapDesc;
+
+    let frame = serialize(&map_desc)?;
+
+    framed_tcp_stream.send(frame.into()).await?;
 
     loop {
         select! {
