@@ -12,7 +12,12 @@ use autopad::autopad;
 use ordered_float::NotNan;
 use shared::{Direction, ElemColor};
 
-use std::{ffi::c_char, mem::MaybeUninit, ops::Deref, slice, str};
+use std::{
+    ffi::c_char,
+    mem::MaybeUninit,
+    ops::{Deref, DerefMut},
+    slice, str,
+};
 
 #[repr(C)]
 struct Array<T> {
@@ -51,6 +56,7 @@ autopad! {
     #[repr(C)]
     pub struct Nod {
                      vtable: *const NodVTable,
+        0x010 =>     ref_count: u32,
         0x018 =>     article: *mut Article,
         0x028 => pub id: u32
     }
@@ -78,8 +84,8 @@ impl Nod {
         unsafe { class_id.assume_init() }
     }
 
-    pub fn is_instance_of<T: Class>(&self) -> bool {
-        unsafe { ((*self.vtable).is_instance_of)(self, T::ID) }
+    pub fn is_instance_of(&self, class_id: u32) -> bool {
+        unsafe { ((*self.vtable).is_instance_of)(self, class_id) }
     }
 }
 
@@ -181,6 +187,12 @@ impl Deref for BlockInfo {
     }
 }
 
+impl DerefMut for BlockInfo {
+    fn deref_mut(&mut self) -> &mut Nod {
+        &mut self.nod
+    }
+}
+
 // CGameItemModel.
 #[repr(C)]
 pub struct ItemModel {
@@ -196,6 +208,12 @@ impl Deref for ItemModel {
 
     fn deref(&self) -> &Nod {
         &self.nod
+    }
+}
+
+impl DerefMut for ItemModel {
+    fn deref_mut(&mut self) -> &mut Nod {
+        &mut self.nod
     }
 }
 
@@ -288,9 +306,55 @@ pub trait Class {
 }
 
 pub fn cast_nod<T: Class>(nod: &Nod) -> Option<&T> {
-    if nod.is_instance_of::<T>() {
+    if nod.is_instance_of(T::ID) {
         unsafe { Some(&*(nod as *const _ as *const _)) }
     } else {
         None
+    }
+}
+
+/// Reference-counted pointer to a [Nod].
+pub struct NodRef<T: DerefMut<Target = Nod>> {
+    ptr: *mut T,
+}
+
+impl<T: DerefMut<Target = Nod>> Clone for NodRef<T> {
+    fn clone(&self) -> Self {
+        let nod = unsafe { (*self.ptr).deref_mut() };
+
+        nod.ref_count += 1;
+
+        Self { ptr: self.ptr }
+    }
+}
+
+impl<T: DerefMut<Target = Nod>> Deref for NodRef<T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        unsafe { &*self.ptr }
+    }
+}
+
+impl<T: DerefMut<Target = Nod>> Drop for NodRef<T> {
+    fn drop(&mut self) {
+        let nod = unsafe { (*self.ptr).deref_mut() };
+
+        nod.ref_count -= 1;
+
+        if nod.ref_count == 0 {
+            unsafe { ((*(nod.vtable)).destructor)(nod, true) };
+        }
+    }
+}
+
+impl<T: DerefMut<Target = Nod>> From<&T> for NodRef<T> {
+    fn from(x: &T) -> Self {
+        let ptr = x as *const T as *mut T;
+        let nod = unsafe { (*ptr).deref_mut() };
+
+        nod.ref_count += 1;
+
+        Self { ptr }
     }
 }

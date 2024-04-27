@@ -54,6 +54,7 @@ impl PreloadFidFn {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct IdNameFn(unsafe extern "system" fn(id: *const u32) -> *mut c_char);
 
 impl IdNameFn {
@@ -70,10 +71,10 @@ impl IdNameFn {
         Ok(Self(id_name_fn))
     }
 
-    pub fn call(&self, id: u32) -> &str {
+    pub fn call(&self, id: u32) -> String {
         let id_name = unsafe { (self.0)(&id) };
 
-        unsafe { CStr::from_ptr(id_name).to_str().unwrap() }
+        unsafe { CStr::from_ptr(id_name).to_str().unwrap().to_owned() }
     }
 }
 

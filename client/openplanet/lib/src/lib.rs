@@ -13,11 +13,12 @@ use std::{
     task::{self, Poll},
 };
 
+use ahash::AHashMap;
 use async_compat::CompatExt;
 use futures::{task::noop_waker_ref, TryStreamExt};
 use game::{
     cast_nod, hook_place_block, hook_place_item, hook_remove_block, hook_remove_item, Block,
-    BlockInfo, FidsFolder, Item, ItemModel, ItemParams, PreloadFidFn,
+    BlockInfo, FidsFolder, IdNameFn, Item, ItemModel, ItemParams, NodRef, PreloadFidFn,
 };
 use native_dialog::{MessageDialog, MessageType};
 use shared::{deserialize, framed_tcp_stream, FramedTcpStream, Message};
@@ -189,6 +190,7 @@ async fn connection(
 
 fn load_game_models(game_folder: &FidsFolder) -> Result<(), Box<dyn Error>> {
     let preload_fid_fn = PreloadFidFn::get()?;
+    let id_name_fn = IdNameFn::get()?;
 
     let game_data_folder = game_folder
         .trees()
@@ -208,7 +210,14 @@ fn load_game_models(game_folder: &FidsFolder) -> Result<(), Box<dyn Error>> {
         .find(|folder| folder.name() == "GameCtnBlockInfo")
         .ok_or("failed to find GameCtnBlockInfo folder")?;
 
-    load_block_infos(block_info_folder, preload_fid_fn)?;
+    let mut block_infos = AHashMap::new();
+
+    load_block_infos(
+        block_info_folder,
+        &mut block_infos,
+        preload_fid_fn,
+        id_name_fn,
+    )?;
 
     let items_folder = stadium_folder
         .trees()
@@ -216,17 +225,21 @@ fn load_game_models(game_folder: &FidsFolder) -> Result<(), Box<dyn Error>> {
         .find(|folder| folder.name() == "Items")
         .ok_or("failed to find Items folder")?;
 
-    load_item_models(items_folder, preload_fid_fn)?;
+    let mut item_models = AHashMap::new();
+
+    load_item_models(items_folder, &mut item_models, preload_fid_fn, id_name_fn)?;
 
     Ok(())
 }
 
 fn load_block_infos(
     folder: &FidsFolder,
+    block_infos: &mut AHashMap<String, NodRef<BlockInfo>>,
     preload_fid_fn: PreloadFidFn,
+    id_name_fn: IdNameFn,
 ) -> Result<(), Box<dyn Error>> {
     for subfolder in folder.trees() {
-        load_block_infos(subfolder, preload_fid_fn)?;
+        load_block_infos(subfolder, block_infos, preload_fid_fn, id_name_fn)?;
     }
 
     for file in folder.leaves() {
@@ -236,7 +249,11 @@ fn load_block_infos(
                 .ok_or("failed to preload fid")?
         };
 
-        if let Some(block_info) = cast_nod::<BlockInfo>(nod) {}
+        if let Some(block_info) = cast_nod::<BlockInfo>(nod) {
+            let id_name = id_name_fn.call(block_info.id);
+
+            block_infos.insert(id_name, NodRef::from(block_info));
+        }
     }
 
     Ok(())
@@ -244,10 +261,12 @@ fn load_block_infos(
 
 fn load_item_models(
     folder: &FidsFolder,
+    item_models: &mut AHashMap<String, NodRef<ItemModel>>,
     preload_fid_fn: PreloadFidFn,
+    id_name_fn: IdNameFn,
 ) -> Result<(), Box<dyn Error>> {
     for subfolder in folder.trees() {
-        load_item_models(subfolder, preload_fid_fn)?;
+        load_item_models(subfolder, item_models, preload_fid_fn, id_name_fn)?;
     }
 
     for file in folder.leaves() {
@@ -257,7 +276,11 @@ fn load_item_models(
                 .ok_or("failed to preload fid")?
         };
 
-        if let Some(item_model) = cast_nod::<ItemModel>(nod) {}
+        if let Some(item_model) = cast_nod::<ItemModel>(nod) {
+            let id_name = id_name_fn.call(item_model.id);
+
+            item_models.insert(id_name, NodRef::from(item_model));
+        }
     }
 
     Ok(())
