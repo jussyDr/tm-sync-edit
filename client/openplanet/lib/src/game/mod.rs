@@ -78,8 +78,8 @@ impl Nod {
         unsafe { class_id.assume_init() }
     }
 
-    pub fn is_instance_of(&self, class_id: u32) -> bool {
-        unsafe { ((*self.vtable).is_instance_of)(self, class_id) }
+    pub fn is_instance_of<T: Class>(&self) -> bool {
+        unsafe { ((*self.vtable).is_instance_of)(self, T::ID) }
     }
 }
 
@@ -169,6 +169,10 @@ pub struct BlockInfo {
     nod: Nod,
 }
 
+impl Class for BlockInfo {
+    const ID: u32 = 0x0304e000;
+}
+
 impl Deref for BlockInfo {
     type Target = Nod;
 
@@ -181,6 +185,10 @@ impl Deref for BlockInfo {
 #[repr(C)]
 pub struct ItemModel {
     nod: Nod,
+}
+
+impl Class for ItemModel {
+    const ID: u32 = 0x2e002000;
 }
 
 impl Deref for ItemModel {
@@ -274,3 +282,15 @@ pub struct ItemParams {
 
 /// CGameCtnEditorFree.
 pub struct MapEditor;
+
+pub trait Class {
+    const ID: u32;
+}
+
+pub fn cast_nod<T: Class>(nod: &Nod) -> Option<&T> {
+    if nod.is_instance_of::<T>() {
+        unsafe { Some(&*(nod as *const _ as *const _)) }
+    } else {
+        None
+    }
+}

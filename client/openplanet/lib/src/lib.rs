@@ -16,8 +16,8 @@ use std::{
 use async_compat::CompatExt;
 use futures::{task::noop_waker_ref, TryStreamExt};
 use game::{
-    hook_place_block, hook_place_item, hook_remove_block, hook_remove_item, Block, FidsFolder,
-    Item, ItemModel, ItemParams, PreloadFidFn,
+    cast_nod, hook_place_block, hook_place_item, hook_remove_block, hook_remove_item, Block,
+    BlockInfo, FidsFolder, Item, ItemModel, ItemParams, PreloadFidFn,
 };
 use native_dialog::{MessageDialog, MessageType};
 use shared::{deserialize, framed_tcp_stream, FramedTcpStream, Message};
@@ -208,7 +208,7 @@ fn load_game_models(game_folder: &FidsFolder) -> Result<(), Box<dyn Error>> {
         .find(|folder| folder.name() == "GameCtnBlockInfo")
         .ok_or("failed to find GameCtnBlockInfo folder")?;
 
-    load_block_models(block_info_folder, preload_fid_fn)?;
+    load_block_infos(block_info_folder, preload_fid_fn)?;
 
     let items_folder = stadium_folder
         .trees()
@@ -221,16 +221,22 @@ fn load_game_models(game_folder: &FidsFolder) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn load_block_models(
+fn load_block_infos(
     folder: &FidsFolder,
     preload_fid_fn: PreloadFidFn,
 ) -> Result<(), Box<dyn Error>> {
     for subfolder in folder.trees() {
-        load_block_models(subfolder, preload_fid_fn)?;
+        load_block_infos(subfolder, preload_fid_fn)?;
     }
 
     for file in folder.leaves() {
-        let nod = preload_fid_fn.call(*file as *const _ as _);
+        let nod = unsafe {
+            preload_fid_fn
+                .call(*file as *const _ as _)
+                .ok_or("failed to preload fid")?
+        };
+
+        if let Some(block_info) = cast_nod::<BlockInfo>(nod) {}
     }
 
     Ok(())
@@ -245,7 +251,13 @@ fn load_item_models(
     }
 
     for file in folder.leaves() {
-        let nod = preload_fid_fn.call(*file as *const _ as _);
+        let nod = unsafe {
+            preload_fid_fn
+                .call(*file as *const _ as _)
+                .ok_or("failed to preload fid")?
+        };
+
+        if let Some(item_model) = cast_nod::<ItemModel>(nod) {}
     }
 
     Ok(())
