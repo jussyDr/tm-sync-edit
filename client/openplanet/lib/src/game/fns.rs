@@ -9,8 +9,6 @@ use memchr::memmem;
 use ordered_float::NotNan;
 use shared::{Direction, ElemColor};
 
-use crate::os::Process;
-
 use super::{Block, BlockInfo, FidFile, Item, ItemModel, ItemParams, MapEditor, Nod};
 
 #[derive(Clone, Copy)]
@@ -19,11 +17,7 @@ pub struct PreloadFidFn(
 );
 
 impl PreloadFidFn {
-    pub fn find() -> Result<Self, Box<dyn Error>> {
-        let current_process = Process::open_current()?;
-
-        let exe_module_memory = current_process.exe_module_memory()?;
-
+    pub fn find(exe_module_memory: &[u8]) -> Result<Self, Box<dyn Error>> {
         let preload_fid_fn_offset = memmem::find(
             exe_module_memory,
             &[
@@ -59,11 +53,7 @@ impl PreloadFidFn {
 pub struct IdNameFn(unsafe extern "system" fn(id: *const u32) -> *mut c_char);
 
 impl IdNameFn {
-    pub fn find() -> Result<Self, Box<dyn Error>> {
-        let current_process = Process::open_current()?;
-
-        let exe_module_memory = current_process.exe_module_memory()?;
-
+    pub fn find(exe_module_memory: &[u8]) -> Result<Self, Box<dyn Error>> {
         let id_name_fn_offset = memmem::find(exe_module_memory, &[0x8b, 0x11, 0x8b, 0xc2, 0x25])
             .ok_or("failed to find IdName function pattern")?;
 
@@ -105,11 +95,7 @@ pub struct PlaceBlockFn(
 );
 
 impl PlaceBlockFn {
-    pub fn find() -> Result<Self, Box<dyn Error>> {
-        let current_process = Process::open_current()?;
-
-        let exe_module_memory = current_process.exe_module_memory()?;
-
+    pub fn find(exe_module_memory: &[u8]) -> Result<Self, Box<dyn Error>> {
         let place_block_fn_offset = memmem::find(
             exe_module_memory,
             &[
@@ -229,11 +215,7 @@ pub struct RemoveBlockFn(
 );
 
 impl RemoveBlockFn {
-    pub fn find() -> Result<Self, Box<dyn Error>> {
-        let current_process = Process::open_current()?;
-
-        let exe_module_memory = current_process.exe_module_memory()?;
-
+    pub fn find(exe_module_memory: &[u8]) -> Result<Self, Box<dyn Error>> {
         let remove_block_fn_offset = memmem::find(
             exe_module_memory,
             &[
@@ -264,11 +246,7 @@ pub struct PlaceItemFn(
 );
 
 impl PlaceItemFn {
-    pub fn find() -> Result<Self, Box<dyn Error>> {
-        let current_process = Process::open_current()?;
-
-        let exe_module_memory = current_process.exe_module_memory()?;
-
+    pub fn find(exe_module_memory: &[u8]) -> Result<Self, Box<dyn Error>> {
         let place_item_fn_offset = memmem::find(
             exe_module_memory,
             &[
@@ -329,11 +307,7 @@ pub struct RemoveItemFn(
 );
 
 impl RemoveItemFn {
-    pub fn find() -> Result<Self, Box<dyn Error>> {
-        let current_process = Process::open_current()?;
-
-        let exe_module_memory = current_process.exe_module_memory()?;
-
+    pub fn find(exe_module_memory: &[u8]) -> Result<Self, Box<dyn Error>> {
         let remove_item_fn_offset = memmem::find(
             exe_module_memory,
             &[

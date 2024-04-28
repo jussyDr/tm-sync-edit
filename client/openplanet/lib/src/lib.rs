@@ -28,6 +28,7 @@ use game::{
     PlaceItemFn, PreloadFidFn,
 };
 use native_dialog::{MessageDialog, MessageType};
+use os::Process;
 use shared::{deserialize, framed_tcp_stream, BlockDescKind, MapDesc, Message, ModelId};
 use tokio::{net::TcpStream, select};
 use windows_sys::Win32::{
@@ -179,12 +180,21 @@ async fn connection(
 
     open_map_editor(context).await;
 
+    let process = Process::open_current()?;
+    let exe_module_memory = process.exe_module_memory()?;
+
     let mut game_block_infos = AHashMap::new();
     let mut game_item_models = AHashMap::new();
-    load_game_models(game_folder, &mut game_block_infos, &mut game_item_models)?;
 
-    let place_block_fn = PlaceBlockFn::find()?;
-    let place_item_fn = PlaceItemFn::find()?;
+    load_game_models(
+        game_folder,
+        &mut game_block_infos,
+        &mut game_item_models,
+        exe_module_memory,
+    )?;
+
+    let place_block_fn = PlaceBlockFn::find(exe_module_memory)?;
+    let place_item_fn = PlaceItemFn::find(exe_module_memory)?;
 
     let map_editor = unsafe { &mut *(context.map_editor.unwrap().get() as *mut MapEditor) };
 
@@ -267,9 +277,10 @@ fn load_game_models(
     game_folder: &FidsFolder,
     block_infos: &mut AHashMap<String, NodRef<BlockInfo>>,
     item_models: &mut AHashMap<String, NodRef<ItemModel>>,
+    exe_module_memory: &[u8],
 ) -> Result<(), Box<dyn Error>> {
-    let preload_fid_fn = PreloadFidFn::find()?;
-    let id_name_fn = IdNameFn::find()?;
+    let preload_fid_fn = PreloadFidFn::find(exe_module_memory)?;
+    let id_name_fn = IdNameFn::find(exe_module_memory)?;
 
     let game_data_folder = game_folder
         .trees()
