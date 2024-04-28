@@ -19,7 +19,7 @@ pub struct PreloadFidFn(
 );
 
 impl PreloadFidFn {
-    pub fn get() -> Result<Self, Box<dyn Error>> {
+    pub fn find() -> Result<Self, Box<dyn Error>> {
         let current_process = Process::open_current()?;
 
         let exe_module_memory = current_process.exe_module_memory()?;
@@ -58,7 +58,7 @@ impl PreloadFidFn {
 pub struct IdNameFn(unsafe extern "system" fn(id: *const u32) -> *mut c_char);
 
 impl IdNameFn {
-    pub fn get() -> Result<Self, Box<dyn Error>> {
+    pub fn find() -> Result<Self, Box<dyn Error>> {
         let current_process = Process::open_current()?;
 
         let exe_module_memory = current_process.exe_module_memory()?;

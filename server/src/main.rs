@@ -108,7 +108,10 @@ async fn handle_client(
 ) -> Result<(), Box<dyn Error>> {
     let mut framed_tcp_stream = framed_tcp_stream(tcp_stream);
 
-    let map_desc = MapDesc;
+    let map_desc = MapDesc {
+        blocks: vec![],
+        items: vec![],
+    };
 
     let frame = serialize(&map_desc)?;
 

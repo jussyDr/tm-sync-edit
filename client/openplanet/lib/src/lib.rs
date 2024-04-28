@@ -18,10 +18,10 @@ use async_compat::CompatExt;
 use futures::{task::noop_waker_ref, TryStreamExt};
 use game::{
     cast_nod, hook_place_block, hook_place_item, hook_remove_block, hook_remove_item, Block,
-    BlockInfo, FidsFolder, IdNameFn, Item, ItemModel, ItemParams, NodRef, PreloadFidFn,
+    BlockInfo, FidsFolder, GameFns, IdNameFn, Item, ItemModel, ItemParams, NodRef, PreloadFidFn,
 };
 use native_dialog::{MessageDialog, MessageType};
-use shared::{deserialize, framed_tcp_stream, FramedTcpStream, MapDesc, Message};
+use shared::{deserialize, framed_tcp_stream, BlockDescKind, FramedTcpStream, MapDesc, Message};
 use tokio::{net::TcpStream, select};
 use windows_sys::Win32::{
     Foundation::{BOOL, HINSTANCE, TRUE},
@@ -174,6 +174,31 @@ async fn connection(
 
     load_game_models(game_folder)?;
 
+    let game_fns = GameFns::find()?;
+
+    for block_desc in map_desc.blocks {
+        match block_desc.kind {
+            BlockDescKind::Normal {
+                x,
+                y,
+                z,
+                direction,
+                is_ground,
+                is_ghost,
+            } => {}
+            BlockDescKind::Free {
+                x,
+                y,
+                z,
+                yaw,
+                pitch,
+                roll,
+            } => {}
+        }
+    }
+
+    for item_desc in map_desc.items {}
+
     context.state = State::Connected;
     context.set_status_text("Connected");
 
@@ -194,8 +219,8 @@ async fn connection(
 
 /// Load all the [BlockInfo]'s and [ItemModel]'s that are internal to the game.
 fn load_game_models(game_folder: &FidsFolder) -> Result<(), Box<dyn Error>> {
-    let preload_fid_fn = PreloadFidFn::get()?;
-    let id_name_fn = IdNameFn::get()?;
+    let preload_fid_fn = PreloadFidFn::find()?;
+    let id_name_fn = IdNameFn::find()?;
 
     let game_data_folder = game_folder
         .trees()
