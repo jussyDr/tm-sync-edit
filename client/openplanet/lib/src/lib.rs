@@ -17,11 +17,11 @@ use ahash::AHashMap;
 use async_compat::CompatExt;
 use futures::{task::noop_waker_ref, TryStreamExt};
 use game::{
-    cast_nod, hook_place_block, hook_place_item, hook_remove_block, hook_remove_item, Block,
-    BlockInfo, FidsFolder, GameFns, IdNameFn, Item, ItemModel, ItemParams, NodRef, PreloadFidFn,
+    cast_nod, BlockInfo, FidsFolder, IdNameFn, ItemModel, MapEditor, NodRef, PlaceBlockFn,
+    PreloadFidFn,
 };
 use native_dialog::{MessageDialog, MessageType};
-use shared::{deserialize, framed_tcp_stream, BlockDescKind, FramedTcpStream, MapDesc, Message};
+use shared::{deserialize, framed_tcp_stream, BlockDescKind, MapDesc, Message, ModelId};
 use tokio::{net::TcpStream, select};
 use windows_sys::Win32::{
     Foundation::{BOOL, HINSTANCE, TRUE},
@@ -172,11 +172,23 @@ async fn connection(
 
     open_map_editor(context).await;
 
-    load_game_models(game_folder)?;
+    let mut block_infos = AHashMap::new();
+    load_game_models(game_folder, &mut block_infos)?;
 
-    let game_fns = GameFns::find()?;
+    let place_block_fn = PlaceBlockFn::find()?;
+
+    let map_editor = unsafe { &mut *(context.map_editor.unwrap().get() as *mut MapEditor) };
 
     for block_desc in map_desc.blocks {
+        let block_info = match block_desc.model_id {
+            ModelId::Game { ref name } => block_infos
+                .get(name)
+                .ok_or("failed to find block info with the given name")?,
+            ModelId::Custom { .. } => {
+                todo!()
+            }
+        };
+
         match block_desc.kind {
             BlockDescKind::Normal {
                 x,
@@ -185,40 +197,42 @@ async fn connection(
                 direction,
                 is_ground,
                 is_ghost,
-            } => {}
-            BlockDescKind::Free {
-                x,
-                y,
-                z,
-                yaw,
-                pitch,
-                roll,
-            } => {}
+            } => {
+                unsafe {
+                    place_block_fn.call_normal(
+                        map_editor,
+                        block_info,
+                        x,
+                        y,
+                        z,
+                        direction,
+                        block_desc.elem_color,
+                        is_ghost,
+                        is_ground,
+                    )
+                };
+            }
+            BlockDescKind::Free { .. } => {}
         }
     }
 
-    for item_desc in map_desc.items {}
-
     context.state = State::Connected;
     context.set_status_text("Connected");
-
-    let _place_block_hook = hook_place_block(context, place_block_callback)?;
-    let _remove_block_hook = hook_remove_block(context, remove_block_callback)?;
-    let _place_item_hook = hook_place_item(context, place_item_callback)?;
-    let _remove_item_hook = hook_remove_item(context, remove_item_callback)?;
-
     loop {
         select! {
             result = framed_tcp_stream.try_next() => match result? {
                 None => return Err("server closed connection".into()),
-                Some(frame) => handle_frame(context, &frame).await?,
+                Some(frame) => handle_frame( &frame).await?,
             }
         }
     }
 }
 
 /// Load all the [BlockInfo]'s and [ItemModel]'s that are internal to the game.
-fn load_game_models(game_folder: &FidsFolder) -> Result<(), Box<dyn Error>> {
+fn load_game_models(
+    game_folder: &FidsFolder,
+    block_infos: &mut AHashMap<String, NodRef<BlockInfo>>,
+) -> Result<(), Box<dyn Error>> {
     let preload_fid_fn = PreloadFidFn::find()?;
     let id_name_fn = IdNameFn::find()?;
 
@@ -240,14 +254,7 @@ fn load_game_models(game_folder: &FidsFolder) -> Result<(), Box<dyn Error>> {
         .find(|folder| folder.name() == "GameCtnBlockInfo")
         .ok_or("failed to find GameCtnBlockInfo folder")?;
 
-    let mut block_infos = AHashMap::new();
-
-    load_block_infos(
-        block_info_folder,
-        &mut block_infos,
-        preload_fid_fn,
-        id_name_fn,
-    )?;
+    load_block_infos(block_info_folder, block_infos, preload_fid_fn, id_name_fn)?;
 
     let items_folder = stadium_folder
         .trees()
@@ -335,7 +342,7 @@ async fn open_map_editor(context: &mut Context) {
     future.await;
 }
 
-async fn handle_frame(context: &mut Context, frame: &[u8]) -> Result<(), Box<dyn Error>> {
+async fn handle_frame(frame: &[u8]) -> Result<(), Box<dyn Error>> {
     let message = deserialize(frame)?;
 
     match message {
@@ -349,19 +356,6 @@ async fn handle_frame(context: &mut Context, frame: &[u8]) -> Result<(), Box<dyn
 
     Ok(())
 }
-
-unsafe extern "system" fn place_block_callback(context: &mut Context, block: Option<&Block>) {}
-
-unsafe extern "system" fn remove_block_callback(context: &mut Context, block: *mut Block) {}
-
-unsafe extern "system" fn place_item_callback(
-    context: &mut Context,
-    item_model: *mut ItemModel,
-    item_params: *mut ItemParams,
-) {
-}
-
-unsafe extern "system" fn remove_item_callback(context: &mut Context, item: *mut Item) {}
 
 unsafe fn str_from_c_str<'a>(c_string: *const c_char) -> &'a str {
     CStr::from_ptr(c_string)

@@ -10,7 +10,10 @@ use bytes::Bytes;
 use clap::Parser;
 use futures_util::{SinkExt, TryStreamExt};
 use log::LevelFilter;
-use shared::{deserialize, framed_tcp_stream, serialize, MapDesc, Message};
+use shared::{
+    deserialize, framed_tcp_stream, serialize, BlockDesc, BlockDescKind, Direction, ElemColor,
+    MapDesc, Message, ModelId,
+};
 use tokio::{
     net::{TcpListener, TcpStream},
     runtime, select,
@@ -108,8 +111,23 @@ async fn handle_client(
 ) -> Result<(), Box<dyn Error>> {
     let mut framed_tcp_stream = framed_tcp_stream(tcp_stream);
 
+    let block_desc = BlockDesc {
+        model_id: ModelId::Game {
+            name: "RoadTechStraight".to_owned(),
+        },
+        elem_color: ElemColor::Blue,
+        kind: BlockDescKind::Normal {
+            x: 20,
+            y: 21,
+            z: 22,
+            direction: Direction::East,
+            is_ground: false,
+            is_ghost: false,
+        },
+    };
+
     let map_desc = MapDesc {
-        blocks: vec![],
+        blocks: vec![block_desc],
         items: vec![],
     };
 

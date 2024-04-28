@@ -24,18 +24,19 @@ impl PreloadFidFn {
 
         let exe_module_memory = current_process.exe_module_memory()?;
 
-        let id_name_fn_offset = memmem::find(
+        let preload_fid_fn_offset = memmem::find(
             exe_module_memory,
             &[
                 0x48, 0x33, 0xc4, 0x48, 0x89, 0x84, 0x24, 0xa0, 0x00, 0x00, 0x00, 0x49, 0x8b, 0xf8,
             ],
         )
-        .ok_or("failed to find get load fid fn pattern")?
+        .ok_or("failed to find PreloadFid function pattern")?
             - 18;
 
-        let id_name_fn = unsafe { transmute(exe_module_memory.as_ptr().add(id_name_fn_offset)) };
+        let preload_fid_fn =
+            unsafe { transmute(exe_module_memory.as_ptr().add(preload_fid_fn_offset)) };
 
-        Ok(Self(id_name_fn))
+        Ok(Self(preload_fid_fn))
     }
 
     pub unsafe fn call(&self, fid: *mut FidFile) -> Option<&Nod> {
@@ -64,7 +65,7 @@ impl IdNameFn {
         let exe_module_memory = current_process.exe_module_memory()?;
 
         let id_name_fn_offset = memmem::find(exe_module_memory, &[0x8b, 0x11, 0x8b, 0xc2, 0x25])
-            .ok_or("failed to find get id name fn pattern")?;
+            .ok_or("failed to find IdName function pattern")?;
 
         let id_name_fn = unsafe { transmute(exe_module_memory.as_ptr().add(id_name_fn_offset)) };
 
@@ -78,54 +79,32 @@ impl IdNameFn {
     }
 }
 
-type PlaceBlockFn = unsafe extern "system" fn(
-    map_editor: *mut MapEditor,
-    block_info: *mut BlockInfo,
-    param_3: usize,
-    coord: *mut [u32; 3],
-    dir: u32,
-    elem_color: u8,
-    param_7: u8,
-    param_8: u32,
-    param_9: u32,
-    is_ghost: u32,
-    param_11: u32,
-    param_12: u32,
-    is_ground: u32,
-    param_14: u32,
-    is_ghost: u32,
-    param_16: usize,
-    is_free: u32,
-    transform: *mut [f32; 6],
-    param_19: u32,
-    param_20: u32,
-) -> *mut Block;
+pub struct PlaceBlockFn(
+    unsafe extern "system" fn(
+        map_editor: *mut MapEditor,
+        block_info: *const BlockInfo,
+        param_3: usize,
+        coord: *mut [u32; 3],
+        dir: u32,
+        elem_color: u8,
+        param_7: u8,
+        param_8: u32,
+        param_9: u32,
+        is_ghost: u32,
+        param_11: u32,
+        param_12: u32,
+        is_ground: u32,
+        param_14: u32,
+        is_ghost: u32,
+        param_16: usize,
+        is_free: u32,
+        transform: *mut [f32; 6],
+        param_19: u32,
+        param_20: u32,
+    ) -> *mut Block,
+);
 
-type RemoveBlockFn = unsafe extern "system" fn(
-    map_editor: *mut MapEditor,
-    block: *mut Block,
-    param_3: u32,
-    param_4: *mut Block,
-    param_5: u32,
-) -> u32;
-
-type PlaceItemFn = unsafe extern "system" fn(
-    map_editor: *mut MapEditor,
-    item_model: *mut ItemModel,
-    params: *mut ItemParams,
-    out_item: *mut *mut Item,
-) -> u32;
-
-type RemoveItemFn = unsafe extern "system" fn(map_editor: *mut MapEditor, item: *mut Item) -> u32;
-
-pub struct GameFns {
-    place_block_fn: PlaceBlockFn,
-    remove_block_fn: RemoveBlockFn,
-    place_item_fn: PlaceItemFn,
-    remove_item_fn: RemoveItemFn,
-}
-
-impl GameFns {
+impl PlaceBlockFn {
     pub fn find() -> Result<Self, Box<dyn Error>> {
         let current_process = Process::open_current()?;
 
@@ -138,60 +117,19 @@ impl GameFns {
                 0x18, 0x55,
             ],
         )
-        .ok_or("failed to find place block fn pattern")?;
-
-        let remove_block_fn_offset = memmem::find(
-            exe_module_memory,
-            &[
-                0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x6c, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24,
-                0x18, 0x57, 0x48, 0x83, 0xec, 0x40, 0x83, 0x7c, 0x24, 0x70, 0x00,
-            ],
-        )
-        .ok_or("failed to find remove block fn pattern")?;
-
-        let place_item_fn_offset = memmem::find(
-            exe_module_memory,
-            &[
-                0x48, 0x89, 0x5c, 0x24, 0x10, 0x48, 0x89, 0x6c, 0x24, 0x18, 0x48, 0x89, 0x74, 0x24,
-                0x20, 0x57, 0x48, 0x83, 0xec, 0x40, 0x49, 0x8b, 0xf9,
-            ],
-        )
-        .ok_or("failed to find place item fn pattern")?;
-
-        let remove_item_fn_offset = memmem::find(
-            exe_module_memory,
-            &[
-                0x48, 0x89, 0x5c, 0x24, 0x08, 0x57, 0x48, 0x83, 0xec, 0x30, 0x48, 0x8b, 0xfa, 0x48,
-                0x8b, 0xd9, 0x48, 0x85, 0xd2, 0x0f, 0x84, 0xe6, 0x00, 0x00, 0x00,
-            ],
-        )
-        .ok_or("failed to find remove item fn pattern")?;
+        .ok_or("failed to find PlaceBlock function pattern")?;
 
         let place_block_fn =
             unsafe { transmute(exe_module_memory.as_ptr().add(place_block_fn_offset)) };
 
-        let remove_block_fn =
-            unsafe { transmute(exe_module_memory.as_ptr().add(remove_block_fn_offset)) };
-
-        let place_item_fn =
-            unsafe { transmute(exe_module_memory.as_ptr().add(place_item_fn_offset)) };
-
-        let remove_item_fn =
-            unsafe { transmute(exe_module_memory.as_ptr().add(remove_item_fn_offset)) };
-
-        Ok(Self {
-            place_block_fn,
-            remove_block_fn,
-            place_item_fn,
-            remove_item_fn,
-        })
+        Ok(Self(place_block_fn))
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub unsafe fn place_block(
+    pub unsafe fn call_normal(
         &self,
         map_editor: &mut MapEditor,
-        block_info: &mut BlockInfo,
+        block_info: &BlockInfo,
         x: u8,
         y: u8,
         z: u8,
@@ -202,40 +140,38 @@ impl GameFns {
     ) -> Option<&Block> {
         let mut coord = [x as u32, y as u32, z as u32];
 
-        let block = unsafe {
-            (self.place_block_fn)(
-                map_editor,
-                block_info,
-                0,
-                &mut coord,
-                dir as u32,
-                elem_color as u8,
-                0,
-                0,
-                0xffffffff,
-                is_ghost as u32,
-                1,
-                0,
-                is_ground as u32,
-                0,
-                is_ghost as u32,
-                0,
-                0,
-                null_mut(),
-                0xffffffff,
-                0,
-            )
-        };
+        let block = (self.0)(
+            map_editor,
+            block_info,
+            0,
+            &mut coord,
+            dir as u32,
+            elem_color as u8,
+            0,
+            0,
+            0xffffffff,
+            is_ghost as u32,
+            1,
+            0,
+            is_ground as u32,
+            0,
+            is_ghost as u32,
+            0,
+            0,
+            null_mut(),
+            0xffffffff,
+            0,
+        );
 
         if block.is_null() {
             None
         } else {
-            unsafe { Some(&*block) }
+            Some(&*block)
         }
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub unsafe fn place_free_block(
+    pub unsafe fn call_free(
         &self,
         map_editor: &mut MapEditor,
         block_info: &mut BlockInfo,
@@ -251,44 +187,105 @@ impl GameFns {
 
         let mut transform = [x, y, z, yaw, pitch, roll];
 
-        let block = unsafe {
-            (self.place_block_fn)(
-                map_editor,
-                block_info,
-                0,
-                &mut coord,
-                0,
-                elem_color as u8,
-                0,
-                0,
-                0x3f,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                1,
-                &mut transform,
-                0xffffffff,
-                0,
-            )
-        };
+        let block = (self.0)(
+            map_editor,
+            block_info,
+            0,
+            &mut coord,
+            0,
+            elem_color as u8,
+            0,
+            0,
+            0x3f,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            &mut transform,
+            0xffffffff,
+            0,
+        );
 
         if block.is_null() {
             None
         } else {
-            unsafe { Some(&*block) }
+            Some(&*block)
         }
     }
+}
 
-    pub unsafe fn remove_block(&self, map_editor: &mut MapEditor, block: &mut Block) -> u32 {
-        unsafe { (self.remove_block_fn)(map_editor, block, 1, block, 0) }
+pub struct RemoveBlockFn(
+    unsafe extern "system" fn(
+        map_editor: *mut MapEditor,
+        block: *mut Block,
+        param_3: u32,
+        param_4: *mut Block,
+        param_5: u32,
+    ) -> u32,
+);
+
+impl RemoveBlockFn {
+    pub fn find() -> Result<Self, Box<dyn Error>> {
+        let current_process = Process::open_current()?;
+
+        let exe_module_memory = current_process.exe_module_memory()?;
+
+        let remove_block_fn_offset = memmem::find(
+            exe_module_memory,
+            &[
+                0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x6c, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24,
+                0x18, 0x57, 0x48, 0x83, 0xec, 0x40, 0x83, 0x7c, 0x24, 0x70, 0x00,
+            ],
+        )
+        .ok_or("failed to find RemoveBlock function pattern")?;
+
+        let remove_block_fn =
+            unsafe { transmute(exe_module_memory.as_ptr().add(remove_block_fn_offset)) };
+
+        Ok(Self(remove_block_fn))
+    }
+
+    pub unsafe fn call(&self, map_editor: &mut MapEditor, block: &mut Block) -> u32 {
+        (self.0)(map_editor, block, 1, block, 0)
+    }
+}
+
+pub struct PlaceItemFn(
+    unsafe extern "system" fn(
+        map_editor: *mut MapEditor,
+        item_model: *mut ItemModel,
+        params: *mut ItemParams,
+        out_item: *mut *mut Item,
+    ) -> u32,
+);
+
+impl PlaceItemFn {
+    pub fn find() -> Result<Self, Box<dyn Error>> {
+        let current_process = Process::open_current()?;
+
+        let exe_module_memory = current_process.exe_module_memory()?;
+
+        let place_item_fn_offset = memmem::find(
+            exe_module_memory,
+            &[
+                0x48, 0x89, 0x5c, 0x24, 0x10, 0x48, 0x89, 0x6c, 0x24, 0x18, 0x48, 0x89, 0x74, 0x24,
+                0x20, 0x57, 0x48, 0x83, 0xec, 0x40, 0x49, 0x8b, 0xf9,
+            ],
+        )
+        .ok_or("failed to find PlaceItem function pattern")?;
+
+        let place_item_fn =
+            unsafe { transmute(exe_module_memory.as_ptr().add(place_item_fn_offset)) };
+
+        Ok(Self(place_item_fn))
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub unsafe fn place_item(
+    pub unsafe fn call(
         &self,
         map_editor: &mut MapEditor,
         item_model: &mut ItemModel,
@@ -323,11 +320,37 @@ impl GameFns {
             param_19: 0,
         };
 
-        unsafe { (self.place_item_fn)(map_editor, item_model, &mut params, null_mut()) }
+        unsafe { (self.0)(map_editor, item_model, &mut params, null_mut()) }
+    }
+}
+
+pub struct RemoveItemFn(
+    unsafe extern "system" fn(map_editor: *mut MapEditor, item: *mut Item) -> u32,
+);
+
+impl RemoveItemFn {
+    pub fn find() -> Result<Self, Box<dyn Error>> {
+        let current_process = Process::open_current()?;
+
+        let exe_module_memory = current_process.exe_module_memory()?;
+
+        let remove_item_fn_offset = memmem::find(
+            exe_module_memory,
+            &[
+                0x48, 0x89, 0x5c, 0x24, 0x08, 0x57, 0x48, 0x83, 0xec, 0x30, 0x48, 0x8b, 0xfa, 0x48,
+                0x8b, 0xd9, 0x48, 0x85, 0xd2, 0x0f, 0x84, 0xe6, 0x00, 0x00, 0x00,
+            ],
+        )
+        .ok_or("failed to find RemoveItem function pattern")?;
+
+        let remove_item_fn =
+            unsafe { transmute(exe_module_memory.as_ptr().add(remove_item_fn_offset)) };
+
+        Ok(Self(remove_item_fn))
     }
 
-    pub unsafe fn remove_item(&self, map_editor: &mut MapEditor, item: &mut Item) -> u32 {
-        unsafe { (self.remove_item_fn)(map_editor, item) }
+    pub unsafe fn call(&self, map_editor: &mut MapEditor, item: &mut Item) -> u32 {
+        (self.0)(map_editor, item)
     }
 }
 
