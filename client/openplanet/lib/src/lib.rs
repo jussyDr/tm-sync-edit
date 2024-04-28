@@ -1,5 +1,12 @@
 mod game;
-mod os;
+
+mod os {
+    mod executable_memory;
+    mod process;
+
+    pub use executable_memory::ExecutableMemory;
+    pub use process::Process;
+}
 
 use std::{
     error::Error,

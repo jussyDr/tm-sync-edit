@@ -3,7 +3,7 @@ use std::{
     io::{Error, Result},
     mem::{size_of, MaybeUninit},
     num::NonZeroIsize,
-    ptr::{self, null, null_mut, NonNull},
+    ptr::{null, null_mut},
     slice,
 };
 
@@ -12,9 +12,6 @@ use windows_sys::Win32::{
     System::{
         Diagnostics::Debug::WriteProcessMemory,
         LibraryLoader::GetModuleHandleW,
-        Memory::{
-            VirtualAlloc, VirtualFree, MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_EXECUTE_READWRITE,
-        },
         ProcessStatus::{GetModuleInformation, MODULEINFO},
         Threading::{
             GetCurrentProcessId, OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_OPERATION,
@@ -101,44 +98,6 @@ impl Process {
 impl Drop for Process {
     fn drop(&mut self) {
         let success = unsafe { CloseHandle(self.handle.get()) };
-
-        if success == 0 {
-            panic!("{}", Error::last_os_error());
-        }
-    }
-}
-
-/// A slice of executable memory.
-pub struct ExecutableMemory {
-    ptr: NonNull<u8>,
-}
-
-impl ExecutableMemory {
-    pub fn new(bytes: &[u8]) -> Result<Self> {
-        let ptr = unsafe {
-            VirtualAlloc(
-                null(),
-                bytes.len(),
-                MEM_COMMIT | MEM_RESERVE,
-                PAGE_EXECUTE_READWRITE,
-            ) as *mut u8
-        };
-
-        let ptr = NonNull::new(ptr).ok_or_else(Error::last_os_error)?;
-
-        unsafe { ptr::copy_nonoverlapping(bytes.as_ptr(), ptr.as_ptr(), bytes.len()) };
-
-        Ok(Self { ptr })
-    }
-
-    pub fn as_ptr(&self) -> *mut u8 {
-        self.ptr.as_ptr()
-    }
-}
-
-impl Drop for ExecutableMemory {
-    fn drop(&mut self) {
-        let success = unsafe { VirtualFree(self.ptr.as_ptr() as *mut c_void, 0, MEM_RELEASE) };
 
         if success == 0 {
             panic!("{}", Error::last_os_error());
