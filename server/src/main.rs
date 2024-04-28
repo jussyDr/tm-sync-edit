@@ -96,7 +96,7 @@ async fn handle_connection(
 
     state.lock().await.clients.insert(socket_addr, sender);
 
-    if let Err(error) = handle_client(&state, tcp_stream, receiver).await {
+    if let Err(error) = handle_client(tcp_stream, receiver).await {
         log::error!("{error}");
     }
 
@@ -106,7 +106,6 @@ async fn handle_connection(
 }
 
 async fn handle_client(
-    state: &Arc<Mutex<State>>,
     tcp_stream: TcpStream,
     mut receiver: mpsc::UnboundedReceiver<Bytes>,
 ) -> Result<(), Box<dyn Error>> {
@@ -140,6 +139,8 @@ async fn handle_client(
     };
 
     let map_desc = MapDesc {
+        custom_block_models: vec![],
+        custom_item_models: vec![],
         blocks: vec![block_desc],
         items: vec![item_desc],
     };
@@ -152,7 +153,7 @@ async fn handle_client(
         select! {
             result = framed_tcp_stream.try_next() => match result? {
                 None => break,
-                Some(frame) => handle_frame(state, frame.freeze()).await?,
+                Some(frame) => handle_frame(frame.freeze()).await?,
             },
             option = receiver.recv() => match option {
                 None => break,
@@ -164,7 +165,7 @@ async fn handle_client(
     Ok(())
 }
 
-async fn handle_frame(state: &Arc<Mutex<State>>, frame: Bytes) -> Result<(), Box<dyn Error>> {
+async fn handle_frame(frame: Bytes) -> Result<(), Box<dyn Error>> {
     let message: Message = deserialize(&frame)?;
 
     match message {

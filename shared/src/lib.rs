@@ -25,6 +25,8 @@ pub fn deserialize<'de, T: Deserialize<'de>>(bytes: &'de [u8]) -> Result<T, Box<
 
 #[derive(Serialize, Deserialize)]
 pub struct MapDesc {
+    pub custom_block_models: Vec<Vec<u8>>,
+    pub custom_item_models: Vec<Vec<u8>>,
     pub blocks: Vec<BlockDesc>,
     pub items: Vec<ItemDesc>,
 }

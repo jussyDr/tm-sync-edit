@@ -27,7 +27,7 @@ impl Hook {
     ) -> Result<Self, Box<dyn Error>> {
         let current_process = Process::open_current()?;
 
-        let exe_module_memory = current_process.exe_module_memory()?;
+        let exe_module_memory = current_process.main_module_memory()?;
 
         let hook_offset = memmem::find(exe_module_memory, code_pattern)
             .ok_or("failed to find code pattern")?

@@ -181,7 +181,7 @@ async fn connection(
     open_map_editor(context).await;
 
     let process = Process::open_current()?;
-    let exe_module_memory = process.exe_module_memory()?;
+    let exe_module_memory = process.main_module_memory()?;
 
     let mut game_block_infos = AHashMap::new();
     let mut game_item_models = AHashMap::new();

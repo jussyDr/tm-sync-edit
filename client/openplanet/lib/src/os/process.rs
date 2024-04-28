@@ -46,16 +46,16 @@ impl Process {
         Ok(Self { handle })
     }
 
-    pub fn exe_module_memory(&self) -> Result<&[u8]> {
-        let exe_module = unsafe { GetModuleHandleW(null()) };
+    pub fn main_module_memory(&self) -> Result<&'static [u8]> {
+        let main_module = unsafe { GetModuleHandleW(null()) };
 
-        let mut exe_module_info = MaybeUninit::uninit();
+        let mut main_module_info = MaybeUninit::uninit();
 
         let success = unsafe {
             GetModuleInformation(
                 self.handle.get(),
-                exe_module,
-                exe_module_info.as_mut_ptr(),
+                main_module,
+                main_module_info.as_mut_ptr(),
                 size_of::<MODULEINFO>() as u32,
             )
         };
@@ -64,16 +64,16 @@ impl Process {
             return Err(Error::last_os_error());
         }
 
-        let exe_module_info = unsafe { exe_module_info.assume_init() };
+        let main_module_info = unsafe { main_module_info.assume_init() };
 
-        let exe_module_memory = unsafe {
+        let main_module_memory = unsafe {
             slice::from_raw_parts(
-                exe_module_info.lpBaseOfDll as *const u8,
-                exe_module_info.SizeOfImage as usize,
+                main_module_info.lpBaseOfDll as *const u8,
+                main_module_info.SizeOfImage as usize,
             )
         };
 
-        Ok(exe_module_memory)
+        Ok(main_module_memory)
     }
 
     pub unsafe fn write_memory(&self, ptr: *mut u8, bytes: &[u8]) -> Result<()> {
