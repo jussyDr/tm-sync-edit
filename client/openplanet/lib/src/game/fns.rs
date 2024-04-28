@@ -257,7 +257,7 @@ impl RemoveBlockFn {
 pub struct PlaceItemFn(
     unsafe extern "system" fn(
         map_editor: *mut MapEditor,
-        item_model: *mut ItemModel,
+        item_model: *const ItemModel,
         params: *mut ItemParams,
         out_item: *mut *mut Item,
     ) -> u32,
@@ -288,7 +288,7 @@ impl PlaceItemFn {
     pub unsafe fn call(
         &self,
         map_editor: &mut MapEditor,
-        item_model: &mut ItemModel,
+        item_model: &ItemModel,
         yaw: NotNan<f32>,
         pitch: NotNan<f32>,
         roll: NotNan<f32>,

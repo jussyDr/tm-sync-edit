@@ -10,9 +10,10 @@ use bytes::Bytes;
 use clap::Parser;
 use futures_util::{SinkExt, TryStreamExt};
 use log::LevelFilter;
+use ordered_float::NotNan;
 use shared::{
     deserialize, framed_tcp_stream, serialize, BlockDesc, BlockDescKind, Direction, ElemColor,
-    MapDesc, Message, ModelId,
+    ItemDesc, MapDesc, Message, ModelId,
 };
 use tokio::{
     net::{TcpListener, TcpStream},
@@ -126,9 +127,21 @@ async fn handle_client(
         },
     };
 
+    let item_desc = ItemDesc {
+        model_id: ModelId::Game {
+            name: "CactusMedium".to_owned(),
+        },
+        x: NotNan::new(300.0).unwrap(),
+        y: NotNan::new(300.0).unwrap(),
+        z: NotNan::new(300.0).unwrap(),
+        yaw: NotNan::new(0.0).unwrap(),
+        pitch: NotNan::new(0.0).unwrap(),
+        roll: NotNan::new(0.0).unwrap(),
+    };
+
     let map_desc = MapDesc {
         blocks: vec![block_desc],
-        items: vec![],
+        items: vec![item_desc],
     };
 
     let frame = serialize(&map_desc)?;

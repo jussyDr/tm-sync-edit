@@ -18,7 +18,7 @@ use async_compat::CompatExt;
 use futures::{task::noop_waker_ref, TryStreamExt};
 use game::{
     cast_nod, BlockInfo, FidsFolder, IdNameFn, ItemModel, MapEditor, NodRef, PlaceBlockFn,
-    PreloadFidFn,
+    PlaceItemFn, PreloadFidFn,
 };
 use native_dialog::{MessageDialog, MessageType};
 use shared::{deserialize, framed_tcp_stream, BlockDescKind, MapDesc, Message, ModelId};
@@ -172,16 +172,18 @@ async fn connection(
 
     open_map_editor(context).await;
 
-    let mut block_infos = AHashMap::new();
-    load_game_models(game_folder, &mut block_infos)?;
+    let mut game_block_infos = AHashMap::new();
+    let mut game_item_models = AHashMap::new();
+    load_game_models(game_folder, &mut game_block_infos, &mut game_item_models)?;
 
     let place_block_fn = PlaceBlockFn::find()?;
+    let place_item_fn = PlaceItemFn::find()?;
 
     let map_editor = unsafe { &mut *(context.map_editor.unwrap().get() as *mut MapEditor) };
 
     for block_desc in map_desc.blocks {
         let block_info = match block_desc.model_id {
-            ModelId::Game { ref name } => block_infos
+            ModelId::Game { ref name } => game_block_infos
                 .get(name)
                 .ok_or("failed to find block info with the given name")?,
             ModelId::Custom { .. } => {
@@ -216,8 +218,33 @@ async fn connection(
         }
     }
 
+    for item_desc in map_desc.items {
+        let item_model = match item_desc.model_id {
+            ModelId::Game { ref name } => game_item_models
+                .get(name)
+                .ok_or("failed to find item model with the given name")?,
+            ModelId::Custom { .. } => {
+                todo!()
+            }
+        };
+
+        unsafe {
+            place_item_fn.call(
+                map_editor,
+                item_model,
+                item_desc.yaw,
+                item_desc.pitch,
+                item_desc.roll,
+                item_desc.x,
+                item_desc.y,
+                item_desc.z,
+            )
+        };
+    }
+
     context.state = State::Connected;
     context.set_status_text("Connected");
+
     loop {
         select! {
             result = framed_tcp_stream.try_next() => match result? {
@@ -232,6 +259,7 @@ async fn connection(
 fn load_game_models(
     game_folder: &FidsFolder,
     block_infos: &mut AHashMap<String, NodRef<BlockInfo>>,
+    item_models: &mut AHashMap<String, NodRef<ItemModel>>,
 ) -> Result<(), Box<dyn Error>> {
     let preload_fid_fn = PreloadFidFn::find()?;
     let id_name_fn = IdNameFn::find()?;
@@ -262,9 +290,7 @@ fn load_game_models(
         .find(|folder| folder.name() == "Items")
         .ok_or("failed to find Items folder")?;
 
-    let mut item_models = AHashMap::new();
-
-    load_item_models(items_folder, &mut item_models, preload_fid_fn, id_name_fn)?;
+    load_item_models(items_folder, item_models, preload_fid_fn, id_name_fn)?;
 
     Ok(())
 }
