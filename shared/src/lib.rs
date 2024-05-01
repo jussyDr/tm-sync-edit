@@ -77,6 +77,7 @@ pub struct ItemDesc {
     pub yaw: NotNan<f32>,
     pub pitch: NotNan<f32>,
     pub roll: NotNan<f32>,
+    pub elem_color: ElemColor,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]

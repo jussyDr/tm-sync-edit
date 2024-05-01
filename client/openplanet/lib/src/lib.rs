@@ -448,6 +448,8 @@ fn load_custom_block_models(
         load_block_fn.call(item_model, file);
 
         let block_info = item_model.entity_model().unwrap();
+
+        fs::remove_file(file_path)?;
     }
 
     Ok(())

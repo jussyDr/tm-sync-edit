@@ -1,3 +1,5 @@
+mod map;
+
 use std::{
     collections::HashMap,
     error::Error,
@@ -10,16 +12,14 @@ use bytes::Bytes;
 use clap::Parser;
 use futures_util::{SinkExt, TryStreamExt};
 use log::LevelFilter;
-use ordered_float::NotNan;
-use shared::{
-    deserialize, framed_tcp_stream, serialize, BlockDesc, BlockDescKind, Direction, ElemColor,
-    ItemDesc, MapDesc, Message, ModelId,
-};
+use shared::{deserialize, framed_tcp_stream, serialize, Message};
 use tokio::{
     net::{TcpListener, TcpStream},
     runtime, select,
     sync::{mpsc, Mutex},
 };
+
+use crate::map::Map;
 
 #[derive(clap::Parser)]
 struct Args {
@@ -62,8 +62,12 @@ fn main() {
             .await
             .expect("failed to create tcp listener");
 
+        let map =
+            Map::load_from_gbx("C:/Users/Justin/Projects/tm-sync-edit/G H O S T.Map.Gbx").unwrap();
+
         let state = Arc::new(Mutex::new(State {
             clients: HashMap::new(),
+            map,
         }));
 
         loop {
@@ -83,6 +87,7 @@ fn main() {
 
 struct State {
     clients: HashMap<SocketAddr, mpsc::UnboundedSender<Bytes>>,
+    map: Map,
 }
 
 async fn handle_connection(
@@ -96,7 +101,7 @@ async fn handle_connection(
 
     state.lock().await.clients.insert(socket_addr, sender);
 
-    if let Err(error) = handle_client(tcp_stream, receiver).await {
+    if let Err(error) = handle_client(&state, tcp_stream, receiver).await {
         log::error!("{error}");
     }
 
@@ -106,19 +111,13 @@ async fn handle_connection(
 }
 
 async fn handle_client(
+    state: &Arc<Mutex<State>>,
     tcp_stream: TcpStream,
     mut receiver: mpsc::UnboundedReceiver<Bytes>,
 ) -> Result<(), Box<dyn Error>> {
     let mut framed_tcp_stream = framed_tcp_stream(tcp_stream);
 
-    let map_desc = MapDesc {
-        custom_block_models: vec![],
-        custom_item_models: vec![],
-        blocks: vec![],
-        items: vec![],
-    };
-
-    let frame = serialize(&map_desc)?;
+    let frame = serialize(&state.lock().await.map.desc)?;
 
     framed_tcp_stream.send(frame.into()).await?;
 
