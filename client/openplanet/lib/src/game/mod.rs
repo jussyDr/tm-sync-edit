@@ -56,10 +56,11 @@ autopad! {
     // CMwNod.
     #[repr(C)]
     pub struct Nod {
-                     vtable: *const NodVtable,
-        0x010 =>     ref_count: u32,
-        0x018 =>     article: *mut Article,
-        0x028 => pub id: u32
+                    vtable: *const NodVtable,
+        0x08 =>     file: *const FidFile,
+        0x10 =>     ref_count: u32,
+        0x18 =>     article: *mut Article,
+        0x28 => pub id: u32
     }
 }
 
@@ -73,6 +74,10 @@ autopad! {
 }
 
 impl Nod {
+    pub fn file(&self) -> &FidFile {
+        unsafe { &*self.file }
+    }
+
     pub fn article(&self) -> &Article {
         unsafe { &*self.article }
     }
@@ -206,10 +211,23 @@ impl DerefMut for BlockInfo {
     }
 }
 
-// CGameItemModel.
-#[repr(C)]
-pub struct ItemModel {
-    nod: Nod,
+autopad! {
+    // CGameItemModel.
+    #[repr(C)]
+    pub struct ItemModel {
+                 nod: Nod,
+        0x288 => entity_model: *const Nod,
+    }
+}
+
+impl ItemModel {
+    pub fn entity_model(&self) -> Option<&Nod> {
+        if self.entity_model.is_null() {
+            None
+        } else {
+            unsafe { Some(&*self.entity_model) }
+        }
+    }
 }
 
 impl Class for ItemModel {

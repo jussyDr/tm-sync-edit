@@ -198,6 +198,7 @@ async fn connection(
         preload_fid_fn,
     )?;
 
+    load_custom_block_models(game_folder, map_desc.custom_block_models, preload_fid_fn)?;
     load_custom_item_models(game_folder, map_desc.custom_item_models, preload_fid_fn)?;
 
     let place_block_fn = PlaceBlockFn::find(exe_module_memory)?;
@@ -397,6 +398,49 @@ fn load_item_models(
     Ok(())
 }
 
+fn load_custom_block_models(
+    folder: &mut FidsFolder,
+    item_models_gbx: Vec<Vec<u8>>,
+    preload_fid_fn: PreloadFidFn,
+) -> Result<(), Box<dyn Error>> {
+    let mut file_paths = vec![];
+
+    let folder_path: PathBuf = fids_folder_full_path(folder);
+
+    for item_model_gbx in item_models_gbx {
+        let hash = blake3::hash(&item_model_gbx);
+
+        let mut file_path = folder_path.clone();
+        file_path.push(hash.to_string());
+        file_path.set_extension("Block.Gbx");
+
+        fs::write(&file_path, item_model_gbx)?;
+
+        file_paths.push(file_path);
+    }
+
+    folder.update_tree(false);
+
+    for file_path in file_paths {
+        let file_name = file_path.file_name().unwrap();
+
+        let file = folder
+            .leaves()
+            .iter()
+            .find(|file| file.name() == file_name)
+            .copied()
+            .unwrap();
+
+        let block_model = unsafe {
+            preload_fid_fn
+                .call(file as *const FidFile as *mut FidFile)
+                .ok_or("failed to preload fid")?
+        };
+    }
+
+    Ok(())
+}
+
 fn load_custom_item_models(
     folder: &mut FidsFolder,
     item_models_gbx: Vec<Vec<u8>>,
@@ -430,11 +474,13 @@ fn load_custom_item_models(
             .copied()
             .unwrap();
 
-        let item_mod = unsafe {
+        let item_model = unsafe {
             preload_fid_fn
                 .call(file as *const FidFile as *mut FidFile)
                 .ok_or("failed to preload fid")?
         };
+
+        fs::remove_file(file_path)?;
     }
 
     Ok(())

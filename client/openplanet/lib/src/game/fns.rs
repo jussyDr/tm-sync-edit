@@ -69,6 +69,31 @@ impl IdNameFn {
     }
 }
 
+pub struct LoadBlockFn(
+    unsafe extern "system" fn(item_model: *mut ItemModel, file: *const FidFile, param_3: u32),
+);
+
+impl LoadBlockFn {
+    pub fn find(exe_module_memory: &[u8]) -> Result<Self, Box<dyn Error>> {
+        let id_name_fn_offset = memmem::find(
+            exe_module_memory,
+            &[
+                0x40, 0x55, 0x56, 0x41, 0x54, 0x41, 0x56, 0x48, 0x8d, 0xac, 0x24, 0x98, 0xfa, 0xff,
+                0xff,
+            ],
+        )
+        .ok_or("failed to find LoadBlock function pattern")?;
+
+        let id_name_fn = unsafe { transmute(exe_module_memory.as_ptr().add(id_name_fn_offset)) };
+
+        Ok(Self(id_name_fn))
+    }
+
+    pub fn call(&self, item_model: &mut ItemModel, file: &FidFile) {
+        unsafe { (self.0)(item_model, file, 0xffffffff) }
+    }
+}
+
 pub struct PlaceBlockFn(
     unsafe extern "system" fn(
         map_editor: *mut MapEditor,
