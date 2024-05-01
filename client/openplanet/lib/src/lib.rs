@@ -11,10 +11,12 @@ mod os {
 use std::{
     error::Error,
     ffi::{c_char, c_void, CStr},
+    fs,
     future::{poll_fn, Future},
     net::{IpAddr, SocketAddr},
     num::NonZeroUsize,
     panic,
+    path::PathBuf,
     pin::Pin,
     str::FromStr,
     task::{self, Poll},
@@ -75,14 +77,14 @@ unsafe extern "system" fn OpenConnection(
     context: *mut Context,
     host: *const c_char,
     port: *const c_char,
-    game_folder: *const FidsFolder,
+    game_folder: *mut FidsFolder,
 ) {
     (*context).state = State::Connecting;
 
     let host = str_from_c_str(host).to_owned();
     let port = str_from_c_str(port).to_owned();
 
-    let connection_future = Box::pin(connection(&mut *context, host, port, &*game_folder));
+    let connection_future = Box::pin(connection(&mut *context, host, port, &mut *game_folder));
 
     (*context).connection_future = Some(connection_future);
 }
@@ -157,7 +159,7 @@ async fn connection(
     context: &mut Context,
     host: String,
     port: String,
-    game_folder: &FidsFolder,
+    game_folder: &mut FidsFolder,
 ) -> Result<(), Box<dyn Error>> {
     let ip_addr = IpAddr::from_str(&host)?;
     let port = u16::from_str(&port)?;
@@ -192,6 +194,19 @@ async fn connection(
         &mut game_item_models,
         exe_module_memory,
     )?;
+
+    let path = PathBuf::from(game_folder.name());
+
+    for item_model in map_desc.custom_item_models {
+        let mut file_path = path.clone();
+
+        let hash = blake3::hash(&item_model);
+        file_path.push(hash.to_string());
+
+        fs::write(file_path, item_model)?;
+
+        game_folder.update_tree(false);
+    }
 
     let place_block_fn = PlaceBlockFn::find(exe_module_memory)?;
     let place_item_fn = PlaceItemFn::find(exe_module_memory)?;

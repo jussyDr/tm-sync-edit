@@ -111,38 +111,13 @@ async fn handle_client(
 ) -> Result<(), Box<dyn Error>> {
     let mut framed_tcp_stream = framed_tcp_stream(tcp_stream);
 
-    let block_desc = BlockDesc {
-        model_id: ModelId::Game {
-            name: "RoadTechStraight".to_owned(),
-        },
-        elem_color: ElemColor::Blue,
-        kind: BlockDescKind::Normal {
-            x: 20,
-            y: 21,
-            z: 22,
-            direction: Direction::East,
-            is_ground: false,
-            is_ghost: false,
-        },
-    };
-
-    let item_desc = ItemDesc {
-        model_id: ModelId::Game {
-            name: "CactusMedium".to_owned(),
-        },
-        x: NotNan::new(300.0).unwrap(),
-        y: NotNan::new(300.0).unwrap(),
-        z: NotNan::new(300.0).unwrap(),
-        yaw: NotNan::new(0.0).unwrap(),
-        pitch: NotNan::new(0.0).unwrap(),
-        roll: NotNan::new(0.0).unwrap(),
-    };
+    let item = std::fs::read("C:/Users/Justin/Projects/tm-sync-edit/AirLegitCP.Item.Gbx")?;
 
     let map_desc = MapDesc {
         custom_block_models: vec![],
-        custom_item_models: vec![],
-        blocks: vec![block_desc],
-        items: vec![item_desc],
+        custom_item_models: vec![item],
+        blocks: vec![],
+        items: vec![],
     };
 
     let frame = serialize(&map_desc)?;

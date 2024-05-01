@@ -55,7 +55,7 @@ autopad! {
     // CMwNod.
     #[repr(C)]
     pub struct Nod {
-                     vtable: *const NodVTable,
+                     vtable: *const NodVtable,
         0x010 =>     ref_count: u32,
         0x018 =>     article: *mut Article,
         0x028 => pub id: u32
@@ -64,7 +64,7 @@ autopad! {
 
 autopad! {
     #[repr(C)]
-    struct NodVTable {
+    struct NodVtable {
         0x08 => destructor: unsafe extern "system" fn(this: *mut Nod, should_free: bool) -> *mut Nod,
         0x18 => class_id: unsafe extern "system" fn(this: *const Nod, class_id: *mut u32) -> *mut u32,
         0x20 => is_instance_of: unsafe extern "system" fn(this: *const Nod, class_id: u32) -> bool,
@@ -114,13 +114,21 @@ impl FidFile {
 }
 
 autopad! {
+    #[repr(C)]
+    struct FidsFolderVtable {
+        0xf8 => update_tree: unsafe extern "system" fn(this: *mut FidsFolder, recurse: bool),
+    }
+}
+
+autopad! {
     // CSystemFidsFolder.
     #[repr(C)]
     pub struct FidsFolder {
-        0x018 => parent_folder: *mut FidsFolder,
-        0x028 => leaves: Array<FidFile>,
-        0x038 => trees: Array<FidsFolder>,
-        0x058 => name: CompactString
+                vtable: *const FidsFolderVtable,
+        0x18 => parent_folder: *mut FidsFolder,
+        0x28 => leaves: Array<FidFile>,
+        0x38 => trees: Array<FidsFolder>,
+        0x58 => name: CompactString
     }
 }
 
@@ -143,6 +151,10 @@ impl FidsFolder {
 
     pub fn name(&self) -> &str {
         self.name.as_str()
+    }
+
+    pub fn update_tree(&mut self, recurse: bool) {
+        unsafe { ((*self.vtable).update_tree)(self, recurse) }
     }
 }
 
