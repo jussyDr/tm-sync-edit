@@ -111,10 +111,8 @@ async fn handle_client(
 ) -> Result<(), Box<dyn Error>> {
     let mut framed_tcp_stream = framed_tcp_stream(tcp_stream);
 
-    let block = std::fs::read("C:/Users/Justin/Projects/tm-sync-edit/RoadTechInBeam.Block.Gbx")?;
-
     let map_desc = MapDesc {
-        custom_block_models: vec![block],
+        custom_block_models: vec![],
         custom_item_models: vec![],
         blocks: vec![],
         items: vec![],

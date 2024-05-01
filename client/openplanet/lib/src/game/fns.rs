@@ -33,7 +33,7 @@ impl PreloadFidFn {
         Ok(Self(preload_fid_fn))
     }
 
-    pub unsafe fn call(&self, fid: *mut FidFile) -> Option<&Nod> {
+    pub unsafe fn call(&self, fid: *mut FidFile) -> Option<&mut Nod> {
         let mut ret_nod = MaybeUninit::uninit();
         let mut nod = [0; 32];
 
@@ -44,7 +44,7 @@ impl PreloadFidFn {
         if ret_nod.is_null() {
             None
         } else {
-            Some(&*ret_nod)
+            Some(&mut *ret_nod)
         }
     }
 }

@@ -27,7 +27,7 @@ use async_compat::CompatExt;
 use futures::{task::noop_waker_ref, TryStreamExt};
 use game::{
     cast_nod, fids_folder_full_path, BlockInfo, FidFile, FidsFolder, IdNameFn, ItemModel,
-    MapEditor, NodRef, PlaceBlockFn, PlaceItemFn, PreloadFidFn,
+    LoadBlockFn, MapEditor, Nod, NodRef, PlaceBlockFn, PlaceItemFn, PreloadFidFn,
 };
 use native_dialog::{MessageDialog, MessageType};
 use os::Process;
@@ -186,6 +186,7 @@ async fn connection(
     let exe_module_memory = process.main_module_memory()?;
 
     let preload_fid_fn = PreloadFidFn::find(exe_module_memory)?;
+    let load_block_fn = LoadBlockFn::find(exe_module_memory)?;
 
     let mut game_block_infos = AHashMap::new();
     let mut game_item_models = AHashMap::new();
@@ -198,7 +199,13 @@ async fn connection(
         preload_fid_fn,
     )?;
 
-    load_custom_block_models(game_folder, map_desc.custom_block_models, preload_fid_fn)?;
+    load_custom_block_models(
+        game_folder,
+        map_desc.custom_block_models,
+        preload_fid_fn,
+        load_block_fn,
+    )?;
+
     load_custom_item_models(game_folder, map_desc.custom_item_models, preload_fid_fn)?;
 
     let place_block_fn = PlaceBlockFn::find(exe_module_memory)?;
@@ -402,6 +409,7 @@ fn load_custom_block_models(
     folder: &mut FidsFolder,
     item_models_gbx: Vec<Vec<u8>>,
     preload_fid_fn: PreloadFidFn,
+    load_block_fn: LoadBlockFn,
 ) -> Result<(), Box<dyn Error>> {
     let mut file_paths = vec![];
 
@@ -431,11 +439,15 @@ fn load_custom_block_models(
             .copied()
             .unwrap();
 
-        let block_model = unsafe {
-            preload_fid_fn
+        let item_model = unsafe {
+            &mut *(preload_fid_fn
                 .call(file as *const FidFile as *mut FidFile)
-                .ok_or("failed to preload fid")?
+                .ok_or("failed to preload fid")? as *mut Nod as *mut ItemModel)
         };
+
+        load_block_fn.call(item_model, file);
+
+        let block_info = item_model.entity_model().unwrap();
     }
 
     Ok(())
