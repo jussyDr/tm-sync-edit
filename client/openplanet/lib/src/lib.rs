@@ -26,8 +26,8 @@ use ahash::AHashMap;
 use async_compat::CompatExt;
 use futures::{task::noop_waker_ref, TryStreamExt};
 use game::{
-    cast_nod, BlockInfo, FidsFolder, IdNameFn, ItemModel, MapEditor, NodRef, PlaceBlockFn,
-    PlaceItemFn, PreloadFidFn,
+    cast_nod, fids_folder_full_path, BlockInfo, FidFile, FidsFolder, IdNameFn, ItemModel,
+    MapEditor, NodRef, PlaceBlockFn, PlaceItemFn, PreloadFidFn,
 };
 use native_dialog::{MessageDialog, MessageType};
 use os::Process;
@@ -185,6 +185,8 @@ async fn connection(
     let process = Process::open_current()?;
     let exe_module_memory = process.main_module_memory()?;
 
+    let preload_fid_fn = PreloadFidFn::find(exe_module_memory)?;
+
     let mut game_block_infos = AHashMap::new();
     let mut game_item_models = AHashMap::new();
 
@@ -193,20 +195,10 @@ async fn connection(
         &mut game_block_infos,
         &mut game_item_models,
         exe_module_memory,
+        preload_fid_fn,
     )?;
 
-    let path = PathBuf::from(game_folder.name());
-
-    for item_model in map_desc.custom_item_models {
-        let mut file_path = path.clone();
-
-        let hash = blake3::hash(&item_model);
-        file_path.push(hash.to_string());
-
-        fs::write(file_path, item_model)?;
-
-        game_folder.update_tree(false);
-    }
+    load_custom_item_models(game_folder, map_desc.custom_item_models, preload_fid_fn)?;
 
     let place_block_fn = PlaceBlockFn::find(exe_module_memory)?;
     let place_item_fn = PlaceItemFn::find(exe_module_memory)?;
@@ -314,8 +306,8 @@ fn load_game_models(
     block_infos: &mut AHashMap<String, NodRef<BlockInfo>>,
     item_models: &mut AHashMap<String, NodRef<ItemModel>>,
     exe_module_memory: &[u8],
+    preload_fid_fn: PreloadFidFn,
 ) -> Result<(), Box<dyn Error>> {
-    let preload_fid_fn = PreloadFidFn::find(exe_module_memory)?;
     let id_name_fn = IdNameFn::find(exe_module_memory)?;
 
     let game_data_folder = game_folder
@@ -400,6 +392,49 @@ fn load_item_models(
 
             item_models.insert(id_name, NodRef::from(item_model));
         }
+    }
+
+    Ok(())
+}
+
+fn load_custom_item_models(
+    folder: &mut FidsFolder,
+    item_models_gbx: Vec<Vec<u8>>,
+    preload_fid_fn: PreloadFidFn,
+) -> Result<(), Box<dyn Error>> {
+    let mut file_paths = vec![];
+
+    let folder_path: PathBuf = fids_folder_full_path(folder);
+
+    for item_model_gbx in item_models_gbx {
+        let hash = blake3::hash(&item_model_gbx);
+
+        let mut file_path = folder_path.clone();
+        file_path.push(hash.to_string());
+        file_path.set_extension("Item.Gbx");
+
+        fs::write(&file_path, item_model_gbx)?;
+
+        file_paths.push(file_path);
+    }
+
+    folder.update_tree(false);
+
+    for file_path in file_paths {
+        let file_name = file_path.file_name().unwrap();
+
+        let file = folder
+            .leaves()
+            .iter()
+            .find(|file| file.name() == file_name)
+            .copied()
+            .unwrap();
+
+        let item_mod = unsafe {
+            preload_fid_fn
+                .call(file as *const FidFile as *mut FidFile)
+                .ok_or("failed to preload fid")?
+        };
     }
 
     Ok(())

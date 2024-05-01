@@ -16,6 +16,7 @@ use std::{
     ffi::c_char,
     mem::MaybeUninit,
     ops::{Deref, DerefMut},
+    path::PathBuf,
     slice, str,
 };
 
@@ -368,5 +369,16 @@ impl<T: DerefMut<Target = Nod>> From<&T> for NodRef<T> {
         nod.ref_count += 1;
 
         Self { ptr }
+    }
+}
+
+pub fn fids_folder_full_path(folder: &FidsFolder) -> PathBuf {
+    if let Some(parent_folder) = folder.parent_folder() {
+        let mut path = fids_folder_full_path(parent_folder);
+        path.push(folder.name());
+
+        path
+    } else {
+        PathBuf::from(folder.name())
     }
 }
