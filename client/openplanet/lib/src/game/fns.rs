@@ -160,18 +160,25 @@ impl PlaceBlockFn {
     pub unsafe fn call_free(
         &self,
         map_editor: &mut MapEditor,
-        block_info: &mut BlockInfo,
+        block_info: &BlockInfo,
         elem_color: ElemColor,
-        x: f32,
-        y: f32,
-        z: f32,
-        yaw: f32,
-        pitch: f32,
-        roll: f32,
+        x: NotNan<f32>,
+        y: NotNan<f32>,
+        z: NotNan<f32>,
+        yaw: NotNan<f32>,
+        pitch: NotNan<f32>,
+        roll: NotNan<f32>,
     ) -> Option<&Block> {
         let mut coord = [0xffffffff, 0, 0xffffffff];
 
-        let mut transform = [x, y, z, yaw, pitch, roll];
+        let mut transform = [
+            x.into_inner(),
+            y.into_inner(),
+            z.into_inner(),
+            yaw.into_inner(),
+            pitch.into_inner(),
+            roll.into_inner(),
+        ];
 
         let block = (self.0)(
             map_editor,

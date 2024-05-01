@@ -231,7 +231,28 @@ async fn connection(
                     )
                 };
             }
-            BlockDescKind::Free { .. } => {}
+            BlockDescKind::Free {
+                x,
+                y,
+                z,
+                yaw,
+                pitch,
+                roll,
+            } => {
+                unsafe {
+                    place_block_fn.call_free(
+                        map_editor,
+                        block_info,
+                        block_desc.elem_color,
+                        x,
+                        y,
+                        z,
+                        yaw,
+                        pitch,
+                        roll,
+                    )
+                };
+            }
         }
     }
 
