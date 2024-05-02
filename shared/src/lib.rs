@@ -1,5 +1,6 @@
 use std::error::Error;
 
+use gamebox::engines::game::map::{Direction, ElemColor};
 use ordered_float::NotNan;
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpStream;
@@ -84,24 +85,4 @@ pub struct ItemDesc {
 pub enum ModelId {
     Game { name: String },
     Custom { hash: blake3::Hash },
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum Direction {
-    North,
-    East,
-    South,
-    West,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum ElemColor {
-    Default,
-    White,
-    Green,
-    Blue,
-    Red,
-    Black,
 }

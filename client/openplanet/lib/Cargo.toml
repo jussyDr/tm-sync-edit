@@ -15,10 +15,11 @@ autopad = "1.0.0"
 blake3 = "1.5.1"
 futures = "0.3.30"
 futures-util = { version = "0.3.30", features = ["sink"] }
+gamebox = { git = "https://github.com/jussyDr/gamebox" }
 memchr = "2.7.2"
 native-dialog = "0.7.0"
 ordered-float = "4.2.0"
-tokio = { version = "1.36.0", features = ["macros", "net"] }
+tokio = { version = "1.37.0", features = ["macros", "net"] }
 
 [dependencies.windows-sys]
 version = "0.52.0"

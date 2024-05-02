@@ -5,9 +5,9 @@ use std::{
     ptr::null_mut,
 };
 
+use gamebox::engines::game::map::{Direction, ElemColor};
 use memchr::memmem;
 use ordered_float::NotNan;
-use shared::{Direction, ElemColor};
 
 use super::{Block, BlockInfo, FidFile, Item, ItemModel, ItemParams, MapEditor, Nod};
 

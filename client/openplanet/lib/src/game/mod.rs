@@ -2,11 +2,11 @@ mod fns;
 mod hook;
 
 pub use fns::*;
+use gamebox::engines::game::map::{Direction, ElemColor};
 pub use hook::*;
 
 use autopad::autopad;
 use ordered_float::NotNan;
-use shared::{Direction, ElemColor};
 
 use std::{
     ffi::c_char,

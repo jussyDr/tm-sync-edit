@@ -2,7 +2,7 @@ use std::{error::Error, path::Path};
 
 use gamebox::engines::game::map::BlockKind;
 use ordered_float::NotNan;
-use shared::{BlockDesc, BlockDescKind, Direction, ElemColor, ItemDesc, MapDesc, ModelId};
+use shared::{BlockDesc, BlockDescKind, ItemDesc, MapDesc, ModelId};
 
 pub struct Map {
     pub desc: MapDesc,
@@ -40,7 +40,7 @@ impl Map {
                         x: coord[0],
                         y: coord[1],
                         z: coord[2],
-                        direction: direction_from_gbx_direction(gbx_kind.direction()),
+                        direction: gbx_kind.direction(),
                         is_ground: gbx_kind.is_ground(),
                         is_ghost: gbx_kind.is_ghost(),
                     }
@@ -64,7 +64,7 @@ impl Map {
                 model_id: ModelId::Game {
                     name: gbx_block.id().to_owned(),
                 },
-                elem_color: elem_color_from_gbx_elem_color(gbx_block.elem_color()),
+                elem_color: gbx_block.elem_color(),
                 kind,
             });
         }
@@ -85,7 +85,7 @@ impl Map {
                 yaw: NotNan::new(rotation[0]).unwrap(),
                 pitch: NotNan::new(rotation[1]).unwrap(),
                 roll: NotNan::new(rotation[2]).unwrap(),
-                elem_color: elem_color_from_gbx_elem_color(gbx_item.elem_color()),
+                elem_color: gbx_item.elem_color(),
             })
         }
 
@@ -97,29 +97,5 @@ impl Map {
                 items,
             },
         })
-    }
-}
-
-fn direction_from_gbx_direction(
-    gbx_direction: gamebox::engines::game::map::Direction,
-) -> Direction {
-    match gbx_direction {
-        gamebox::engines::game::map::Direction::North => Direction::North,
-        gamebox::engines::game::map::Direction::East => Direction::East,
-        gamebox::engines::game::map::Direction::South => Direction::South,
-        gamebox::engines::game::map::Direction::West => Direction::West,
-    }
-}
-
-fn elem_color_from_gbx_elem_color(
-    gbx_elem_color: gamebox::engines::game::map::ElemColor,
-) -> ElemColor {
-    match gbx_elem_color {
-        gamebox::engines::game::map::ElemColor::Default => ElemColor::Default,
-        gamebox::engines::game::map::ElemColor::White => ElemColor::White,
-        gamebox::engines::game::map::ElemColor::Green => ElemColor::Green,
-        gamebox::engines::game::map::ElemColor::Blue => ElemColor::Blue,
-        gamebox::engines::game::map::ElemColor::Red => ElemColor::Red,
-        gamebox::engines::game::map::ElemColor::Black => ElemColor::Black,
     }
 }
