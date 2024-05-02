@@ -305,6 +305,7 @@ impl PlaceItemFn {
         x: NotNan<f32>,
         y: NotNan<f32>,
         z: NotNan<f32>,
+        elem_color: ElemColor,
     ) -> u32 {
         let coord = coord_from_pos([x.into_inner(), y.into_inner(), z.into_inner()]);
 
@@ -326,7 +327,7 @@ impl PlaceItemFn {
             param_15: 0xffffffff,
             param_16: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             param_17: [-1.0, -1.0, -1.0],
-            param_18: 0xfe000000,
+            elem_color,
             param_19: 0,
         };
 

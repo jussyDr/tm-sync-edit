@@ -31,11 +31,10 @@ use game::{
     LoadBlockFn, MapEditor, Nod, NodRef, PlaceBlockFn, PlaceItemFn, PreloadFidFn,
 };
 use native_dialog::{MessageDialog, MessageType};
-use ordered_float::NotNan;
 use os::Process;
 use shared::{
-    deserialize, framed_tcp_stream, serialize, BlockDesc, BlockDescKind, Direction, ElemColor,
-    FramedTcpStream, ItemDesc, MapDesc, Message, ModelId,
+    deserialize, framed_tcp_stream, serialize, BlockDesc, BlockDescKind, FramedTcpStream, ItemDesc,
+    MapDesc, Message, ModelId,
 };
 use tokio::{net::TcpStream, select};
 use windows_sys::Win32::{
@@ -303,6 +302,7 @@ async fn connection(
                 item_desc.x,
                 item_desc.y,
                 item_desc.z,
+                item_desc.elem_color,
             )
         };
     }
@@ -553,7 +553,7 @@ unsafe extern "system" fn place_block_callback(context: &mut Context, block: Opt
                     x: block.x_coord as u8,
                     y: block.y_coord as u8,
                     z: block.z_coord as u8,
-                    direction: Direction::East,
+                    direction: block.direction,
                     is_ground: block.is_ground(),
                     is_ghost: block.is_ghost(),
                 }
@@ -563,7 +563,7 @@ unsafe extern "system" fn place_block_callback(context: &mut Context, block: Opt
 
             let block_desc = BlockDesc {
                 model_id: ModelId::Game { name },
-                elem_color: ElemColor::Default,
+                elem_color: block.elem_color,
                 kind,
             };
 
@@ -598,7 +598,7 @@ unsafe extern "system" fn remove_block_callback(context: &mut Context, block: &B
                 x: block.x_coord as u8,
                 y: block.y_coord as u8,
                 z: block.z_coord as u8,
-                direction: Direction::East,
+                direction: block.direction,
                 is_ground: block.is_ground(),
                 is_ghost: block.is_ghost(),
             }
@@ -608,7 +608,7 @@ unsafe extern "system" fn remove_block_callback(context: &mut Context, block: &B
 
         let block_desc = BlockDesc {
             model_id: ModelId::Game { name },
-            elem_color: ElemColor::Default,
+            elem_color: block.elem_color,
             kind,
         };
 
@@ -642,7 +642,7 @@ unsafe extern "system" fn place_item_callback(
             yaw: item_params.yaw,
             pitch: item_params.pitch,
             roll: item_params.roll,
-            elem_color: ElemColor::Black,
+            elem_color: item_params.elem_color,
         };
 
         let message = Message::PlaceItem(item_desc);
@@ -673,7 +673,7 @@ unsafe extern "system" fn remove_item_callback(context: &mut Context, item: &Ite
             yaw: item_params.yaw,
             pitch: item_params.pitch,
             roll: item_params.roll,
-            elem_color: ElemColor::Black,
+            elem_color: item_params.elem_color,
         };
 
         let message = Message::RemoveItem(item_desc);

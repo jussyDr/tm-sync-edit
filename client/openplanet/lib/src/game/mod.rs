@@ -320,7 +320,7 @@ pub struct ItemParams {
     pub param_15: u32,
     pub param_16: [u32; 10],
     pub param_17: [f32; 3],
-    pub param_18: u32,
+    pub elem_color: ElemColor,
     pub param_19: usize,
 }
 
