@@ -124,7 +124,7 @@ async fn handle_client(
         select! {
             result = framed_tcp_stream.try_next() => match result? {
                 None => break,
-                Some(frame) => handle_frame(frame.freeze()).await?,
+                Some(frame) => handle_frame(state, frame.freeze()).await?,
             },
             option = receiver.recv() => match option {
                 None => break,
@@ -136,21 +136,45 @@ async fn handle_client(
     Ok(())
 }
 
-async fn handle_frame(frame: Bytes) -> Result<(), Box<dyn Error>> {
+async fn handle_frame(state: &Arc<Mutex<State>>, frame: Bytes) -> Result<(), Box<dyn Error>> {
     let message: Message = deserialize(&frame)?;
 
     match message {
         Message::PlaceBlock(block_desc) => {
             println!("placed block: {block_desc:?}");
+
+            let frame = Bytes::from(serialize(&Message::RemoveBlock(block_desc))?);
+
+            for client in state.lock().await.clients.values() {
+                client.send(frame.clone())?;
+            }
         }
         Message::RemoveBlock(block_desc) => {
             println!("removed block: {block_desc:?}");
+
+            let frame = Bytes::from(serialize(&Message::PlaceBlock(block_desc))?);
+
+            for client in state.lock().await.clients.values() {
+                client.send(frame.clone())?;
+            }
         }
         Message::PlaceItem(item_desc) => {
             println!("placed item: {item_desc:?}");
+
+            let frame = Bytes::from(serialize(&Message::RemoveItem(item_desc))?);
+
+            for client in state.lock().await.clients.values() {
+                client.send(frame.clone())?;
+            }
         }
         Message::RemoveItem(item_desc) => {
             println!("removed item {item_desc:?}");
+
+            let frame = Bytes::from(serialize(&Message::PlaceItem(item_desc))?);
+
+            for client in state.lock().await.clients.values() {
+                client.send(frame.clone())?;
+            }
         }
         Message::AddBlockModel { .. } => {}
         Message::AddItemModel { .. } => {}

@@ -127,7 +127,10 @@ struct Context {
 
     connection_future: Option<ConnectionFuture>,
     framed_tcp_stream: Option<FramedTcpStream>,
+    game_block_infos: Option<AHashMap<String, NodRef<BlockInfo>>>,
     id_name_fn: Option<IdNameFn>,
+    place_block_fn: Option<PlaceBlockFn>,
+    hooks_enabled: bool,
 }
 
 impl Context {
@@ -140,7 +143,10 @@ impl Context {
 
             connection_future: None,
             framed_tcp_stream: None,
+            game_block_infos: None,
             id_name_fn: None,
+            place_block_fn: None,
+            hooks_enabled: true,
         }
     }
 
@@ -210,6 +216,8 @@ async fn connection(
         preload_fid_fn,
     )?;
 
+    context.game_block_infos = Some(game_block_infos);
+
     load_custom_block_models(
         game_folder,
         map_desc.custom_block_models,
@@ -219,14 +227,17 @@ async fn connection(
 
     load_custom_item_models(game_folder, map_desc.custom_item_models, preload_fid_fn)?;
 
-    let place_block_fn = PlaceBlockFn::find(exe_module_memory)?;
+    context.place_block_fn = Some(PlaceBlockFn::find(exe_module_memory)?);
     let place_item_fn = PlaceItemFn::find(exe_module_memory)?;
 
     let map_editor = unsafe { &mut *(context.map_editor.unwrap().get() as *mut MapEditor) };
 
     for block_desc in map_desc.blocks {
         let block_info = match block_desc.model_id {
-            ModelId::Game { ref name } => game_block_infos
+            ModelId::Game { ref name } => context
+                .game_block_infos
+                .as_mut()
+                .unwrap()
                 .get(name)
                 .ok_or("failed to find block info with the given name")?,
             ModelId::Custom { .. } => {
@@ -244,7 +255,7 @@ async fn connection(
                 is_ghost,
             } => {
                 unsafe {
-                    place_block_fn.call_normal(
+                    context.place_block_fn.as_mut().unwrap().call_normal(
                         map_editor,
                         block_info,
                         x,
@@ -266,7 +277,7 @@ async fn connection(
                 roll,
             } => {
                 unsafe {
-                    place_block_fn.call_free(
+                    context.place_block_fn.as_mut().unwrap().call_free(
                         map_editor,
                         block_info,
                         block_desc.elem_color,
@@ -321,7 +332,7 @@ async fn connection(
         select! {
             result = context.framed_tcp_stream.as_mut().unwrap().try_next() => match result? {
                 None => return Err("server closed connection".into()),
-                Some(frame) => handle_frame( &frame).await?,
+                Some(frame) => handle_frame(context, &frame).await?,
             }
         }
     }
@@ -538,6 +549,10 @@ async fn open_map_editor(context: &mut Context) {
 
 unsafe extern "system" fn place_block_callback(context: &mut Context, block: Option<&Block>) {
     block_on(async {
+        if !context.hooks_enabled {
+            return;
+        }
+
         if let Some(block) = block {
             let kind = if block.is_free() {
                 BlockDescKind::Free {
@@ -584,6 +599,10 @@ unsafe extern "system" fn place_block_callback(context: &mut Context, block: Opt
 
 unsafe extern "system" fn remove_block_callback(context: &mut Context, block: &Block) {
     block_on(async {
+        if !context.hooks_enabled {
+            return;
+        }
+
         let kind = if block.is_free() {
             BlockDescKind::Free {
                 x: block.x_pos,
@@ -632,6 +651,10 @@ unsafe extern "system" fn place_item_callback(
     item_params: &ItemParams,
 ) {
     block_on(async {
+        if !context.hooks_enabled {
+            return;
+        }
+
         let name = context.id_name_fn.unwrap().call(item_model.id);
 
         let item_desc = ItemDesc {
@@ -661,6 +684,10 @@ unsafe extern "system" fn place_item_callback(
 
 unsafe extern "system" fn remove_item_callback(context: &mut Context, item: &Item) {
     block_on(async {
+        if !context.hooks_enabled {
+            return;
+        }
+
         let name = context.id_name_fn.unwrap().call(item.model().id);
 
         let item_params = &item.params;
@@ -690,17 +717,82 @@ unsafe extern "system" fn remove_item_callback(context: &mut Context, item: &Ite
     })
 }
 
-async fn handle_frame(frame: &[u8]) -> Result<(), Box<dyn Error>> {
+async fn handle_frame(context: &mut Context, frame: &[u8]) -> Result<(), Box<dyn Error>> {
     let message = deserialize(frame)?;
 
+    let map_editor = unsafe { &mut *(context.map_editor.unwrap().get() as *mut MapEditor) };
+
+    context.hooks_enabled = false;
+
     match message {
-        Message::PlaceBlock(..) => {}
-        Message::RemoveBlock(..) => {}
-        Message::PlaceItem(..) => {}
-        Message::RemoveItem(..) => {}
+        Message::PlaceBlock(block_desc) => {
+            let block_info = match block_desc.model_id {
+                ModelId::Game { ref name } => context
+                    .game_block_infos
+                    .as_mut()
+                    .unwrap()
+                    .get(name)
+                    .ok_or("failed to find block info with the given name")?,
+                ModelId::Custom { .. } => {
+                    todo!()
+                }
+            };
+
+            match block_desc.kind {
+                BlockDescKind::Normal {
+                    x,
+                    y,
+                    z,
+                    direction,
+                    is_ground,
+                    is_ghost,
+                } => {
+                    unsafe {
+                        context.place_block_fn.as_mut().unwrap().call_normal(
+                            map_editor,
+                            block_info,
+                            x,
+                            y,
+                            z,
+                            direction,
+                            block_desc.elem_color,
+                            is_ghost,
+                            is_ground,
+                        )
+                    };
+                }
+                BlockDescKind::Free {
+                    x,
+                    y,
+                    z,
+                    yaw,
+                    pitch,
+                    roll,
+                } => {
+                    unsafe {
+                        context.place_block_fn.as_mut().unwrap().call_free(
+                            map_editor,
+                            block_info,
+                            block_desc.elem_color,
+                            x,
+                            y,
+                            z,
+                            yaw,
+                            pitch,
+                            roll,
+                        )
+                    };
+                }
+            }
+        }
+        Message::RemoveBlock(block_desc) => {}
+        Message::PlaceItem(item_desc) => {}
+        Message::RemoveItem(item_desc) => {}
         Message::AddBlockModel { .. } => {}
         Message::AddItemModel { .. } => {}
     }
+
+    context.hooks_enabled = true;
 
     Ok(())
 }
