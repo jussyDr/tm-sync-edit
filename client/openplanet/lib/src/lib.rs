@@ -128,8 +128,10 @@ struct Context {
     connection_future: Option<ConnectionFuture>,
     framed_tcp_stream: Option<FramedTcpStream>,
     game_block_infos: Option<AHashMap<String, NodRef<BlockInfo>>>,
+    game_item_models: Option<AHashMap<String, NodRef<ItemModel>>>,
     id_name_fn: Option<IdNameFn>,
     place_block_fn: Option<PlaceBlockFn>,
+    place_item_fn: Option<PlaceItemFn>,
     hooks_enabled: bool,
 }
 
@@ -144,8 +146,10 @@ impl Context {
             connection_future: None,
             framed_tcp_stream: None,
             game_block_infos: None,
+            game_item_models: None,
             id_name_fn: None,
             place_block_fn: None,
+            place_item_fn: None,
             hooks_enabled: true,
         }
     }
@@ -217,6 +221,7 @@ async fn connection(
     )?;
 
     context.game_block_infos = Some(game_block_infos);
+    context.game_item_models = Some(game_item_models);
 
     load_custom_block_models(
         game_folder,
@@ -228,7 +233,7 @@ async fn connection(
     load_custom_item_models(game_folder, map_desc.custom_item_models, preload_fid_fn)?;
 
     context.place_block_fn = Some(PlaceBlockFn::find(exe_module_memory)?);
-    let place_item_fn = PlaceItemFn::find(exe_module_memory)?;
+    context.place_item_fn = Some(PlaceItemFn::find(exe_module_memory)?);
 
     let map_editor = unsafe { &mut *(context.map_editor.unwrap().get() as *mut MapEditor) };
 
@@ -295,7 +300,10 @@ async fn connection(
 
     for item_desc in map_desc.items {
         let item_model = match item_desc.model_id {
-            ModelId::Game { ref name } => game_item_models
+            ModelId::Game { ref name } => context
+                .game_item_models
+                .as_mut()
+                .unwrap()
                 .get(name)
                 .ok_or("failed to find item model with the given name")?,
             ModelId::Custom { .. } => {
@@ -304,7 +312,7 @@ async fn connection(
         };
 
         unsafe {
-            place_item_fn.call(
+            context.place_item_fn.as_mut().unwrap().call(
                 map_editor,
                 item_model,
                 item_desc.yaw,
@@ -786,7 +794,33 @@ async fn handle_frame(context: &mut Context, frame: &[u8]) -> Result<(), Box<dyn
             }
         }
         Message::RemoveBlock(block_desc) => {}
-        Message::PlaceItem(item_desc) => {}
+        Message::PlaceItem(item_desc) => {
+            let item_model = match item_desc.model_id {
+                ModelId::Game { ref name } => context
+                    .game_item_models
+                    .as_mut()
+                    .unwrap()
+                    .get(name)
+                    .ok_or("failed to find item model with the given name")?,
+                ModelId::Custom { .. } => {
+                    todo!()
+                }
+            };
+
+            unsafe {
+                context.place_item_fn.as_mut().unwrap().call(
+                    map_editor,
+                    item_model,
+                    item_desc.yaw,
+                    item_desc.pitch,
+                    item_desc.roll,
+                    item_desc.x,
+                    item_desc.y,
+                    item_desc.z,
+                    item_desc.elem_color,
+                )
+            };
+        }
         Message::RemoveItem(item_desc) => {}
         Message::AddBlockModel { .. } => {}
         Message::AddItemModel { .. } => {}
