@@ -670,38 +670,50 @@ unsafe extern "system" fn remove_block_callback(context: &mut Context, block: &B
 
 unsafe extern "system" fn place_item_callback(
     context: &mut Context,
-    item_model: &ItemModel,
-    item_params: &ItemParams,
+    item: *const Item,
+    success: bool,
 ) {
     block_on(async {
         if !context.hooks_enabled {
             return;
         }
 
-        let name = context.id_name_fn.unwrap().call(item_model.id);
+        if success {
+            let item = &*item;
 
-        let item_desc = ItemDesc {
-            model_id: ModelId::Game { name },
-            x: item_params.x_pos,
-            y: item_params.y_pos,
-            z: item_params.z_pos,
-            yaw: item_params.yaw,
-            pitch: item_params.pitch,
-            roll: item_params.roll,
-            elem_color: item_params.elem_color,
-        };
+            let name = context.id_name_fn.unwrap().call(item.model().id);
 
-        let message = Message::PlaceItem(item_desc);
+            let params = &item.params;
 
-        let frame = serialize(&message).unwrap();
+            let item_desc = ItemDesc {
+                model_id: ModelId::Game { name },
+                x: params.x_pos,
+                y: params.y_pos,
+                z: params.z_pos,
+                yaw: params.yaw,
+                pitch: params.pitch,
+                roll: params.roll,
+                elem_color: params.elem_color,
+            };
 
-        context
-            .framed_tcp_stream
-            .as_mut()
-            .unwrap()
-            .send(frame.into())
-            .await
-            .unwrap();
+            context
+                .items
+                .as_mut()
+                .unwrap()
+                .insert(item_desc.clone(), item as *const Item as *mut Item);
+
+            let message = Message::PlaceItem(item_desc);
+
+            let frame = serialize(&message).unwrap();
+
+            context
+                .framed_tcp_stream
+                .as_mut()
+                .unwrap()
+                .send(frame.into())
+                .await
+                .unwrap();
+        }
     })
 }
 

@@ -213,36 +213,38 @@ pub fn hook_remove_block(
 }
 
 pub type PlaceItemCallbackFn =
-    unsafe extern "system" fn(context: &mut Context, model: &ItemModel, params: &ItemParams);
+    unsafe extern "system" fn(context: &mut Context, item: *const Item, success: bool);
 
 pub fn hook_place_item(
     context: &mut Context,
     callback: PlaceItemCallbackFn,
 ) -> Result<Hook, Box<dyn Error>> {
     let code_pattern = &[
-        0x48, 0x89, 0x5c, 0x24, 0x10, 0x48, 0x89, 0x6c, 0x24, 0x18, 0x48, 0x89, 0x74, 0x24, 0x20,
-        0x57, 0x48, 0x83, 0xec, 0x40, 0x49, 0x8b, 0xf9,
+        0x33, 0xc0, 0x4c, 0x8b, 0x74, 0x24, 0x50, 0x48, 0x8b, 0x5c, 0x24, 0x58, 0x48, 0x8b, 0x6c,
+        0x24, 0x60, 0x48, 0x8b, 0x74, 0x24, 0x68, 0x48, 0x83, 0xc4, 0x40, 0x5f, 0xc3,
     ];
 
-    let original_code = &code_pattern[..15];
+    let original_code = &code_pattern[7..];
 
-    let trampoline_code_fn = |hook_end_ptr| {
+    let trampoline_code_fn = |_hook_end_ptr| {
         let mut trampoline_code = vec![];
 
-        trampoline_code.extend_from_slice(original_code);
+        trampoline_code.extend_from_slice(&[
+            0x48, 0x89, 0xda, // mov rdx, rbx
+        ]);
+
+        trampoline_code.extend_from_slice(&original_code[..19]);
 
         trampoline_code.extend_from_slice(&[
-            0x51, // push rcx
-            0x52, // push rdx
-            0x41, 0x50, // push r8
-            0x41, 0x51, // push r9
-            0x48, 0x83, 0xec, 0x28, // sub rsp, 40
+            0x50, // push rax
+            0x50, // push rax
             0x48, 0xb9, // mov rcx, ????????
         ]);
 
         trampoline_code.extend_from_slice(&(context as *mut Context as usize).to_le_bytes());
 
         trampoline_code.extend_from_slice(&[
+            0x49, 0x89, 0xc0, // mov r8, rax
             0x48, 0xb8, // mov rax, ????????
         ]);
 
@@ -250,18 +252,10 @@ pub fn hook_place_item(
 
         trampoline_code.extend_from_slice(&[
             0xff, 0xd0, // call rax
-            0x48, 0x83, 0xc4, 0x28, // add rsp, 40
-            0x41, 0x59, // pop r9
-            0x41, 0x58, // pop r8
-            0x5a, // pop rdx
-            0x59, // pop rcx
-            0x48, 0xb8, // mov rax, ????????
-        ]);
-
-        trampoline_code.extend_from_slice(&(hook_end_ptr as usize).to_le_bytes());
-
-        trampoline_code.extend_from_slice(&[
-            0xff, 0xe0, // jmp rax
+            0x58, // pop rax
+            0x58, // pop rax
+            0x5f, // pop rdi
+            0xc3, // ret
         ]);
 
         trampoline_code
@@ -271,13 +265,13 @@ pub fn hook_place_item(
         let mut hook_code = vec![];
 
         hook_code.extend_from_slice(&[
-            0x48, 0xb8, // mov rax, ????????
+            0x48, 0xb9, // mov rcx, ????????
         ]);
 
         hook_code.extend_from_slice(&(trampoline_ptr as usize).to_le_bytes());
 
         hook_code.extend_from_slice(&[
-            0xff, 0xe0, // jmp rax
+            0xff, 0xe1, // jmp rcx
         ]);
 
         hook_code
@@ -285,7 +279,7 @@ pub fn hook_place_item(
 
     Hook::new(
         code_pattern,
-        0,
+        7,
         original_code,
         trampoline_code_fn,
         hook_code_fn,
