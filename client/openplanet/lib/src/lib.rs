@@ -27,8 +27,9 @@ use async_compat::CompatExt;
 use futures::{executor::block_on, task::noop_waker_ref, SinkExt, TryStreamExt};
 use game::{
     cast_nod, fids_folder_full_path, hook_place_block, hook_place_item, hook_remove_block,
-    hook_remove_item, Block, BlockInfo, FidFile, FidsFolder, IdNameFn, Item, ItemModel, ItemParams,
-    LoadBlockFn, MapEditor, Nod, NodRef, PlaceBlockFn, PlaceItemFn, PreloadFidFn,
+    hook_remove_item, Block, BlockInfo, FidFile, FidsFolder, IdNameFn, Item, ItemModel,
+    LoadBlockFn, MapEditor, Nod, NodRef, PlaceBlockFn, PlaceItemFn, PreloadFidFn, RemoveBlockFn,
+    RemoveItemFn,
 };
 use native_dialog::{MessageDialog, MessageType};
 use os::Process;
@@ -131,7 +132,9 @@ struct Context {
     game_item_models: Option<AHashMap<String, NodRef<ItemModel>>>,
     id_name_fn: Option<IdNameFn>,
     place_block_fn: Option<PlaceBlockFn>,
+    remove_block_fn: Option<RemoveBlockFn>,
     place_item_fn: Option<PlaceItemFn>,
+    remove_item_fn: Option<RemoveItemFn>,
     hooks_enabled: bool,
     blocks: Option<AHashMap<BlockDesc, *mut Block>>,
     items: Option<AHashMap<ItemDesc, *mut Item>>,
@@ -151,7 +154,9 @@ impl Context {
             game_item_models: None,
             id_name_fn: None,
             place_block_fn: None,
+            remove_block_fn: None,
             place_item_fn: None,
+            remove_item_fn: None,
             hooks_enabled: true,
             blocks: None,
             items: None,
@@ -237,7 +242,9 @@ async fn connection(
     load_custom_item_models(game_folder, map_desc.custom_item_models, preload_fid_fn)?;
 
     context.place_block_fn = Some(PlaceBlockFn::find(exe_module_memory)?);
+    context.remove_block_fn = Some(RemoveBlockFn::find(exe_module_memory)?);
     context.place_item_fn = Some(PlaceItemFn::find(exe_module_memory)?);
+    context.remove_item_fn = Some(RemoveItemFn::find(exe_module_memory)?);
 
     let map_editor = unsafe { &mut *(context.map_editor.unwrap().get() as *mut MapEditor) };
 
@@ -822,7 +829,17 @@ async fn handle_frame(context: &mut Context, frame: &[u8]) -> Result<(), Box<dyn
                 }
             }
         }
-        Message::RemoveBlock(block_desc) => {}
+        Message::RemoveBlock(block_desc) => {
+            if let Some(&block) = context.blocks.as_mut().unwrap().get(&block_desc) {
+                unsafe {
+                    context
+                        .remove_block_fn
+                        .as_mut()
+                        .unwrap()
+                        .call(map_editor, &mut *block)
+                };
+            }
+        }
         Message::PlaceItem(item_desc) => {
             let item_model = match item_desc.model_id {
                 ModelId::Game { ref name } => context
@@ -850,7 +867,17 @@ async fn handle_frame(context: &mut Context, frame: &[u8]) -> Result<(), Box<dyn
                 )
             };
         }
-        Message::RemoveItem(item_desc) => {}
+        Message::RemoveItem(item_desc) => {
+            if let Some(&item) = context.items.as_mut().unwrap().get(&item_desc) {
+                unsafe {
+                    context
+                        .remove_item_fn
+                        .as_mut()
+                        .unwrap()
+                        .call(map_editor, &mut *item)
+                };
+            }
+        }
         Message::AddBlockModel { .. } => {}
         Message::AddItemModel { .. } => {}
     }
