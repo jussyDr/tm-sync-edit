@@ -263,7 +263,7 @@ autopad! {
         0x080 => pub yaw: NotNan<f32>,
         0x084 => pub pitch: NotNan<f32>,
         0x088 => pub roll: NotNan<f32>,
-        0x08C => pub flags: BlockFlags,
+        0x08C => pub flags: u32,
         0x09C => pub elem_color: ElemColor
     }
 }
@@ -272,22 +272,17 @@ impl Block {
     pub fn block_info(&self) -> &BlockInfo {
         unsafe { &*self.block_info }
     }
-}
 
-#[repr(transparent)]
-pub struct BlockFlags(u32);
-
-impl BlockFlags {
     pub fn is_ground(&self) -> bool {
-        self.0 & 0x00001000 != 0
+        self.flags & 0x00001000 != 0
     }
 
     pub fn is_ghost(&self) -> bool {
-        self.0 & 0x10000000 != 0
+        self.flags & 0x10000000 != 0
     }
 
     pub fn is_free(&self) -> bool {
-        self.0 & 0x20000000 != 0
+        self.flags & 0x20000000 != 0
     }
 }
 

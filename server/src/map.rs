@@ -9,6 +9,17 @@ pub struct Map {
 }
 
 impl Map {
+    pub fn new() -> Self {
+        Self {
+            desc: MapDesc {
+                custom_block_models: vec![],
+                custom_item_models: vec![],
+                blocks: vec![],
+                items: vec![],
+            },
+        }
+    }
+
     pub fn load_from_gbx(path: impl AsRef<Path>) -> Result<Self, Box<dyn Error>> {
         let gbx_map: gamebox::Map = gamebox::read_file(path)?;
 

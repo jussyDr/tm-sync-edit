@@ -24,14 +24,19 @@ use std::{
 
 use ahash::AHashMap;
 use async_compat::CompatExt;
-use futures::{task::noop_waker_ref, TryStreamExt};
+use futures::{executor::block_on, task::noop_waker_ref, SinkExt, TryStreamExt};
 use game::{
-    cast_nod, fids_folder_full_path, BlockInfo, FidFile, FidsFolder, IdNameFn, ItemModel,
+    cast_nod, fids_folder_full_path, hook_place_block, hook_place_item, hook_remove_block,
+    hook_remove_item, Block, BlockInfo, FidFile, FidsFolder, IdNameFn, Item, ItemModel, ItemParams,
     LoadBlockFn, MapEditor, Nod, NodRef, PlaceBlockFn, PlaceItemFn, PreloadFidFn,
 };
 use native_dialog::{MessageDialog, MessageType};
+use ordered_float::NotNan;
 use os::Process;
-use shared::{deserialize, framed_tcp_stream, BlockDescKind, MapDesc, Message, ModelId};
+use shared::{
+    deserialize, framed_tcp_stream, serialize, BlockDesc, BlockDescKind, Direction, ElemColor,
+    FramedTcpStream, ItemDesc, MapDesc, Message, ModelId,
+};
 use tokio::{net::TcpStream, select};
 use windows_sys::Win32::{
     Foundation::{BOOL, HINSTANCE, TRUE},
@@ -122,6 +127,8 @@ struct Context {
     should_open_editor: bool,
 
     connection_future: Option<ConnectionFuture>,
+    framed_tcp_stream: Option<FramedTcpStream>,
+    id_name_fn: Option<IdNameFn>,
 }
 
 impl Context {
@@ -133,6 +140,8 @@ impl Context {
             should_open_editor: false,
 
             connection_future: None,
+            framed_tcp_stream: None,
+            id_name_fn: None,
         }
     }
 
@@ -169,9 +178,12 @@ async fn connection(
 
     let tcp_stream = TcpStream::connect(socket_addr).compat().await?;
 
-    let mut framed_tcp_stream = framed_tcp_stream(tcp_stream);
+    context.framed_tcp_stream = Some(framed_tcp_stream(tcp_stream));
 
-    let frame = framed_tcp_stream
+    let frame = context
+        .framed_tcp_stream
+        .as_mut()
+        .unwrap()
         .try_next()
         .await?
         .ok_or("server closed connection")?;
@@ -298,9 +310,16 @@ async fn connection(
     context.state = State::Connected;
     context.set_status_text("Connected");
 
+    context.id_name_fn = Some(IdNameFn::find(exe_module_memory)?);
+
+    let _place_block_hook = hook_place_block(context, place_block_callback)?;
+    let _remove_block_hook = hook_remove_block(context, remove_block_callback)?;
+    let _place_item_hook = hook_place_item(context, place_item_callback)?;
+    let _remove_item_hook = hook_remove_item(context, remove_item_callback)?;
+
     loop {
         select! {
-            result = framed_tcp_stream.try_next() => match result? {
+            result = context.framed_tcp_stream.as_mut().unwrap().try_next() => match result? {
                 None => return Err("server closed connection".into()),
                 Some(frame) => handle_frame( &frame).await?,
             }
@@ -515,6 +534,160 @@ async fn open_map_editor(context: &mut Context) {
     });
 
     future.await;
+}
+
+unsafe extern "system" fn place_block_callback(context: &mut Context, block: Option<&Block>) {
+    block_on(async {
+        if let Some(block) = block {
+            let kind = if block.is_free() {
+                BlockDescKind::Free {
+                    x: block.x_pos,
+                    y: block.y_pos,
+                    z: block.z_pos,
+                    yaw: block.yaw,
+                    pitch: block.pitch,
+                    roll: block.roll,
+                }
+            } else {
+                BlockDescKind::Normal {
+                    x: block.x_coord as u8,
+                    y: block.y_coord as u8,
+                    z: block.z_coord as u8,
+                    direction: Direction::East,
+                    is_ground: block.is_ground(),
+                    is_ghost: block.is_ghost(),
+                }
+            };
+
+            let name = context.id_name_fn.unwrap().call(block.block_info().id);
+
+            let block_desc = BlockDesc {
+                model_id: ModelId::Game { name },
+                elem_color: ElemColor::Default,
+                kind,
+            };
+
+            let message = Message::PlaceBlock(block_desc);
+
+            let frame = serialize(&message).unwrap();
+
+            context
+                .framed_tcp_stream
+                .as_mut()
+                .unwrap()
+                .send(frame.into())
+                .await
+                .unwrap();
+        }
+    })
+}
+
+unsafe extern "system" fn remove_block_callback(context: &mut Context, block: &Block) {
+    block_on(async {
+        let kind = if block.is_free() {
+            BlockDescKind::Free {
+                x: block.x_pos,
+                y: block.y_pos,
+                z: block.z_pos,
+                yaw: block.yaw,
+                pitch: block.pitch,
+                roll: block.roll,
+            }
+        } else {
+            BlockDescKind::Normal {
+                x: block.x_coord as u8,
+                y: block.y_coord as u8,
+                z: block.z_coord as u8,
+                direction: Direction::East,
+                is_ground: block.is_ground(),
+                is_ghost: block.is_ghost(),
+            }
+        };
+
+        let name = context.id_name_fn.unwrap().call(block.block_info().id);
+
+        let block_desc = BlockDesc {
+            model_id: ModelId::Game { name },
+            elem_color: ElemColor::Default,
+            kind,
+        };
+
+        let message = Message::RemoveBlock(block_desc);
+
+        let frame = serialize(&message).unwrap();
+
+        context
+            .framed_tcp_stream
+            .as_mut()
+            .unwrap()
+            .send(frame.into())
+            .await
+            .unwrap();
+    })
+}
+
+unsafe extern "system" fn place_item_callback(
+    context: &mut Context,
+    item_model: &ItemModel,
+    item_params: &ItemParams,
+) {
+    block_on(async {
+        let name = context.id_name_fn.unwrap().call(item_model.id);
+
+        let item_desc = ItemDesc {
+            model_id: ModelId::Game { name },
+            x: item_params.x_pos,
+            y: item_params.y_pos,
+            z: item_params.z_pos,
+            yaw: item_params.yaw,
+            pitch: item_params.pitch,
+            roll: item_params.roll,
+            elem_color: ElemColor::Black,
+        };
+
+        let message = Message::PlaceItem(item_desc);
+
+        let frame = serialize(&message).unwrap();
+
+        context
+            .framed_tcp_stream
+            .as_mut()
+            .unwrap()
+            .send(frame.into())
+            .await
+            .unwrap();
+    })
+}
+
+unsafe extern "system" fn remove_item_callback(context: &mut Context, item: &Item) {
+    block_on(async {
+        let name = context.id_name_fn.unwrap().call(item.model().id);
+
+        let item_params = &item.params;
+
+        let item_desc = ItemDesc {
+            model_id: ModelId::Game { name },
+            x: item_params.x_pos,
+            y: item_params.y_pos,
+            z: item_params.z_pos,
+            yaw: item_params.yaw,
+            pitch: item_params.pitch,
+            roll: item_params.roll,
+            elem_color: ElemColor::Black,
+        };
+
+        let message = Message::RemoveItem(item_desc);
+
+        let frame = serialize(&message).unwrap();
+
+        context
+            .framed_tcp_stream
+            .as_mut()
+            .unwrap()
+            .send(frame.into())
+            .await
+            .unwrap();
+    })
 }
 
 async fn handle_frame(frame: &[u8]) -> Result<(), Box<dyn Error>> {

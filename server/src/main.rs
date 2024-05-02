@@ -62,8 +62,7 @@ fn main() {
             .await
             .expect("failed to create tcp listener");
 
-        let map =
-            Map::load_from_gbx("C:/Users/Justin/Projects/tm-sync-edit/G H O S T.Map.Gbx").unwrap();
+        let map = Map::new();
 
         let state = Arc::new(Mutex::new(State {
             clients: HashMap::new(),

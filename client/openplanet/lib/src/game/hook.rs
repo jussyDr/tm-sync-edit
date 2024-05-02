@@ -133,8 +133,7 @@ pub fn hook_place_block(
     )
 }
 
-pub type RemoveBlockCallbackFn =
-    unsafe extern "system" fn(context: &mut Context, block: *mut Block);
+pub type RemoveBlockCallbackFn = unsafe extern "system" fn(context: &mut Context, block: &Block);
 
 pub fn hook_remove_block(
     context: &mut Context,
@@ -213,11 +212,8 @@ pub fn hook_remove_block(
     )
 }
 
-pub type PlaceItemCallbackFn = unsafe extern "system" fn(
-    context: &mut Context,
-    model: *mut ItemModel,
-    params: *mut ItemParams,
-);
+pub type PlaceItemCallbackFn =
+    unsafe extern "system" fn(context: &mut Context, model: &ItemModel, params: &ItemParams);
 
 pub fn hook_place_item(
     context: &mut Context,
@@ -296,7 +292,7 @@ pub fn hook_place_item(
     )
 }
 
-pub type RemoveItemCallbackFn = unsafe extern "system" fn(context: &mut Context, item: *mut Item);
+pub type RemoveItemCallbackFn = unsafe extern "system" fn(context: &mut Context, item: &Item);
 
 pub fn hook_remove_item(
     context: &mut Context,
