@@ -15,7 +15,7 @@ use std::{
     future::{poll_fn, Future},
     net::{IpAddr, SocketAddr},
     num::NonZeroUsize,
-    panic,
+    panic::{self},
     path::PathBuf,
     pin::Pin,
     str::FromStr,
@@ -133,6 +133,8 @@ struct Context {
     place_block_fn: Option<PlaceBlockFn>,
     place_item_fn: Option<PlaceItemFn>,
     hooks_enabled: bool,
+    blocks: Option<AHashMap<BlockDesc, *mut Block>>,
+    items: Option<AHashMap<ItemDesc, *mut Item>>,
 }
 
 impl Context {
@@ -151,6 +153,8 @@ impl Context {
             place_block_fn: None,
             place_item_fn: None,
             hooks_enabled: true,
+            blocks: None,
+            items: None,
         }
     }
 
@@ -328,6 +332,9 @@ async fn connection(
 
     context.state = State::Connected;
     context.set_status_text("Connected");
+
+    context.blocks = Some(AHashMap::new());
+    context.items = Some(AHashMap::new());
 
     context.id_name_fn = Some(IdNameFn::find(exe_module_memory)?);
 
@@ -590,6 +597,12 @@ unsafe extern "system" fn place_block_callback(context: &mut Context, block: Opt
                 kind,
             };
 
+            context
+                .blocks
+                .as_mut()
+                .unwrap()
+                .insert(block_desc.clone(), block as *const Block as *mut Block);
+
             let message = Message::PlaceBlock(block_desc);
 
             let frame = serialize(&message).unwrap();
@@ -638,6 +651,8 @@ unsafe extern "system" fn remove_block_callback(context: &mut Context, block: &B
             elem_color: block.elem_color,
             kind,
         };
+
+        context.blocks.as_mut().unwrap().remove(&block_desc);
 
         let message = Message::RemoveBlock(block_desc);
 
@@ -710,6 +725,8 @@ unsafe extern "system" fn remove_item_callback(context: &mut Context, item: &Ite
             roll: item_params.roll,
             elem_color: item_params.elem_color,
         };
+
+        context.items.as_mut().unwrap().remove(&item_desc);
 
         let message = Message::RemoveItem(item_desc);
 
