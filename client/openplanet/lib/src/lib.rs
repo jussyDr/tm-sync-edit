@@ -27,9 +27,9 @@ use async_compat::CompatExt;
 use futures::{executor::block_on, task::noop_waker_ref, SinkExt, TryStreamExt};
 use game::{
     cast_nod, fids_folder_full_path, hook_place_block, hook_place_item, hook_remove_block,
-    hook_remove_item, App, Block, BlockInfo, FidFile, FidsFolder, IdNameFn, Item, ItemModel,
-    LoadBlockFn, MapEditor, Nod, NodRef, PlaceBlockFn, PlaceItemFn, PreloadFidFn, RemoveBlockFn,
-    RemoveItemFn,
+    hook_remove_item, Block, BlockInfo, Class, FidFile, FidsFolder, IdNameFn, Item, ItemModel,
+    LoadBlockFn, ManiaPlanet, MapEditor, Nod, NodRef, PlaceBlockFn, PlaceItemFn, PreloadFidFn,
+    RemoveBlockFn, RemoveItemFn,
 };
 use native_dialog::{MessageDialog, MessageType};
 use os::Process;
@@ -82,7 +82,7 @@ unsafe extern "system" fn OpenConnection(
     context: *mut Context,
     host: *const c_char,
     port: *const c_char,
-    app: *mut App,
+    mania_planet: *mut ManiaPlanet,
     game_folder: *mut FidsFolder,
 ) {
     (*context).state = State::Connecting;
@@ -94,7 +94,7 @@ unsafe extern "system" fn OpenConnection(
         &mut *context,
         host,
         port,
-        &mut *app,
+        &mut *mania_planet,
         &mut *game_folder,
     ));
 
@@ -193,7 +193,7 @@ async fn connection(
     context: &mut Context,
     host: String,
     port: String,
-    app: &mut App,
+    mania_planet: &mut ManiaPlanet,
     game_folder: &mut FidsFolder,
 ) -> Result<(), Box<dyn Error>> {
     let ip_addr = IpAddr::from_str(&host)?;
@@ -218,7 +218,7 @@ async fn connection(
 
     context.set_status_text("Opening map editor...");
 
-    open_map_editor(context).await;
+    open_map_editor(mania_planet).await;
 
     let process = Process::open_current()?;
     let exe_module_memory = process.main_module_memory()?;
@@ -477,11 +477,38 @@ fn load_custom_item_models(
     Ok(())
 }
 
-async fn open_map_editor(context: &mut Context) {
+async fn open_map_editor(mania_planet: &ManiaPlanet) {
+    poll_fn(|_| {
+        let modules = mania_planet.switcher().modules();
+
+        if modules.is_empty() {
+            return Poll::Pending;
+        }
+
+        let current_module = *modules.last().unwrap();
+
+        if current_module.is_instance_of(MapEditor::ID) {
+            return Poll::Ready(());
+        }
+
+        let editor_open = modules
+            .iter()
+            .any(|module| module.is_instance_of(MapEditor::ID));
+
+        if editor_open {
+        } else {
+        }
+
+        Poll::Pending
+    })
+    .await;
+}
+
+async fn open_map_editor_old(context: &mut Context) {
     context.map_editor = None;
     context.should_open_editor = true;
 
-    let future = poll_fn(|_cx| {
+    let future = poll_fn(|_| {
         if context.map_editor.is_some() {
             context.should_open_editor = false;
 

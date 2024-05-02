@@ -356,6 +356,10 @@ impl DerefMut for Item {
 /// CGameCtnEditorFree.
 pub struct MapEditor;
 
+impl Class for MapEditor {
+    const ID: u32 = 0x0310f000;
+}
+
 pub trait Class {
     const ID: u32;
 }
@@ -369,14 +373,14 @@ pub fn cast_nod<T: Class>(nod: &Nod) -> Option<&T> {
 }
 
 autopad! {
-    /// CGameCtnApp.
+    /// CGameManiaPlanet.
     #[repr(C)]
-    pub struct App {
+    pub struct ManiaPlanet {
         0x7f0 => switcher: *mut Switcher,
     }
 }
 
-impl App {
+impl ManiaPlanet {
     pub fn switcher(&self) -> &Switcher {
         unsafe { &*self.switcher }
     }

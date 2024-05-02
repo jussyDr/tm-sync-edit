@@ -97,7 +97,7 @@ class Library {
     }
 
     void OpenConnection(const string&in host, const string&in port) {
-        m_openConnection.Call(m_context, host, port, GetApp(), Fids::GetGameFolder(""));
+        m_openConnection.Call(m_context, host, port, cast<CGameManiaPlanet>(GetApp()), Fids::GetGameFolder(""));
     }
 
     void UpdateConnection() {
