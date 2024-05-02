@@ -246,95 +246,12 @@ async fn connection(
     context.place_item_fn = Some(PlaceItemFn::find(exe_module_memory)?);
     context.remove_item_fn = Some(RemoveItemFn::find(exe_module_memory)?);
 
-    let map_editor = unsafe { &mut *(context.map_editor.unwrap().get() as *mut MapEditor) };
-
     for block_desc in map_desc.blocks {
-        let block_info = match block_desc.model_id {
-            ModelId::Game { ref name } => context
-                .game_block_infos
-                .as_mut()
-                .unwrap()
-                .get(name)
-                .ok_or("failed to find block info with the given name")?,
-            ModelId::Custom { .. } => {
-                todo!()
-            }
-        };
-
-        match block_desc.kind {
-            BlockDescKind::Normal {
-                x,
-                y,
-                z,
-                direction,
-                is_ground,
-                is_ghost,
-            } => {
-                unsafe {
-                    context.place_block_fn.as_mut().unwrap().call_normal(
-                        map_editor,
-                        block_info,
-                        x,
-                        y,
-                        z,
-                        direction,
-                        block_desc.elem_color,
-                        is_ghost,
-                        is_ground,
-                    )
-                };
-            }
-            BlockDescKind::Free {
-                x,
-                y,
-                z,
-                yaw,
-                pitch,
-                roll,
-            } => {
-                unsafe {
-                    context.place_block_fn.as_mut().unwrap().call_free(
-                        map_editor,
-                        block_info,
-                        block_desc.elem_color,
-                        x,
-                        y,
-                        z,
-                        yaw,
-                        pitch,
-                        roll,
-                    )
-                };
-            }
-        }
+        handle_place_block(context, &block_desc)?;
     }
 
     for item_desc in map_desc.items {
-        let item_model = match item_desc.model_id {
-            ModelId::Game { ref name } => context
-                .game_item_models
-                .as_mut()
-                .unwrap()
-                .get(name)
-                .ok_or("failed to find item model with the given name")?,
-            ModelId::Custom { .. } => {
-                todo!()
-            }
-        };
-
-        unsafe {
-            context.place_item_fn.as_mut().unwrap().call(
-                map_editor,
-                item_model,
-                item_desc.yaw,
-                item_desc.pitch,
-                item_desc.roll,
-                item_desc.x,
-                item_desc.y,
-                item_desc.z,
-                item_desc.elem_color,
-            )
-        };
+        handle_place_item(context, &item_desc)?;
     }
 
     context.state = State::Connected;
@@ -569,6 +486,103 @@ async fn open_map_editor(context: &mut Context) {
     future.await;
 }
 
+fn handle_place_block(context: &mut Context, block_desc: &BlockDesc) -> Result<(), Box<dyn Error>> {
+    let map_editor = unsafe { &mut *(context.map_editor.unwrap().get() as *mut MapEditor) };
+
+    let block_info = match block_desc.model_id {
+        ModelId::Game { ref name } => context
+            .game_block_infos
+            .as_mut()
+            .unwrap()
+            .get(name)
+            .ok_or("failed to find block info with the given name")?,
+        ModelId::Custom { .. } => {
+            todo!()
+        }
+    };
+
+    match block_desc.kind {
+        BlockDescKind::Normal {
+            x,
+            y,
+            z,
+            direction,
+            is_ground,
+            is_ghost,
+        } => {
+            unsafe {
+                context.place_block_fn.as_mut().unwrap().call_normal(
+                    map_editor,
+                    block_info,
+                    x,
+                    y,
+                    z,
+                    direction,
+                    block_desc.elem_color,
+                    is_ghost,
+                    is_ground,
+                )
+            };
+        }
+        BlockDescKind::Free {
+            x,
+            y,
+            z,
+            yaw,
+            pitch,
+            roll,
+        } => {
+            unsafe {
+                context.place_block_fn.as_mut().unwrap().call_free(
+                    map_editor,
+                    block_info,
+                    block_desc.elem_color,
+                    x,
+                    y,
+                    z,
+                    yaw,
+                    pitch,
+                    roll,
+                )
+            };
+        }
+    }
+
+    Ok(())
+}
+
+fn handle_place_item(context: &mut Context, item_desc: &ItemDesc) -> Result<(), Box<dyn Error>> {
+    let map_editor = unsafe { &mut *(context.map_editor.unwrap().get() as *mut MapEditor) };
+
+    let item_model = match item_desc.model_id {
+        ModelId::Game { ref name } => context
+            .game_item_models
+            .as_mut()
+            .unwrap()
+            .get(name)
+            .ok_or("failed to find item model with the given name")?,
+        ModelId::Custom { .. } => {
+            todo!()
+        }
+    };
+
+    unsafe {
+        context.place_item_fn.as_mut().unwrap().call(
+            map_editor,
+            item_model,
+            item_desc.yaw,
+            item_desc.pitch,
+            item_desc.roll,
+            item_desc.x,
+            item_desc.y,
+            item_desc.z,
+            item_desc.elem_color,
+        )
+    };
+
+    Ok(())
+}
+
 unsafe extern "system" fn place_block_callback(context: &mut Context, block: Option<&Block>) {
     block_on(async {
         if !context.hooks_enabled {
@@ -769,66 +783,7 @@ async fn handle_frame(context: &mut Context, frame: &[u8]) -> Result<(), Box<dyn
     context.hooks_enabled = false;
 
     match message {
-        Message::PlaceBlock(block_desc) => {
-            let block_info = match block_desc.model_id {
-                ModelId::Game { ref name } => context
-                    .game_block_infos
-                    .as_mut()
-                    .unwrap()
-                    .get(name)
-                    .ok_or("failed to find block info with the given name")?,
-                ModelId::Custom { .. } => {
-                    todo!()
-                }
-            };
-
-            match block_desc.kind {
-                BlockDescKind::Normal {
-                    x,
-                    y,
-                    z,
-                    direction,
-                    is_ground,
-                    is_ghost,
-                } => {
-                    unsafe {
-                        context.place_block_fn.as_mut().unwrap().call_normal(
-                            map_editor,
-                            block_info,
-                            x,
-                            y,
-                            z,
-                            direction,
-                            block_desc.elem_color,
-                            is_ghost,
-                            is_ground,
-                        )
-                    };
-                }
-                BlockDescKind::Free {
-                    x,
-                    y,
-                    z,
-                    yaw,
-                    pitch,
-                    roll,
-                } => {
-                    unsafe {
-                        context.place_block_fn.as_mut().unwrap().call_free(
-                            map_editor,
-                            block_info,
-                            block_desc.elem_color,
-                            x,
-                            y,
-                            z,
-                            yaw,
-                            pitch,
-                            roll,
-                        )
-                    };
-                }
-            }
-        }
+        Message::PlaceBlock(block_desc) => handle_place_block(context, &block_desc)?,
         Message::RemoveBlock(block_desc) => {
             if let Some(&block) = context.blocks.as_mut().unwrap().get(&block_desc) {
                 unsafe {
@@ -840,33 +795,7 @@ async fn handle_frame(context: &mut Context, frame: &[u8]) -> Result<(), Box<dyn
                 };
             }
         }
-        Message::PlaceItem(item_desc) => {
-            let item_model = match item_desc.model_id {
-                ModelId::Game { ref name } => context
-                    .game_item_models
-                    .as_mut()
-                    .unwrap()
-                    .get(name)
-                    .ok_or("failed to find item model with the given name")?,
-                ModelId::Custom { .. } => {
-                    todo!()
-                }
-            };
-
-            unsafe {
-                context.place_item_fn.as_mut().unwrap().call(
-                    map_editor,
-                    item_model,
-                    item_desc.yaw,
-                    item_desc.pitch,
-                    item_desc.roll,
-                    item_desc.x,
-                    item_desc.y,
-                    item_desc.z,
-                    item_desc.elem_color,
-                )
-            };
-        }
+        Message::PlaceItem(item_desc) => handle_place_item(context, &item_desc)?,
         Message::RemoveItem(item_desc) => {
             if let Some(&item) = context.items.as_mut().unwrap().get(&item_desc) {
                 unsafe {
