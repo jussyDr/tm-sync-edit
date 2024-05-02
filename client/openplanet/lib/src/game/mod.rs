@@ -256,15 +256,15 @@ autopad! {
         0x60 => pub x_coord: u32,
         0x64 => pub y_coord: u32,
         0x68 => pub z_coord: u32,
-        0x6C => pub direction: Direction,
+        0x6c => pub direction: Direction,
         0x74 => pub x_pos: NotNan<f32>,
         0x78 => pub y_pos: NotNan<f32>,
-        0x7C => pub z_pos: NotNan<f32>,
+        0x7c => pub z_pos: NotNan<f32>,
         0x80 => pub yaw: NotNan<f32>,
         0x84 => pub pitch: NotNan<f32>,
         0x88 => pub roll: NotNan<f32>,
-        0x8C => pub flags: u32,
-        0x9C => pub elem_color: ElemColor
+        0x8c => pub flags: u32,
+        0x9c => pub elem_color: ElemColor
     }
 }
 
@@ -365,6 +365,33 @@ pub fn cast_nod<T: Class>(nod: &Nod) -> Option<&T> {
         unsafe { Some(&*(nod as *const _ as *const _)) }
     } else {
         None
+    }
+}
+
+autopad! {
+    /// CGameCtnApp.
+    #[repr(C)]
+    pub struct App {
+        0x7f0 => switcher: *mut Switcher,
+    }
+}
+
+impl App {
+    pub fn switcher(&self) -> &Switcher {
+        unsafe { &*self.switcher }
+    }
+}
+
+autopad! {
+    /// CGameSwitcher.
+    pub struct Switcher {
+        0x20 => modules: Array<Nod>
+    }
+}
+
+impl Switcher {
+    pub fn modules(&self) -> &[&Nod] {
+        self.modules.as_slice()
     }
 }
 

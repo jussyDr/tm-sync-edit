@@ -27,7 +27,7 @@ use async_compat::CompatExt;
 use futures::{executor::block_on, task::noop_waker_ref, SinkExt, TryStreamExt};
 use game::{
     cast_nod, fids_folder_full_path, hook_place_block, hook_place_item, hook_remove_block,
-    hook_remove_item, Block, BlockInfo, FidFile, FidsFolder, IdNameFn, Item, ItemModel,
+    hook_remove_item, App, Block, BlockInfo, FidFile, FidsFolder, IdNameFn, Item, ItemModel,
     LoadBlockFn, MapEditor, Nod, NodRef, PlaceBlockFn, PlaceItemFn, PreloadFidFn, RemoveBlockFn,
     RemoveItemFn,
 };
@@ -82,6 +82,7 @@ unsafe extern "system" fn OpenConnection(
     context: *mut Context,
     host: *const c_char,
     port: *const c_char,
+    app: *mut App,
     game_folder: *mut FidsFolder,
 ) {
     (*context).state = State::Connecting;
@@ -89,7 +90,13 @@ unsafe extern "system" fn OpenConnection(
     let host = str_from_c_str(host).to_owned();
     let port = str_from_c_str(port).to_owned();
 
-    let connection_future = Box::pin(connection(&mut *context, host, port, &mut *game_folder));
+    let connection_future = Box::pin(connection(
+        &mut *context,
+        host,
+        port,
+        &mut *app,
+        &mut *game_folder,
+    ));
 
     (*context).connection_future = Some(connection_future);
 }
@@ -186,6 +193,7 @@ async fn connection(
     context: &mut Context,
     host: String,
     port: String,
+    app: &mut App,
     game_folder: &mut FidsFolder,
 ) -> Result<(), Box<dyn Error>> {
     let ip_addr = IpAddr::from_str(&host)?;
