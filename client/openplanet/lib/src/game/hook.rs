@@ -1,4 +1,4 @@
-//! Functionality for hooking into the game.
+//! Hooking into game functions.
 
 use std::error::Error;
 
@@ -9,7 +9,7 @@ use crate::{
     Context,
 };
 
-use super::{Block, Item, ItemModel, ItemParams};
+use super::{Block, Item};
 
 pub struct Hook {
     ptr: *const u8,

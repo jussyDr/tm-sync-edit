@@ -136,8 +136,8 @@ struct Context {
     place_item_fn: Option<PlaceItemFn>,
     remove_item_fn: Option<RemoveItemFn>,
     hooks_enabled: bool,
-    blocks: Option<AHashMap<BlockDesc, *mut Block>>,
-    items: Option<AHashMap<ItemDesc, *mut Item>>,
+    blocks: Option<AHashMap<BlockDesc, NodRef<Block>>>,
+    items: Option<AHashMap<ItemDesc, NodRef<Item>>>,
 }
 
 impl Context {
@@ -622,7 +622,7 @@ unsafe extern "system" fn place_block_callback(context: &mut Context, block: Opt
                 .blocks
                 .as_mut()
                 .unwrap()
-                .insert(block_desc.clone(), block as *const Block as *mut Block);
+                .insert(block_desc.clone(), NodRef::from(block));
 
             let message = Message::PlaceBlock(block_desc);
 
@@ -721,7 +721,7 @@ unsafe extern "system" fn place_item_callback(
                 .items
                 .as_mut()
                 .unwrap()
-                .insert(item_desc.clone(), item as *const Item as *mut Item);
+                .insert(item_desc.clone(), NodRef::from(item));
 
             let message = Message::PlaceItem(item_desc);
 
@@ -785,7 +785,7 @@ async fn handle_frame(context: &mut Context, frame: &[u8]) -> Result<(), Box<dyn
     match message {
         Message::PlaceBlock(block_desc) => handle_place_block(context, &block_desc)?,
         Message::RemoveBlock(block_desc) => {
-            if let Some(&block) = context.blocks.as_mut().unwrap().get(&block_desc) {
+            if let Some(block) = context.blocks.as_mut().unwrap().get_mut(&block_desc) {
                 unsafe {
                     context
                         .remove_block_fn
@@ -797,7 +797,7 @@ async fn handle_frame(context: &mut Context, frame: &[u8]) -> Result<(), Box<dyn
         }
         Message::PlaceItem(item_desc) => handle_place_item(context, &item_desc)?,
         Message::RemoveItem(item_desc) => {
-            if let Some(&item) = context.items.as_mut().unwrap().get(&item_desc) {
+            if let Some(item) = context.items.as_mut().unwrap().get_mut(&item_desc) {
                 unsafe {
                     context
                         .remove_item_fn

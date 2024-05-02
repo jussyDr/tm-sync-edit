@@ -1,7 +1,3 @@
-//! Functionality for interacting with the actual game.
-//!
-//! A lot of items here depend on the current game version, and can break in the future.
-
 mod fns;
 mod hook;
 
@@ -60,7 +56,6 @@ autopad! {
         0x08 =>     file: *const FidFile,
         0x10 =>     ref_count: u32,
         0x18 =>     article: *mut Article,
-        0x28 => pub id: u32
     }
 }
 
@@ -187,10 +182,13 @@ impl Article {
     }
 }
 
-// CGameCtnBlockInfo.
-#[repr(C)]
-pub struct BlockInfo {
-    nod: Nod,
+autopad! {
+    // CGameCtnBlockInfo.
+    #[repr(C)]
+    pub struct BlockInfo {
+                    nod: Nod,
+        0x28 => pub id: u32
+    }
 }
 
 impl Class for BlockInfo {
@@ -215,8 +213,9 @@ autopad! {
     // CGameItemModel.
     #[repr(C)]
     pub struct ItemModel {
-                 nod: Nod,
-        0x288 => entity_model: *const Nod,
+                     nod: Nod,
+        0x028 => pub id: u32,
+        0x288 =>     entity_model: *const Nod,
     }
 }
 
@@ -252,19 +251,20 @@ autopad! {
     // CGameCtnBlock.
     #[repr(C)]
     pub struct Block {
-        0x028 =>     block_info: *mut BlockInfo,
-        0x060 => pub x_coord: u32,
-        0x064 => pub y_coord: u32,
-        0x068 => pub z_coord: u32,
-        0x06C => pub direction: Direction,
-        0x074 => pub x_pos: NotNan<f32>,
-        0x078 => pub y_pos: NotNan<f32>,
-        0x07C => pub z_pos: NotNan<f32>,
-        0x080 => pub yaw: NotNan<f32>,
-        0x084 => pub pitch: NotNan<f32>,
-        0x088 => pub roll: NotNan<f32>,
-        0x08C => pub flags: u32,
-        0x09C => pub elem_color: ElemColor
+                    nod: Nod,
+        0x28 =>     block_info: *mut BlockInfo,
+        0x60 => pub x_coord: u32,
+        0x64 => pub y_coord: u32,
+        0x68 => pub z_coord: u32,
+        0x6C => pub direction: Direction,
+        0x74 => pub x_pos: NotNan<f32>,
+        0x78 => pub y_pos: NotNan<f32>,
+        0x7C => pub z_pos: NotNan<f32>,
+        0x80 => pub yaw: NotNan<f32>,
+        0x84 => pub pitch: NotNan<f32>,
+        0x88 => pub roll: NotNan<f32>,
+        0x8C => pub flags: u32,
+        0x9C => pub elem_color: ElemColor
     }
 }
 
@@ -286,18 +286,17 @@ impl Block {
     }
 }
 
-autopad! {
-    /// CGameCtnAnchoredObject.
-    #[repr(C)]
-    pub struct Item {
-        0x028 => pub params: ItemParams,
-        0x158 => model: *mut ItemModel
+impl Deref for Block {
+    type Target = Nod;
+
+    fn deref(&self) -> &Nod {
+        &self.nod
     }
 }
 
-impl Item {
-    pub fn model(&self) -> &ItemModel {
-        unsafe { &*self.model }
+impl DerefMut for Block {
+    fn deref_mut(&mut self) -> &mut Nod {
+        &mut self.nod
     }
 }
 
@@ -322,6 +321,36 @@ pub struct ItemParams {
     pub param_17: [f32; 3],
     pub elem_color: ElemColor,
     pub param_19: usize,
+}
+
+autopad! {
+    /// CGameCtnAnchoredObject.
+    #[repr(C)]
+    pub struct Item {
+                     nod: Nod,
+        0x028 => pub params: ItemParams,
+        0x158 =>     model: *mut ItemModel
+    }
+}
+
+impl Item {
+    pub fn model(&self) -> &ItemModel {
+        unsafe { &*self.model }
+    }
+}
+
+impl Deref for Item {
+    type Target = Nod;
+
+    fn deref(&self) -> &Nod {
+        &self.nod
+    }
+}
+
+impl DerefMut for Item {
+    fn deref_mut(&mut self) -> &mut Nod {
+        &mut self.nod
+    }
 }
 
 /// CGameCtnEditorFree.
@@ -359,6 +388,12 @@ impl<T: DerefMut<Target = Nod>> Deref for NodRef<T> {
 
     fn deref(&self) -> &T {
         unsafe { &*self.ptr }
+    }
+}
+
+impl<T: DerefMut<Target = Nod>> DerefMut for NodRef<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut *self.ptr }
     }
 }
 
