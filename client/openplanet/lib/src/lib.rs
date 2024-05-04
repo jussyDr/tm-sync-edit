@@ -218,7 +218,7 @@ async fn connection(
 
     context.set_status_text("Opening map editor...");
 
-    open_map_editor(mania_planet).await;
+    open_map_editor(context).await;
 
     let process = Process::open_current()?;
     let exe_module_memory = process.main_module_memory()?;
@@ -477,34 +477,7 @@ fn load_custom_item_models(
     Ok(())
 }
 
-async fn open_map_editor(mania_planet: &ManiaPlanet) {
-    poll_fn(|_| {
-        let modules = mania_planet.switcher().modules();
-
-        if modules.is_empty() {
-            return Poll::Pending;
-        }
-
-        let current_module = *modules.last().unwrap();
-
-        if current_module.is_instance_of(MapEditor::ID) {
-            return Poll::Ready(());
-        }
-
-        let editor_open = modules
-            .iter()
-            .any(|module| module.is_instance_of(MapEditor::ID));
-
-        if editor_open {
-        } else {
-        }
-
-        Poll::Pending
-    })
-    .await;
-}
-
-async fn open_map_editor_old(context: &mut Context) {
+async fn open_map_editor(context: &mut Context) {
     context.map_editor = None;
     context.should_open_editor = true;
 
