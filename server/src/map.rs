@@ -90,6 +90,7 @@ impl Map {
                 pivot_pos_y: NotNan::new(pivot_pos[1]).unwrap(),
                 pivot_pos_z: NotNan::new(pivot_pos[2]).unwrap(),
                 elem_color: gbx_item.elem_color(),
+                anim_offset: gbx_item.animation_offset(),
             })
         }
 

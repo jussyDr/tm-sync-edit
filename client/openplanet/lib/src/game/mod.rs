@@ -2,7 +2,7 @@ mod fns;
 mod hook;
 
 pub use fns::*;
-use gamebox::engines::game::map::{Direction, ElemColor};
+use gamebox::engines::game::map::{Direction, ElemColor, PhaseOffset};
 pub use hook::*;
 
 use autopad::autopad;
@@ -320,7 +320,7 @@ pub struct ItemParams {
     pub param_16: [u32; 10],
     pub param_17: [f32; 3],
     pub elem_color: ElemColor,
-    pub param_19: usize,
+    pub anim_offset: PhaseOffset,
 }
 
 autopad! {

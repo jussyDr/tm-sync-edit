@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use gamebox::engines::game::map::{Direction, ElemColor};
+use gamebox::engines::game::map::{Direction, ElemColor, PhaseOffset};
 use ordered_float::NotNan;
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpStream;
@@ -82,6 +82,7 @@ pub struct ItemDesc {
     pub pivot_pos_y: NotNan<f32>,
     pub pivot_pos_z: NotNan<f32>,
     pub elem_color: ElemColor,
+    pub anim_offset: PhaseOffset,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]

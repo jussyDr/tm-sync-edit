@@ -5,7 +5,7 @@ use std::{
     ptr::null_mut,
 };
 
-use gamebox::engines::game::map::{Direction, ElemColor};
+use gamebox::engines::game::map::{Direction, ElemColor, PhaseOffset};
 use memchr::memmem;
 use ordered_float::NotNan;
 
@@ -307,6 +307,7 @@ impl PlaceItemFn {
         z: NotNan<f32>,
         pivot_pos: [NotNan<f32>; 3],
         elem_color: ElemColor,
+        anim_offset: PhaseOffset,
     ) -> u32 {
         let coord = coord_from_pos([x.into_inner(), y.into_inner(), z.into_inner()]);
 
@@ -329,7 +330,7 @@ impl PlaceItemFn {
             param_16: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             param_17: [-1.0, -1.0, -1.0],
             elem_color,
-            param_19: 0,
+            anim_offset,
         };
 
         unsafe { (self.0)(map_editor, item_model, &mut params, null_mut()) }

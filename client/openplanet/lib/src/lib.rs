@@ -578,6 +578,7 @@ fn handle_place_item(context: &mut Context, item_desc: &ItemDesc) -> Result<(), 
                 item_desc.pivot_pos_z,
             ],
             item_desc.elem_color,
+            item_desc.anim_offset,
         )
     };
 
@@ -719,6 +720,7 @@ unsafe extern "system" fn place_item_callback(
                 pivot_pos_y: params.pivot_pos[1],
                 pivot_pos_z: params.pivot_pos[2],
                 elem_color: params.elem_color,
+                anim_offset: params.anim_offset,
             };
 
             context
@@ -764,6 +766,7 @@ unsafe extern "system" fn remove_item_callback(context: &mut Context, item: &Ite
             pivot_pos_y: params.pivot_pos[1],
             pivot_pos_z: params.pivot_pos[2],
             elem_color: params.elem_color,
+            anim_offset: params.anim_offset,
         };
 
         context.items.as_mut().unwrap().remove(&item_desc);
