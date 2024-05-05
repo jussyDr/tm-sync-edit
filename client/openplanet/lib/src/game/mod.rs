@@ -317,8 +317,12 @@ pub struct ItemParams {
     pub param_13: f32,
     pub param_14: u32,
     pub param_15: u32,
-    pub param_16: [u32; 10],
-    pub param_17: [f32; 3],
+    pub param_16: u32,
+    pub parent_block: *const *const Block,
+    pub skin: *const PackDesc,
+    pub skin_effect: *const PackDesc,
+    pub param_20: [u32; 3],
+    pub param_21: [f32; 3],
     pub elem_color: ElemColor,
     pub anim_offset: PhaseOffset,
 }
@@ -388,6 +392,7 @@ impl ManiaPlanet {
 
 autopad! {
     /// CGameSwitcher.
+    #[repr(C)]
     pub struct Switcher {
         0x20 => modules: Array<Nod>
     }
@@ -398,6 +403,9 @@ impl Switcher {
         self.modules.as_slice()
     }
 }
+
+#[repr(C)]
+pub struct PackDesc;
 
 /// Reference-counted pointer to a [Nod].
 pub struct NodRef<T: DerefMut<Target = Nod>> {

@@ -2,7 +2,7 @@ use std::{
     error::Error,
     ffi::{c_char, CStr},
     mem::{transmute, MaybeUninit},
-    ptr::null_mut,
+    ptr::{null, null_mut},
 };
 
 use gamebox::engines::game::map::{Direction, ElemColor, PhaseOffset};
@@ -325,10 +325,14 @@ impl PlaceItemFn {
             param_11: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
             pivot_pos,
             param_13: 1.0,
-            param_14: 1,
+            param_14: 0,
             param_15: 0xffffffff,
-            param_16: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            param_17: [-1.0, -1.0, -1.0],
+            param_16: 0,
+            parent_block: null(),
+            skin: null(),
+            skin_effect: null(),
+            param_20: [0, 0, 0],
+            param_21: [-1.0, -1.0, -1.0],
             elem_color,
             anim_offset,
         };
