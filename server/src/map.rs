@@ -1,7 +1,7 @@
 use std::{error::Error, path::Path};
 
-use gamebox::engines::game::map::BlockKind;
-use ordered_float::NotNan;
+use gamebox::{engines::game::map::BlockKind, Vec3};
+use ordered_float::{FloatIsNan, NotNan};
 use shared::{BlockDesc, BlockDescKind, ItemDesc, MapDesc, ModelId};
 
 pub struct Map {
@@ -33,26 +33,17 @@ impl Map {
 
         for gbx_block in gbx_map.blocks() {
             let kind = match gbx_block.kind() {
-                BlockKind::Normal(gbx_kind) => {
-                    let coord = gbx_kind.coord().as_array();
-
-                    BlockDescKind::Normal {
-                        x: coord[0],
-                        y: coord[1],
-                        z: coord[2],
-                        direction: gbx_kind.direction(),
-                        is_ground: gbx_kind.is_ground(),
-                        is_ghost: gbx_kind.is_ghost(),
-                    }
-                }
+                BlockKind::Normal(gbx_kind) => BlockDescKind::Normal {
+                    coordinate: gbx_kind.coord(),
+                    direction: gbx_kind.direction(),
+                    is_ground: gbx_kind.is_ground(),
+                    is_ghost: gbx_kind.is_ghost(),
+                },
                 BlockKind::Free(gbx_block_kind) => {
-                    let position = gbx_block_kind.position().as_array();
                     let rotation = gbx_block_kind.rotation().as_array();
 
                     BlockDescKind::Free {
-                        x: NotNan::new(position[0]).unwrap(),
-                        y: NotNan::new(position[1]).unwrap(),
-                        z: NotNan::new(position[2]).unwrap(),
+                        position: vec3_f32_to_vec3_not_nan_f32(gbx_block_kind.position())?,
                         yaw: NotNan::new(rotation[0]).unwrap(),
                         pitch: NotNan::new(rotation[1]).unwrap(),
                         roll: NotNan::new(rotation[2]).unwrap(),
@@ -72,23 +63,17 @@ impl Map {
         let mut items = vec![];
 
         for gbx_item in gbx_map.items() {
-            let position = gbx_item.position().as_array();
             let rotation = gbx_item.rotation().as_array();
-            let pivot_pos = gbx_item.pivot_position().as_array();
 
             items.push(ItemDesc {
                 model_id: ModelId::Game {
                     name: gbx_item.id().to_owned(),
                 },
-                x: NotNan::new(position[0]).unwrap(),
-                y: NotNan::new(position[1]).unwrap(),
-                z: NotNan::new(position[2]).unwrap(),
+                position: vec3_f32_to_vec3_not_nan_f32(gbx_item.position())?,
                 yaw: NotNan::new(rotation[0]).unwrap(),
                 pitch: NotNan::new(rotation[1]).unwrap(),
                 roll: NotNan::new(rotation[2]).unwrap(),
-                pivot_pos_x: NotNan::new(pivot_pos[0]).unwrap(),
-                pivot_pos_y: NotNan::new(pivot_pos[1]).unwrap(),
-                pivot_pos_z: NotNan::new(pivot_pos[2]).unwrap(),
+                pivot_position: vec3_f32_to_vec3_not_nan_f32(gbx_item.pivot_position())?,
                 elem_color: gbx_item.elem_color(),
                 anim_offset: gbx_item.animation_offset(),
             })
@@ -103,4 +88,12 @@ impl Map {
             },
         })
     }
+}
+
+fn vec3_f32_to_vec3_not_nan_f32(vec: &Vec3<f32>) -> Result<Vec3<NotNan<f32>>, FloatIsNan> {
+    Ok(Vec3 {
+        x: NotNan::new(vec.x)?,
+        y: NotNan::new(vec.y)?,
+        z: NotNan::new(vec.z)?,
+    })
 }

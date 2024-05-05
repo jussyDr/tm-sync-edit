@@ -17,8 +17,6 @@ pub use engines::*;
 pub use fns::*;
 pub use hook::*;
 
-use autopad::autopad;
-
 use std::{
     ops::{Deref, DerefMut},
     path::PathBuf,
@@ -34,34 +32,6 @@ pub fn cast_nod<T: Class>(nod: &Nod) -> Option<&T> {
         unsafe { Some(&*(nod as *const _ as *const _)) }
     } else {
         None
-    }
-}
-
-autopad! {
-    /// CGameManiaPlanet.
-    #[repr(C)]
-    pub struct ManiaPlanet {
-        0x7f0 => switcher: *mut Switcher,
-    }
-}
-
-impl ManiaPlanet {
-    pub fn switcher(&self) -> &Switcher {
-        unsafe { &*self.switcher }
-    }
-}
-
-autopad! {
-    /// CGameSwitcher.
-    #[repr(C)]
-    pub struct Switcher {
-        0x20 => modules: Array<Nod>
-    }
-}
-
-impl Switcher {
-    pub fn modules(&self) -> &[&Nod] {
-        self.modules.as_slice()
     }
 }
 

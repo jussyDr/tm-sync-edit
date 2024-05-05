@@ -1,6 +1,9 @@
 use std::error::Error;
 
-use gamebox::engines::game::map::{Direction, ElemColor, PhaseOffset};
+use gamebox::{
+    engines::game::map::{Direction, ElemColor, PhaseOffset},
+    Vec3,
+};
 use ordered_float::NotNan;
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpStream;
@@ -52,17 +55,13 @@ pub struct BlockDesc {
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub enum BlockDescKind {
     Normal {
-        x: u8,
-        y: u8,
-        z: u8,
+        coordinate: Vec3<u8>,
         direction: Direction,
         is_ground: bool,
         is_ghost: bool,
     },
     Free {
-        x: NotNan<f32>,
-        y: NotNan<f32>,
-        z: NotNan<f32>,
+        position: Vec3<NotNan<f32>>,
         yaw: NotNan<f32>,
         pitch: NotNan<f32>,
         roll: NotNan<f32>,
@@ -72,15 +71,11 @@ pub enum BlockDescKind {
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct ItemDesc {
     pub model_id: ModelId,
-    pub x: NotNan<f32>,
-    pub y: NotNan<f32>,
-    pub z: NotNan<f32>,
+    pub position: Vec3<NotNan<f32>>,
     pub yaw: NotNan<f32>,
     pub pitch: NotNan<f32>,
     pub roll: NotNan<f32>,
-    pub pivot_pos_x: NotNan<f32>,
-    pub pivot_pos_y: NotNan<f32>,
-    pub pivot_pos_z: NotNan<f32>,
+    pub pivot_position: Vec3<NotNan<f32>>,
     pub elem_color: ElemColor,
     pub anim_offset: PhaseOffset,
 }

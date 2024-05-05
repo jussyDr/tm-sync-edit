@@ -31,6 +31,7 @@ use game::{
     ItemModel, LoadBlockFn, ManiaPlanet, MapEditor, Nod, NodRef, PlaceBlockFn, PlaceItemFn,
     PreloadFidFn, RemoveBlockFn, RemoveItemFn,
 };
+use gamebox::Vec3;
 use native_dialog::{MessageDialog, MessageType};
 use os::Process;
 use shared::{
@@ -499,9 +500,7 @@ fn handle_place_block(context: &mut Context, block_desc: &BlockDesc) -> Result<(
 
     match block_desc.kind {
         BlockDescKind::Normal {
-            x,
-            y,
-            z,
+            coordinate,
             direction,
             is_ground,
             is_ghost,
@@ -510,9 +509,7 @@ fn handle_place_block(context: &mut Context, block_desc: &BlockDesc) -> Result<(
                 context.place_block_fn.as_mut().unwrap().call_normal(
                     map_editor,
                     block_info,
-                    x,
-                    y,
-                    z,
+                    coordinate,
                     direction,
                     block_desc.elem_color,
                     is_ghost,
@@ -521,9 +518,7 @@ fn handle_place_block(context: &mut Context, block_desc: &BlockDesc) -> Result<(
             };
         }
         BlockDescKind::Free {
-            x,
-            y,
-            z,
+            ref position,
             yaw,
             pitch,
             roll,
@@ -533,9 +528,7 @@ fn handle_place_block(context: &mut Context, block_desc: &BlockDesc) -> Result<(
                     map_editor,
                     block_info,
                     block_desc.elem_color,
-                    x,
-                    y,
-                    z,
+                    position.clone(),
                     yaw,
                     pitch,
                     roll,
@@ -569,14 +562,8 @@ fn handle_place_item(context: &mut Context, item_desc: &ItemDesc) -> Result<(), 
             item_desc.yaw,
             item_desc.pitch,
             item_desc.roll,
-            item_desc.x,
-            item_desc.y,
-            item_desc.z,
-            [
-                item_desc.pivot_pos_x,
-                item_desc.pivot_pos_y,
-                item_desc.pivot_pos_z,
-            ],
+            item_desc.position.clone(),
+            item_desc.pivot_position.clone(),
             item_desc.elem_color,
             item_desc.anim_offset,
         )
@@ -594,18 +581,18 @@ unsafe extern "system" fn place_block_callback(context: &mut Context, block: Opt
         if let Some(block) = block {
             let kind = if block.is_free() {
                 BlockDescKind::Free {
-                    x: block.x_pos,
-                    y: block.y_pos,
-                    z: block.z_pos,
+                    position: block.position.clone(),
                     yaw: block.yaw,
                     pitch: block.pitch,
                     roll: block.roll,
                 }
             } else {
                 BlockDescKind::Normal {
-                    x: block.x_coord as u8,
-                    y: block.y_coord as u8,
-                    z: block.z_coord as u8,
+                    coordinate: Vec3 {
+                        x: block.coordinate.x as u8,
+                        y: block.coordinate.y as u8,
+                        z: block.coordinate.z as u8,
+                    },
                     direction: block.direction,
                     is_ground: block.is_ground(),
                     is_ghost: block.is_ghost(),
@@ -649,18 +636,18 @@ unsafe extern "system" fn remove_block_callback(context: &mut Context, block: &B
 
         let kind = if block.is_free() {
             BlockDescKind::Free {
-                x: block.x_pos,
-                y: block.y_pos,
-                z: block.z_pos,
+                position: block.position.clone(),
                 yaw: block.yaw,
                 pitch: block.pitch,
                 roll: block.roll,
             }
         } else {
             BlockDescKind::Normal {
-                x: block.x_coord as u8,
-                y: block.y_coord as u8,
-                z: block.z_coord as u8,
+                coordinate: Vec3 {
+                    x: block.coordinate.x as u8,
+                    y: block.coordinate.y as u8,
+                    z: block.coordinate.z as u8,
+                },
                 direction: block.direction,
                 is_ground: block.is_ground(),
                 is_ghost: block.is_ghost(),
@@ -710,15 +697,11 @@ unsafe extern "system" fn place_item_callback(
 
             let item_desc = ItemDesc {
                 model_id: ModelId::Game { name },
-                x: params.x_pos,
-                y: params.y_pos,
-                z: params.z_pos,
+                position: params.position.clone(),
                 yaw: params.yaw,
                 pitch: params.pitch,
                 roll: params.roll,
-                pivot_pos_x: params.pivot_pos[0],
-                pivot_pos_y: params.pivot_pos[1],
-                pivot_pos_z: params.pivot_pos[2],
+                pivot_position: params.pivot_position.clone(),
                 elem_color: params.elem_color,
                 anim_offset: params.anim_offset,
             };
@@ -756,15 +739,11 @@ unsafe extern "system" fn remove_item_callback(context: &mut Context, item: &Ite
 
         let item_desc = ItemDesc {
             model_id: ModelId::Game { name },
-            x: params.x_pos,
-            y: params.y_pos,
-            z: params.z_pos,
+            position: params.position.clone(),
             yaw: params.yaw,
             pitch: params.pitch,
             roll: params.roll,
-            pivot_pos_x: params.pivot_pos[0],
-            pivot_pos_y: params.pivot_pos[1],
-            pivot_pos_z: params.pivot_pos[2],
+            pivot_position: params.pivot_position.clone(),
             elem_color: params.elem_color,
             anim_offset: params.anim_offset,
         };

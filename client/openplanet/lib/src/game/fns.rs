@@ -5,7 +5,10 @@ use std::{
     ptr::{null, null_mut},
 };
 
-use gamebox::engines::game::map::{Direction, ElemColor, PhaseOffset};
+use gamebox::{
+    engines::game::map::{Direction, ElemColor, PhaseOffset},
+    Vec3,
+};
 use memchr::memmem;
 use ordered_float::NotNan;
 
@@ -141,15 +144,17 @@ impl PlaceBlockFn {
         &self,
         map_editor: &mut MapEditor,
         block_info: &BlockInfo,
-        x: u8,
-        y: u8,
-        z: u8,
+        coordinate: Vec3<u8>,
         dir: Direction,
         elem_color: ElemColor,
         is_ghost: bool,
         is_ground: bool,
     ) -> Option<&Block> {
-        let mut coord = [x as u32, y as u32, z as u32];
+        let mut coord = [
+            coordinate.x as u32,
+            coordinate.y as u32,
+            coordinate.z as u32,
+        ];
 
         let block = (self.0)(
             map_editor,
@@ -187,9 +192,7 @@ impl PlaceBlockFn {
         map_editor: &mut MapEditor,
         block_info: &BlockInfo,
         elem_color: ElemColor,
-        x: NotNan<f32>,
-        y: NotNan<f32>,
-        z: NotNan<f32>,
+        position: Vec3<NotNan<f32>>,
         yaw: NotNan<f32>,
         pitch: NotNan<f32>,
         roll: NotNan<f32>,
@@ -197,9 +200,9 @@ impl PlaceBlockFn {
         let mut coord = [0xffffffff, 0, 0xffffffff];
 
         let mut transform = [
-            x.into_inner(),
-            y.into_inner(),
-            z.into_inner(),
+            position.x.into_inner(),
+            position.y.into_inner(),
+            position.z.into_inner(),
             yaw.into_inner(),
             pitch.into_inner(),
             roll.into_inner(),
@@ -302,37 +305,31 @@ impl PlaceItemFn {
         yaw: NotNan<f32>,
         pitch: NotNan<f32>,
         roll: NotNan<f32>,
-        x: NotNan<f32>,
-        y: NotNan<f32>,
-        z: NotNan<f32>,
-        pivot_pos: [NotNan<f32>; 3],
+        position: Vec3<NotNan<f32>>,
+        pivot_position: Vec3<NotNan<f32>>,
         elem_color: ElemColor,
         anim_offset: PhaseOffset,
     ) -> u32 {
-        let coord = coord_from_pos([x.into_inner(), y.into_inner(), z.into_inner()]);
+        let coordinate = coordinate_from_position(&position);
 
         let mut params = ItemParams {
-            x_coord: coord[0],
-            y_coord: coord[1],
-            z_coord: coord[2],
+            coordinate,
             yaw,
             pitch,
             roll,
-            param_7: 0xffffffff,
-            x_pos: x,
-            y_pos: y,
-            z_pos: z,
-            param_11: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
-            pivot_pos,
-            param_13: 1.0,
-            param_14: 0,
-            param_15: 0xffffffff,
-            param_16: 0,
+            param_5: 0xffffffff,
+            position,
+            param_7: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+            pivot_position,
+            param_9: 1.0,
+            param_10: 0,
+            param_11: 0xffffffff,
+            param_12: 0,
             parent_block: null(),
             skin: null(),
             skin_effect: null(),
-            param_20: [0, 0, 0],
-            param_21: [-1.0, -1.0, -1.0],
+            param_16: [0, 0, 0],
+            param_17: [-1.0, -1.0, -1.0],
             elem_color,
             anim_offset,
         };
@@ -367,27 +364,84 @@ impl RemoveItemFn {
     }
 }
 
-fn coord_from_pos(pos: [f32; 3]) -> [u32; 3] {
-    [
-        (pos[0] as u32) / 32,
-        ((pos[1] + 64.0) as u32) / 8,
-        (pos[2] as u32) / 32,
-    ]
+fn coordinate_from_position(position: &Vec3<NotNan<f32>>) -> Vec3<u32> {
+    Vec3 {
+        x: (position.x.into_inner() as u32) / 32,
+        y: ((position.y.into_inner() + 64.0) as u32) / 8,
+        z: (position.z.into_inner() as u32) / 32,
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use gamebox::Vec3;
+    use ordered_float::NotNan;
+
     #[test]
-    fn coord_from_pos() {
-        for (pos, expected_coord) in [
-            ([0.0, -56.0, 0.0], [0, 1, 0]),
-            ([31.0, -49.0, 31.0], [0, 1, 0]),
-            ([32.0, -48.0, 32.0], [1, 2, 1]),
-            ([1503.0, 247.0, 1503.0], [46, 38, 46]),
-            ([1504.0, 248.0, 1504.0], [47, 39, 47]),
-            ([1535.0, 255.0, 1535.0], [47, 39, 47]),
+    fn coordinate_from_position() {
+        for (position, expected_coord) in [
+            (
+                Vec3 {
+                    x: NotNan::new(0.0).unwrap(),
+                    y: NotNan::new(-56.0).unwrap(),
+                    z: NotNan::new(0.0).unwrap(),
+                },
+                Vec3 { x: 0, y: 1, z: 0 },
+            ),
+            (
+                Vec3 {
+                    x: NotNan::new(31.0).unwrap(),
+                    y: NotNan::new(-49.0).unwrap(),
+                    z: NotNan::new(31.0).unwrap(),
+                },
+                Vec3 { x: 0, y: 1, z: 0 },
+            ),
+            (
+                Vec3 {
+                    x: NotNan::new(32.0).unwrap(),
+                    y: NotNan::new(-48.0).unwrap(),
+                    z: NotNan::new(32.0).unwrap(),
+                },
+                Vec3 { x: 1, y: 2, z: 1 },
+            ),
+            (
+                Vec3 {
+                    x: NotNan::new(1503.0).unwrap(),
+                    y: NotNan::new(247.0).unwrap(),
+                    z: NotNan::new(1503.0).unwrap(),
+                },
+                Vec3 {
+                    x: 46,
+                    y: 38,
+                    z: 46,
+                },
+            ),
+            (
+                Vec3 {
+                    x: NotNan::new(1504.0).unwrap(),
+                    y: NotNan::new(248.0).unwrap(),
+                    z: NotNan::new(1504.0).unwrap(),
+                },
+                Vec3 {
+                    x: 47,
+                    y: 39,
+                    z: 47,
+                },
+            ),
+            (
+                Vec3 {
+                    x: NotNan::new(1535.0).unwrap(),
+                    y: NotNan::new(255.0).unwrap(),
+                    z: NotNan::new(1535.0).unwrap(),
+                },
+                Vec3 {
+                    x: 47,
+                    y: 39,
+                    z: 47,
+                },
+            ),
         ] {
-            let actual_coord = super::coord_from_pos(pos);
+            let actual_coord = super::coordinate_from_position(&position);
             assert_eq!(actual_coord, expected_coord);
         }
     }
