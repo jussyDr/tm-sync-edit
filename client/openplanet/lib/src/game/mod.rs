@@ -461,3 +461,11 @@ pub fn fids_folder_full_path(folder: &FidsFolder) -> PathBuf {
         PathBuf::from(folder.name())
     }
 }
+
+pub fn fids_folder_get_subfolder<'a>(folder: &'a FidsFolder, name: &str) -> Option<&'a FidsFolder> {
+    folder
+        .trees()
+        .iter()
+        .find(|folder| folder.name() == name)
+        .copied()
+}

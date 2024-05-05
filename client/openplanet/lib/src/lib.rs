@@ -26,10 +26,10 @@ use ahash::AHashMap;
 use async_compat::CompatExt;
 use futures::{executor::block_on, task::noop_waker_ref, SinkExt, TryStreamExt};
 use game::{
-    cast_nod, fids_folder_full_path, hook_place_block, hook_place_item, hook_remove_block,
-    hook_remove_item, Block, BlockInfo, Class, FidFile, FidsFolder, IdNameFn, Item, ItemModel,
-    LoadBlockFn, ManiaPlanet, MapEditor, Nod, NodRef, PlaceBlockFn, PlaceItemFn, PreloadFidFn,
-    RemoveBlockFn, RemoveItemFn,
+    cast_nod, fids_folder_full_path, fids_folder_get_subfolder, hook_place_block, hook_place_item,
+    hook_remove_block, hook_remove_item, Block, BlockInfo, FidFile, FidsFolder, IdNameFn, Item,
+    ItemModel, LoadBlockFn, ManiaPlanet, MapEditor, Nod, NodRef, PlaceBlockFn, PlaceItemFn,
+    PreloadFidFn, RemoveBlockFn, RemoveItemFn,
 };
 use native_dialog::{MessageDialog, MessageType};
 use os::Process;
@@ -295,31 +295,19 @@ fn load_game_models(
 ) -> Result<(), Box<dyn Error>> {
     let id_name_fn = IdNameFn::find(exe_module_memory)?;
 
-    let game_data_folder = game_folder
-        .trees()
-        .iter()
-        .find(|folder| folder.name() == "GameData")
+    let game_data_folder = fids_folder_get_subfolder(game_folder, "GameData")
         .ok_or("failed to find GameData folder")?;
 
-    let stadium_folder = game_data_folder
-        .trees()
-        .iter()
-        .find(|folder| folder.name() == "Stadium")
+    let stadium_folder = fids_folder_get_subfolder(game_data_folder, "Stadium")
         .ok_or("failed to find Stadium folder")?;
 
-    let block_info_folder = stadium_folder
-        .trees()
-        .iter()
-        .find(|folder| folder.name() == "GameCtnBlockInfo")
+    let block_info_folder = fids_folder_get_subfolder(stadium_folder, "GameCtnBlockInfo")
         .ok_or("failed to find GameCtnBlockInfo folder")?;
 
     load_block_infos(block_info_folder, block_infos, preload_fid_fn, id_name_fn)?;
 
-    let items_folder = stadium_folder
-        .trees()
-        .iter()
-        .find(|folder| folder.name() == "Items")
-        .ok_or("failed to find Items folder")?;
+    let items_folder =
+        fids_folder_get_subfolder(stadium_folder, "Items").ok_or("failed to find Items folder")?;
 
     load_item_models(items_folder, item_models, preload_fid_fn, id_name_fn)?;
 
