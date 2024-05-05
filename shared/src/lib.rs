@@ -78,6 +78,9 @@ pub struct ItemDesc {
     pub yaw: NotNan<f32>,
     pub pitch: NotNan<f32>,
     pub roll: NotNan<f32>,
+    pub pivot_pos_x: NotNan<f32>,
+    pub pivot_pos_y: NotNan<f32>,
+    pub pivot_pos_z: NotNan<f32>,
     pub elem_color: ElemColor,
 }
 

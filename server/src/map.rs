@@ -74,6 +74,7 @@ impl Map {
         for gbx_item in gbx_map.items() {
             let position = gbx_item.position().as_array();
             let rotation = gbx_item.rotation().as_array();
+            let pivot_pos = gbx_item.pivot_position().as_array();
 
             items.push(ItemDesc {
                 model_id: ModelId::Game {
@@ -85,6 +86,9 @@ impl Map {
                 yaw: NotNan::new(rotation[0]).unwrap(),
                 pitch: NotNan::new(rotation[1]).unwrap(),
                 roll: NotNan::new(rotation[2]).unwrap(),
+                pivot_pos_x: NotNan::new(pivot_pos[0]).unwrap(),
+                pivot_pos_y: NotNan::new(pivot_pos[1]).unwrap(),
+                pivot_pos_z: NotNan::new(pivot_pos[2]).unwrap(),
                 elem_color: gbx_item.elem_color(),
             })
         }

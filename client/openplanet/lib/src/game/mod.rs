@@ -313,7 +313,7 @@ pub struct ItemParams {
     pub y_pos: NotNan<f32>,
     pub z_pos: NotNan<f32>,
     pub param_11: [f32; 9],
-    pub param_12: [f32; 3],
+    pub pivot_pos: [NotNan<f32>; 3],
     pub param_13: f32,
     pub param_14: u32,
     pub param_15: u32,

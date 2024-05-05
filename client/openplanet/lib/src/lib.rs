@@ -572,6 +572,11 @@ fn handle_place_item(context: &mut Context, item_desc: &ItemDesc) -> Result<(), 
             item_desc.x,
             item_desc.y,
             item_desc.z,
+            [
+                item_desc.pivot_pos_x,
+                item_desc.pivot_pos_y,
+                item_desc.pivot_pos_z,
+            ],
             item_desc.elem_color,
         )
     };
@@ -710,6 +715,9 @@ unsafe extern "system" fn place_item_callback(
                 yaw: params.yaw,
                 pitch: params.pitch,
                 roll: params.roll,
+                pivot_pos_x: params.pivot_pos[0],
+                pivot_pos_y: params.pivot_pos[1],
+                pivot_pos_z: params.pivot_pos[2],
                 elem_color: params.elem_color,
             };
 
@@ -742,17 +750,20 @@ unsafe extern "system" fn remove_item_callback(context: &mut Context, item: &Ite
 
         let name = context.id_name_fn.unwrap().call(item.model().id);
 
-        let item_params = &item.params;
+        let params = &item.params;
 
         let item_desc = ItemDesc {
             model_id: ModelId::Game { name },
-            x: item_params.x_pos,
-            y: item_params.y_pos,
-            z: item_params.z_pos,
-            yaw: item_params.yaw,
-            pitch: item_params.pitch,
-            roll: item_params.roll,
-            elem_color: item_params.elem_color,
+            x: params.x_pos,
+            y: params.y_pos,
+            z: params.z_pos,
+            yaw: params.yaw,
+            pitch: params.pitch,
+            roll: params.roll,
+            pivot_pos_x: params.pivot_pos[0],
+            pivot_pos_y: params.pivot_pos[1],
+            pivot_pos_z: params.pivot_pos[2],
+            elem_color: params.elem_color,
         };
 
         context.items.as_mut().unwrap().remove(&item_desc);
