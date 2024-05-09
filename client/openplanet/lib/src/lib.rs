@@ -512,8 +512,9 @@ fn handle_place_block(context: &mut Context, block_desc: &BlockDesc) -> Result<(
                     coordinate,
                     direction,
                     block_desc.elem_color,
-                    is_ghost,
                     is_ground,
+                    0,
+                    is_ghost,
                 )
             };
         }
@@ -603,6 +604,7 @@ unsafe extern "system" fn place_block_callback(context: &mut Context, block: Opt
 
             let block_desc = BlockDesc {
                 model_id: ModelId::Game { name },
+                variant_index: block.variant_index(),
                 elem_color: block.elem_color,
                 kind,
             };
@@ -658,6 +660,7 @@ unsafe extern "system" fn remove_block_callback(context: &mut Context, block: &B
 
         let block_desc = BlockDesc {
             model_id: ModelId::Game { name },
+            variant_index: block.variant_index(),
             elem_color: block.elem_color,
             kind,
         };

@@ -101,6 +101,14 @@ impl Block {
         self.flags & 0x00001000 != 0
     }
 
+    pub fn variant_index(&self) -> u8 {
+        if self.flags & 0x00200000 != 0 {
+            1
+        } else {
+            0
+        }
+    }
+
     pub fn is_ghost(&self) -> bool {
         self.flags & 0x10000000 != 0
     }

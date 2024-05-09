@@ -48,6 +48,7 @@ pub enum Message {
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct BlockDesc {
     pub model_id: ModelId,
+    pub variant_index: u8,
     pub elem_color: ElemColor,
     pub kind: BlockDescKind,
 }

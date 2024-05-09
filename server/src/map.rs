@@ -55,6 +55,7 @@ impl Map {
                 model_id: ModelId::Game {
                     name: gbx_block.id().to_owned(),
                 },
+                variant_index: gbx_block.variant_index(),
                 elem_color: gbx_block.elem_color(),
                 kind,
             });
