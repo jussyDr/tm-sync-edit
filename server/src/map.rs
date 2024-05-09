@@ -40,13 +40,13 @@ impl Map {
                     is_ghost: gbx_kind.is_ghost(),
                 },
                 BlockKind::Free(gbx_block_kind) => {
-                    let rotation = gbx_block_kind.rotation().as_array();
+                    let rotation = gbx_block_kind.rotation();
 
                     BlockDescKind::Free {
                         position: vec3_f32_to_vec3_not_nan_f32(gbx_block_kind.position())?,
-                        yaw: NotNan::new(rotation[0]).unwrap(),
-                        pitch: NotNan::new(rotation[1]).unwrap(),
-                        roll: NotNan::new(rotation[2]).unwrap(),
+                        yaw: NotNan::new(rotation.yaw).unwrap(),
+                        pitch: NotNan::new(rotation.pitch).unwrap(),
+                        roll: NotNan::new(rotation.roll).unwrap(),
                     }
                 }
             };
@@ -63,16 +63,16 @@ impl Map {
         let mut items = vec![];
 
         for gbx_item in gbx_map.items() {
-            let rotation = gbx_item.rotation().as_array();
+            let rotation = gbx_item.rotation();
 
             items.push(ItemDesc {
                 model_id: ModelId::Game {
                     name: gbx_item.id().to_owned(),
                 },
                 position: vec3_f32_to_vec3_not_nan_f32(gbx_item.position())?,
-                yaw: NotNan::new(rotation[0]).unwrap(),
-                pitch: NotNan::new(rotation[1]).unwrap(),
-                roll: NotNan::new(rotation[2]).unwrap(),
+                yaw: NotNan::new(rotation.yaw).unwrap(),
+                pitch: NotNan::new(rotation.pitch).unwrap(),
+                roll: NotNan::new(rotation.roll).unwrap(),
                 pivot_position: vec3_f32_to_vec3_not_nan_f32(gbx_item.pivot_position())?,
                 elem_color: gbx_item.elem_color(),
                 anim_offset: gbx_item.animation_offset(),
