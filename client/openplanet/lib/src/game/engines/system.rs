@@ -73,5 +73,6 @@ impl FidFile {
     }
 }
 
+/// CSystemPackDesc.
 #[repr(C)]
 pub struct PackDesc;

@@ -28,7 +28,7 @@ use futures::{executor::block_on, task::noop_waker_ref, SinkExt, TryStreamExt};
 use game::{
     cast_nod, fids_folder_full_path, fids_folder_get_subfolder, hook_place_block, hook_place_item,
     hook_remove_block, hook_remove_item, Block, BlockInfo, FidFile, FidsFolder, IdNameFn, Item,
-    ItemModel, LoadBlockFn, ManiaPlanet, MapEditor, Nod, NodRef, PlaceBlockFn, PlaceItemFn,
+    ItemModel, ManiaPlanet, MapEditor, Nod, NodRef, PlaceBlockFn, PlaceItemFn, PreloadBlockInfoFn,
     PreloadFidFn, RemoveBlockFn, RemoveItemFn,
 };
 use gamebox::Vec3;
@@ -225,7 +225,7 @@ async fn connection(
     let exe_module_memory = process.main_module_memory()?;
 
     let preload_fid_fn = PreloadFidFn::find(exe_module_memory)?;
-    let load_block_fn = LoadBlockFn::find(exe_module_memory)?;
+    let preload_block_info_fn = PreloadBlockInfoFn::find(exe_module_memory)?;
 
     let mut game_block_infos = AHashMap::new();
     let mut game_item_models = AHashMap::new();
@@ -245,7 +245,7 @@ async fn connection(
         game_folder,
         map_desc.custom_block_models,
         preload_fid_fn,
-        load_block_fn,
+        preload_block_info_fn,
     )?;
 
     load_custom_item_models(game_folder, map_desc.custom_item_models, preload_fid_fn)?;
@@ -375,7 +375,7 @@ fn load_custom_block_models(
     folder: &mut FidsFolder,
     item_models_gbx: Vec<Vec<u8>>,
     preload_fid_fn: PreloadFidFn,
-    load_block_fn: LoadBlockFn,
+    preload_block_info_fn: PreloadBlockInfoFn,
 ) -> Result<(), Box<dyn Error>> {
     let mut file_paths = vec![];
 
@@ -411,7 +411,7 @@ fn load_custom_block_models(
                 .ok_or("failed to preload fid")? as *mut Nod as *mut ItemModel)
         };
 
-        load_block_fn.call(item_model, file);
+        preload_block_info_fn.call(item_model, file);
 
         let block_info = item_model.entity_model().unwrap();
 

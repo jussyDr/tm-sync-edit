@@ -14,10 +14,11 @@ use ordered_float::NotNan;
 
 use super::{Block, BlockInfo, FidFile, Item, ItemModel, ItemParams, MapEditor, Nod};
 
+type PreloadFidFnType =
+    unsafe extern "system" fn(ret_nod: *mut *mut Nod, fid: *mut FidFile, nod: *mut u8);
+
 #[derive(Clone, Copy)]
-pub struct PreloadFidFn(
-    unsafe extern "system" fn(ret_nod: *mut *mut Nod, fid: *mut FidFile, nod: *mut u8),
-);
+pub struct PreloadFidFn(PreloadFidFnType);
 
 impl PreloadFidFn {
     pub fn find(exe_module_memory: &[u8]) -> Result<Self, Box<dyn Error>> {
@@ -30,8 +31,11 @@ impl PreloadFidFn {
         .ok_or("failed to find PreloadFid function pattern")?
             - 18;
 
-        let preload_fid_fn =
-            unsafe { transmute(exe_module_memory.as_ptr().add(preload_fid_fn_offset)) };
+        let preload_fid_fn = unsafe {
+            transmute::<*const u8, PreloadFidFnType>(
+                exe_module_memory.as_ptr().add(preload_fid_fn_offset),
+            )
+        };
 
         Ok(Self(preload_fid_fn))
     }
@@ -52,15 +56,19 @@ impl PreloadFidFn {
     }
 }
 
+type IdNameFnType = unsafe extern "system" fn(id: *const u32) -> *mut c_char;
+
 #[derive(Clone, Copy)]
-pub struct IdNameFn(unsafe extern "system" fn(id: *const u32) -> *mut c_char);
+pub struct IdNameFn(IdNameFnType);
 
 impl IdNameFn {
     pub fn find(exe_module_memory: &[u8]) -> Result<Self, Box<dyn Error>> {
         let id_name_fn_offset = memmem::find(exe_module_memory, &[0x8b, 0x11, 0x8b, 0xc2, 0x25])
             .ok_or("failed to find IdName function pattern")?;
 
-        let id_name_fn = unsafe { transmute(exe_module_memory.as_ptr().add(id_name_fn_offset)) };
+        let id_name_fn = unsafe {
+            transmute::<*const u8, IdNameFnType>(exe_module_memory.as_ptr().add(id_name_fn_offset))
+        };
 
         Ok(Self(id_name_fn))
     }
@@ -72,24 +80,29 @@ impl IdNameFn {
     }
 }
 
-pub struct LoadBlockFn(
-    unsafe extern "system" fn(item_model: *mut ItemModel, file: *const FidFile, param_3: u32),
-);
+type PreloadBlockInfoFnType =
+    unsafe extern "system" fn(item_model: *mut ItemModel, file: *const FidFile, param_3: u32);
 
-impl LoadBlockFn {
+pub struct PreloadBlockInfoFn(PreloadBlockInfoFnType);
+
+impl PreloadBlockInfoFn {
     pub fn find(exe_module_memory: &[u8]) -> Result<Self, Box<dyn Error>> {
-        let id_name_fn_offset = memmem::find(
+        let preload_block_info_fn_offset = memmem::find(
             exe_module_memory,
             &[
                 0x40, 0x55, 0x56, 0x41, 0x54, 0x41, 0x56, 0x48, 0x8d, 0xac, 0x24, 0x98, 0xfa, 0xff,
                 0xff,
             ],
         )
-        .ok_or("failed to find LoadBlock function pattern")?;
+        .ok_or("failed to find PreloadBlockInfo function pattern")?;
 
-        let id_name_fn = unsafe { transmute(exe_module_memory.as_ptr().add(id_name_fn_offset)) };
+        let preload_block_info_fn = unsafe {
+            transmute::<*const u8, PreloadBlockInfoFnType>(
+                exe_module_memory.as_ptr().add(preload_block_info_fn_offset),
+            )
+        };
 
-        Ok(Self(id_name_fn))
+        Ok(Self(preload_block_info_fn))
     }
 
     pub fn call(&self, item_model: &mut ItemModel, file: &FidFile) {
@@ -97,30 +110,30 @@ impl LoadBlockFn {
     }
 }
 
-pub struct PlaceBlockFn(
-    unsafe extern "system" fn(
-        map_editor: *mut MapEditor,
-        block_info: *const BlockInfo,
-        param_3: usize,
-        coord: *mut [u32; 3],
-        dir: u32,
-        elem_color: u8,
-        param_7: u8,
-        param_8: u32,
-        param_9: u32,
-        is_ghost: u32,
-        place_pillars: u32,
-        param_12: u32,
-        is_ground: u32,
-        param_14: u32,
-        is_ghost: u32,
-        param_16: usize,
-        is_free: u32,
-        transform: *mut [f32; 6],
-        param_19: u32,
-        param_20: u32,
-    ) -> *mut Block,
-);
+type PlaceBlockFnType = unsafe extern "system" fn(
+    map_editor: *mut MapEditor,
+    block_info: *const BlockInfo,
+    param_3: usize,
+    coord: *mut [u32; 3],
+    dir: u32,
+    elem_color: u8,
+    param_7: u8,
+    param_8: u32,
+    param_9: u32,
+    is_ghost: u32,
+    place_pillars: u32,
+    param_12: u32,
+    is_ground: u32,
+    param_14: u32,
+    is_ghost: u32,
+    param_16: usize,
+    is_free: u32,
+    transform: *mut [f32; 6],
+    param_19: u32,
+    param_20: u32,
+) -> *mut Block;
+
+pub struct PlaceBlockFn(PlaceBlockFnType);
 
 impl PlaceBlockFn {
     pub fn find(exe_module_memory: &[u8]) -> Result<Self, Box<dyn Error>> {
@@ -133,8 +146,11 @@ impl PlaceBlockFn {
         )
         .ok_or("failed to find PlaceBlock function pattern")?;
 
-        let place_block_fn =
-            unsafe { transmute(exe_module_memory.as_ptr().add(place_block_fn_offset)) };
+        let place_block_fn = unsafe {
+            transmute::<*const u8, PlaceBlockFnType>(
+                exe_module_memory.as_ptr().add(place_block_fn_offset),
+            )
+        };
 
         Ok(Self(place_block_fn))
     }
@@ -239,15 +255,15 @@ impl PlaceBlockFn {
     }
 }
 
-pub struct RemoveBlockFn(
-    unsafe extern "system" fn(
-        map_editor: *mut MapEditor,
-        block: *mut Block,
-        param_3: u32,
-        param_4: *mut Block,
-        param_5: u32,
-    ) -> u32,
-);
+type RemoveBlockFnType = unsafe extern "system" fn(
+    map_editor: *mut MapEditor,
+    block: *mut Block,
+    param_3: u32,
+    param_4: *mut Block,
+    param_5: u32,
+) -> u32;
+
+pub struct RemoveBlockFn(RemoveBlockFnType);
 
 impl RemoveBlockFn {
     pub fn find(exe_module_memory: &[u8]) -> Result<Self, Box<dyn Error>> {
@@ -260,8 +276,11 @@ impl RemoveBlockFn {
         )
         .ok_or("failed to find RemoveBlock function pattern")?;
 
-        let remove_block_fn =
-            unsafe { transmute(exe_module_memory.as_ptr().add(remove_block_fn_offset)) };
+        let remove_block_fn = unsafe {
+            transmute::<*const u8, RemoveBlockFnType>(
+                exe_module_memory.as_ptr().add(remove_block_fn_offset),
+            )
+        };
 
         Ok(Self(remove_block_fn))
     }
@@ -271,14 +290,14 @@ impl RemoveBlockFn {
     }
 }
 
-pub struct PlaceItemFn(
-    unsafe extern "system" fn(
-        map_editor: *mut MapEditor,
-        item_model: *const ItemModel,
-        params: *mut ItemParams,
-        out_item: *mut *mut Item,
-    ) -> u32,
-);
+type PlaceItemFnType = unsafe extern "system" fn(
+    map_editor: *mut MapEditor,
+    item_model: *const ItemModel,
+    params: *mut ItemParams,
+    out_item: *mut *mut Item,
+) -> u32;
+
+pub struct PlaceItemFn(PlaceItemFnType);
 
 impl PlaceItemFn {
     pub fn find(exe_module_memory: &[u8]) -> Result<Self, Box<dyn Error>> {
@@ -291,8 +310,11 @@ impl PlaceItemFn {
         )
         .ok_or("failed to find PlaceItem function pattern")?;
 
-        let place_item_fn =
-            unsafe { transmute(exe_module_memory.as_ptr().add(place_item_fn_offset)) };
+        let place_item_fn = unsafe {
+            transmute::<*const u8, PlaceItemFnType>(
+                exe_module_memory.as_ptr().add(place_item_fn_offset),
+            )
+        };
 
         Ok(Self(place_item_fn))
     }
@@ -338,9 +360,10 @@ impl PlaceItemFn {
     }
 }
 
-pub struct RemoveItemFn(
-    unsafe extern "system" fn(map_editor: *mut MapEditor, item: *mut Item) -> u32,
-);
+type RemoveItemFnType =
+    unsafe extern "system" fn(map_editor: *mut MapEditor, item: *mut Item) -> u32;
+
+pub struct RemoveItemFn(RemoveItemFnType);
 
 impl RemoveItemFn {
     pub fn find(exe_module_memory: &[u8]) -> Result<Self, Box<dyn Error>> {
@@ -353,8 +376,11 @@ impl RemoveItemFn {
         )
         .ok_or("failed to find RemoveItem function pattern")?;
 
-        let remove_item_fn =
-            unsafe { transmute(exe_module_memory.as_ptr().add(remove_item_fn_offset)) };
+        let remove_item_fn = unsafe {
+            transmute::<*const u8, RemoveItemFnType>(
+                exe_module_memory.as_ptr().add(remove_item_fn_offset),
+            )
+        };
 
         Ok(Self(remove_item_fn))
     }
