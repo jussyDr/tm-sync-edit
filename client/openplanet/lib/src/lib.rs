@@ -539,6 +539,7 @@ fn handle_place_block(context: &mut Context, block_desc: &BlockDesc) -> Result<(
                     block_info,
                     coordinate,
                     direction,
+                    is_ground,
                     block_desc.elem_color,
                 );
             };
