@@ -242,6 +242,85 @@ impl PlaceBlockFn {
     }
 }
 
+type PlaceNormalBlockFnType = unsafe extern "system" fn(
+    editor: *mut MapEditor,
+    block_info: *const BlockInfo,
+    coordinate: *const [u32; 3],
+    direction: u32,
+    elem_color: u8,
+    param_6: u8,
+    param_7: u32,
+    param_8: *mut usize,
+    param_9: u32,
+    param_10: u32,
+    param_11: u32,
+    param_12: usize,
+    param_13: u32,
+    param_14: usize,
+    param_15: u32,
+    air_mode: u32,
+    param_17: u32,
+    param_18: usize,
+    param_19: u32,
+) -> *const Block;
+
+pub struct PlaceNormalBlockFn(PlaceNormalBlockFnType);
+
+impl PlaceNormalBlockFn {
+    pub fn find(exe_module_memory: &[u8]) -> Result<Self, Box<dyn Error>> {
+        let pattern = &[
+            0x4c, 0x8b, 0xdc, 0x55, 0x53, 0x56, 0x41, 0x54, 0x41, 0x56, 0x49, 0x8d, 0x6b, 0xd1,
+        ];
+
+        let place_normal_block_fn = find_fn(exe_module_memory, pattern, 0)?;
+
+        Ok(Self(place_normal_block_fn))
+    }
+
+    pub unsafe fn call(
+        &self,
+        map_editor: &mut MapEditor,
+        block_info: &BlockInfo,
+        coordinate: Vec3<u8>,
+        direction: Direction,
+        element_color: ElemColor,
+    ) -> &Block {
+        let coordinate = [
+            coordinate.x as u32,
+            coordinate.y as u32,
+            coordinate.z as u32,
+        ];
+
+        let mut param_8 = 0;
+
+        let block = unsafe {
+            (self.0)(
+                map_editor,
+                block_info,
+                &coordinate,
+                direction as u32,
+                element_color as u8,
+                0,
+                1,
+                &mut param_8,
+                0,
+                0,
+                0,
+                2,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0,
+                0,
+            )
+        };
+
+        unsafe { &*block }
+    }
+}
+
 type RemoveBlockFnType = unsafe extern "system" fn(
     map_editor: *mut MapEditor,
     block: *mut Block,
@@ -259,9 +338,9 @@ impl RemoveBlockFn {
             0x18, 0x57, 0x48, 0x83, 0xec, 0x40, 0x83, 0x7c, 0x24, 0x70, 0x00,
         ];
 
-        let place_block_fn = find_fn(exe_module_memory, pattern, 0)?;
+        let remove_block_fn = find_fn(exe_module_memory, pattern, 0)?;
 
-        Ok(Self(place_block_fn))
+        Ok(Self(remove_block_fn))
     }
 
     pub unsafe fn call(&self, map_editor: &mut MapEditor, block: &mut Block) -> u32 {
@@ -285,9 +364,9 @@ impl PlaceItemFn {
             0x20, 0x57, 0x48, 0x83, 0xec, 0x40, 0x49, 0x8b, 0xf9,
         ];
 
-        let place_block_fn = find_fn(exe_module_memory, pattern, 0)?;
+        let place_item_fn = find_fn(exe_module_memory, pattern, 0)?;
 
-        Ok(Self(place_block_fn))
+        Ok(Self(place_item_fn))
     }
 
     #[allow(clippy::too_many_arguments)]

@@ -28,10 +28,13 @@ use futures::{executor::block_on, task::noop_waker_ref, SinkExt, TryStreamExt};
 use game::{
     cast_nod, fids_folder_full_path, fids_folder_get_subfolder, hook_place_block, hook_place_item,
     hook_remove_block, hook_remove_item, Block, BlockInfo, FidFile, FidsFolder, IdNameFn, Item,
-    ItemModel, ManiaPlanet, MapEditor, Nod, NodRef, PlaceBlockFn, PlaceItemFn, PreloadBlockInfoFn,
-    PreloadFidFn, RemoveBlockFn, RemoveItemFn,
+    ItemModel, ManiaPlanet, MapEditor, Nod, NodRef, PlaceBlockFn, PlaceItemFn, PlaceNormalBlockFn,
+    PreloadBlockInfoFn, PreloadFidFn, RemoveBlockFn, RemoveItemFn,
 };
-use gamebox::Vec3;
+use gamebox::{
+    engines::game::map::{Direction, ElemColor},
+    Vec3,
+};
 use native_dialog::{MessageDialog, MessageType};
 use os::Process;
 use shared::{
@@ -140,6 +143,7 @@ struct Context {
     game_item_models: Option<AHashMap<String, NodRef<ItemModel>>>,
     id_name_fn: Option<IdNameFn>,
     place_block_fn: Option<PlaceBlockFn>,
+    place_normal_block_fn: Option<PlaceNormalBlockFn>,
     remove_block_fn: Option<RemoveBlockFn>,
     place_item_fn: Option<PlaceItemFn>,
     remove_item_fn: Option<RemoveItemFn>,
@@ -162,6 +166,7 @@ impl Context {
             game_item_models: None,
             id_name_fn: None,
             place_block_fn: None,
+            place_normal_block_fn: None,
             remove_block_fn: None,
             place_item_fn: None,
             remove_item_fn: None,
@@ -251,17 +256,18 @@ async fn connection(
     load_custom_item_models(game_folder, map_desc.custom_item_models, preload_fid_fn)?;
 
     context.place_block_fn = Some(PlaceBlockFn::find(exe_module_memory)?);
+    context.place_normal_block_fn = Some(PlaceNormalBlockFn::find(exe_module_memory)?);
     context.remove_block_fn = Some(RemoveBlockFn::find(exe_module_memory)?);
     context.place_item_fn = Some(PlaceItemFn::find(exe_module_memory)?);
     context.remove_item_fn = Some(RemoveItemFn::find(exe_module_memory)?);
 
-    for block_desc in map_desc.blocks {
-        handle_place_block(context, &block_desc)?;
-    }
+    // for block_desc in map_desc.blocks {
+    //     handle_place_block(context, &block_desc)?;
+    // }
 
-    for item_desc in map_desc.items {
-        handle_place_item(context, &item_desc)?;
-    }
+    // for item_desc in map_desc.items {
+    //     handle_place_item(context, &item_desc)?;
+    // }
 
     context.state = State::Connected;
     context.set_status_text("Connected");
@@ -271,10 +277,32 @@ async fn connection(
 
     context.id_name_fn = Some(IdNameFn::find(exe_module_memory)?);
 
-    let _place_block_hook = hook_place_block(context, place_block_callback)?;
-    let _remove_block_hook = hook_remove_block(context, remove_block_callback)?;
-    let _place_item_hook = hook_place_item(context, place_item_callback)?;
-    let _remove_item_hook = hook_remove_item(context, remove_item_callback)?;
+    handle_place_block(
+        context,
+        &BlockDesc {
+            model_id: ModelId::Game {
+                name: "RoadTechStraight".to_owned(),
+            },
+            variant_index: 0,
+            elem_color: ElemColor::Default,
+            kind: BlockDescKind::Normal {
+                coordinate: Vec3 {
+                    x: 20,
+                    y: 20,
+                    z: 20,
+                },
+                direction: Direction::North,
+                is_ground: false,
+                is_ghost: false,
+            },
+        },
+    )
+    .unwrap();
+
+    // let _place_block_hook = hook_place_block(context, place_block_callback)?;
+    // let _remove_block_hook = hook_remove_block(context, remove_block_callback)?;
+    // let _place_item_hook = hook_place_item(context, place_item_callback)?;
+    // let _remove_item_hook = hook_remove_item(context, remove_item_callback)?;
 
     loop {
         select! {
@@ -503,39 +531,19 @@ fn handle_place_block(context: &mut Context, block_desc: &BlockDesc) -> Result<(
             coordinate,
             direction,
             is_ground,
-            is_ghost,
+            is_ghost: false,
         } => {
             unsafe {
-                context.place_block_fn.as_mut().unwrap().call_normal(
+                context.place_normal_block_fn.as_mut().unwrap().call(
                     map_editor,
                     block_info,
                     coordinate,
                     direction,
                     block_desc.elem_color,
-                    is_ground,
-                    0,
-                    is_ghost,
-                )
+                );
             };
         }
-        BlockDescKind::Free {
-            ref position,
-            yaw,
-            pitch,
-            roll,
-        } => {
-            unsafe {
-                context.place_block_fn.as_mut().unwrap().call_free(
-                    map_editor,
-                    block_info,
-                    block_desc.elem_color,
-                    position.clone(),
-                    yaw,
-                    pitch,
-                    roll,
-                )
-            };
-        }
+        _ => {}
     }
 
     Ok(())
@@ -573,62 +581,7 @@ fn handle_place_item(context: &mut Context, item_desc: &ItemDesc) -> Result<(), 
     Ok(())
 }
 
-unsafe extern "system" fn place_block_callback(context: &mut Context, block: Option<&Block>) {
-    block_on(async {
-        if !context.hooks_enabled {
-            return;
-        }
-
-        if let Some(block) = block {
-            let kind = if block.is_free() {
-                BlockDescKind::Free {
-                    position: block.position.clone(),
-                    yaw: block.yaw,
-                    pitch: block.pitch,
-                    roll: block.roll,
-                }
-            } else {
-                BlockDescKind::Normal {
-                    coordinate: Vec3 {
-                        x: block.coordinate.x as u8,
-                        y: block.coordinate.y as u8,
-                        z: block.coordinate.z as u8,
-                    },
-                    direction: block.direction,
-                    is_ground: block.is_ground(),
-                    is_ghost: block.is_ghost(),
-                }
-            };
-
-            let name = context.id_name_fn.unwrap().call(block.block_info().id);
-
-            let block_desc = BlockDesc {
-                model_id: ModelId::Game { name },
-                variant_index: block.variant_index(),
-                elem_color: block.elem_color,
-                kind,
-            };
-
-            context
-                .blocks
-                .as_mut()
-                .unwrap()
-                .insert(block_desc.clone(), NodRef::from(block));
-
-            let message = Message::PlaceBlock(block_desc);
-
-            let frame = serialize(&message).unwrap();
-
-            context
-                .framed_tcp_stream
-                .as_mut()
-                .unwrap()
-                .send(frame.into())
-                .await
-                .unwrap();
-        }
-    })
-}
+unsafe extern "system" fn place_block_callback(context: &mut Context, block: Option<&Block>) {}
 
 unsafe extern "system" fn remove_block_callback(context: &mut Context, block: &Block) {
     block_on(async {
