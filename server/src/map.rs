@@ -2,7 +2,7 @@ use std::{error::Error, path::Path};
 
 use gamebox::{engines::game::map::BlockKind, Vec3};
 use ordered_float::{FloatIsNan, NotNan};
-use shared::{BlockDesc, BlockDescKind, ItemDesc, MapDesc, ModelId};
+use shared::{BlockDesc, ItemDesc, MapDesc, ModelId};
 
 pub struct Map {
     pub desc: MapDesc,
@@ -32,33 +32,21 @@ impl Map {
         let mut blocks = vec![];
 
         for gbx_block in gbx_map.blocks() {
-            let kind = match gbx_block.kind() {
-                BlockKind::Normal(gbx_kind) => BlockDescKind::Normal {
-                    coordinate: gbx_kind.coord(),
-                    direction: gbx_kind.direction(),
-                    is_ground: gbx_kind.is_ground(),
-                    is_ghost: gbx_kind.is_ghost(),
-                },
-                BlockKind::Free(gbx_block_kind) => {
-                    let rotation = gbx_block_kind.rotation();
-
-                    BlockDescKind::Free {
-                        position: vec3_f32_to_vec3_not_nan_f32(gbx_block_kind.position())?,
-                        yaw: NotNan::new(rotation.yaw).unwrap(),
-                        pitch: NotNan::new(rotation.pitch).unwrap(),
-                        roll: NotNan::new(rotation.roll).unwrap(),
-                    }
+            match gbx_block.kind() {
+                BlockKind::Normal(gbx_kind) => {
+                    blocks.push(BlockDesc {
+                        model_id: ModelId::Game {
+                            name: gbx_block.id().to_owned(),
+                        },
+                        coord: gbx_kind.coord(),
+                        dir: gbx_kind.direction(),
+                        elem_color: gbx_block.elem_color(),
+                    });
                 }
-            };
-
-            blocks.push(BlockDesc {
-                model_id: ModelId::Game {
-                    name: gbx_block.id().to_owned(),
-                },
-                variant_index: gbx_block.variant_index(),
-                elem_color: gbx_block.elem_color(),
-                kind,
-            });
+                BlockKind::Free(..) => {
+                    todo!()
+                }
+            }
         }
 
         let mut items = vec![];
@@ -70,11 +58,11 @@ impl Map {
                 model_id: ModelId::Game {
                     name: gbx_item.id().to_owned(),
                 },
-                position: vec3_f32_to_vec3_not_nan_f32(gbx_item.position())?,
+                pos: vec3_f32_to_vec3_not_nan_f32(gbx_item.position())?,
                 yaw: NotNan::new(rotation.yaw).unwrap(),
                 pitch: NotNan::new(rotation.pitch).unwrap(),
                 roll: NotNan::new(rotation.roll).unwrap(),
-                pivot_position: vec3_f32_to_vec3_not_nan_f32(gbx_item.pivot_position())?,
+                pivot_pos: vec3_f32_to_vec3_not_nan_f32(gbx_item.pivot_position())?,
                 elem_color: gbx_item.elem_color(),
                 anim_offset: gbx_item.animation_offset(),
             })

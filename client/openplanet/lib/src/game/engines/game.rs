@@ -199,8 +199,13 @@ impl DerefMut for Item {
     }
 }
 
-/// CGameCtnEditorFree.
-pub struct MapEditor;
+autopad! {
+    /// CGameCtnEditorFree.
+    #[repr(C)]
+    pub struct MapEditor {
+        0xbd4 => pub air_mode: bool
+    }
+}
 
 impl Class for MapEditor {
     const ID: u32 = 0x0310f000;

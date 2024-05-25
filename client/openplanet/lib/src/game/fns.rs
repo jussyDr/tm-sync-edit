@@ -118,7 +118,7 @@ type PlaceBlockFnType = unsafe extern "system" fn(
     param_11: u32,
     param_12: u32,
     is_ground: u32,
-    variant_index: u32,
+    param_14: u32,
     is_ghost: u32,
     param_16: usize,
     is_free: u32,
@@ -146,18 +146,16 @@ impl PlaceBlockFn {
         &self,
         map_editor: &mut MapEditor,
         block_info: &BlockInfo,
-        coordinate: Vec3<u8>,
+        coord: Vec3<u8>,
         dir: Direction,
-        elem_color: ElemColor,
-        is_ground: bool,
         variant_index: u8,
-        is_ghost: bool,
+        elem_color: ElemColor,
     ) -> Option<&Block> {
-        let mut coord = [
-            coordinate.x as u32,
-            coordinate.y as u32,
-            coordinate.z as u32,
-        ];
+        let weird_air_variant = false;
+        let ghost = false;
+        let ground = false;
+
+        let mut coord = [coord.x as u32, coord.y as u32, coord.z as u32];
 
         let block = (self.0)(
             map_editor,
@@ -169,67 +167,15 @@ impl PlaceBlockFn {
             0,
             0,
             0xffffffff,
+            if ghost || weird_air_variant { 1 } else { 0 },
+            if !weird_air_variant { 1 } else { 0 },
             0,
-            0,
-            0,
-            if is_ground { 1 } else { 0 },
+            if ground { 1 } else { 0 },
             variant_index as u32,
-            if is_ghost { 1 } else { 0 },
+            if ghost { 1 } else { 0 },
             0,
             0,
             null_mut(),
-            0xffffffff,
-            0,
-        );
-
-        if block.is_null() {
-            None
-        } else {
-            Some(&*block)
-        }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub unsafe fn call_free(
-        &self,
-        map_editor: &mut MapEditor,
-        block_info: &BlockInfo,
-        elem_color: ElemColor,
-        position: Vec3<NotNan<f32>>,
-        yaw: NotNan<f32>,
-        pitch: NotNan<f32>,
-        roll: NotNan<f32>,
-    ) -> Option<&Block> {
-        let mut coord = [0xffffffff, 0, 0xffffffff];
-
-        let mut transform = [
-            position.x.into_inner(),
-            position.y.into_inner(),
-            position.z.into_inner(),
-            yaw.into_inner(),
-            pitch.into_inner(),
-            roll.into_inner(),
-        ];
-
-        let block = (self.0)(
-            map_editor,
-            block_info,
-            0,
-            &mut coord,
-            0,
-            elem_color as u8,
-            0,
-            0,
-            0x3f,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            1,
-            &mut transform,
             0xffffffff,
             0,
         );
@@ -254,7 +200,7 @@ type PlaceNormalBlockFnType = unsafe extern "system" fn(
     param_9: u32,
     is_ground: u32,
     param_11: u32,
-    param_12: u32,
+    param_12: usize,
     param_13: u32,
     param_14: u32,
     param_15: u32,
@@ -306,12 +252,12 @@ impl PlaceNormalBlockFn {
                 &mut param_8,
                 0,
                 is_ground as u32,
-                0, // variant?
-                0,
+                1,
+                2,
                 0,
                 1,
                 0,
-                0, // variant (opposite)?
+                0,
                 0,
                 0,
                 0,

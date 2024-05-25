@@ -38,8 +38,8 @@ use gamebox::{
 use native_dialog::{MessageDialog, MessageType};
 use os::Process;
 use shared::{
-    deserialize, framed_tcp_stream, serialize, BlockDesc, BlockDescKind, FramedTcpStream, ItemDesc,
-    MapDesc, Message, ModelId,
+    deserialize, framed_tcp_stream, serialize, BlockDesc, FramedTcpStream, ItemDesc, MapDesc,
+    Message, ModelId,
 };
 use tokio::{net::TcpStream, select};
 use windows_sys::Win32::{
@@ -269,6 +269,23 @@ async fn connection(
     //     handle_place_item(context, &item_desc)?;
     // }
 
+    handle_place_block(
+        context,
+        &BlockDesc {
+            model_id: ModelId::Game {
+                name: "RoadTechSlopeEnd2x1".to_string(),
+            },
+            coord: Vec3 {
+                x: 20,
+                y: 20,
+                z: 20,
+            },
+            dir: Direction::North,
+            elem_color: ElemColor::Default,
+        },
+    )
+    .unwrap();
+
     context.state = State::Connected;
     context.set_status_text("Connected");
 
@@ -276,28 +293,6 @@ async fn connection(
     context.items = Some(AHashMap::new());
 
     context.id_name_fn = Some(IdNameFn::find(exe_module_memory)?);
-
-    handle_place_block(
-        context,
-        &BlockDesc {
-            model_id: ModelId::Game {
-                name: "RoadTechStraight".to_owned(),
-            },
-            variant_index: 0,
-            elem_color: ElemColor::Default,
-            kind: BlockDescKind::Normal {
-                coordinate: Vec3 {
-                    x: 20,
-                    y: 20,
-                    z: 20,
-                },
-                direction: Direction::North,
-                is_ground: false,
-                is_ghost: false,
-            },
-        },
-    )
-    .unwrap();
 
     // let _place_block_hook = hook_place_block(context, place_block_callback)?;
     // let _remove_block_hook = hook_remove_block(context, remove_block_callback)?;
@@ -526,26 +521,14 @@ fn handle_place_block(context: &mut Context, block_desc: &BlockDesc) -> Result<(
         }
     };
 
-    match block_desc.kind {
-        BlockDescKind::Normal {
-            coordinate,
-            direction,
-            is_ground,
-            is_ghost: false,
-        } => {
-            unsafe {
-                context.place_normal_block_fn.as_mut().unwrap().call(
-                    map_editor,
-                    block_info,
-                    coordinate,
-                    direction,
-                    is_ground,
-                    block_desc.elem_color,
-                );
-            };
-        }
-        _ => {}
-    }
+    unsafe {
+        // context.place_block_fn.as_mut().unwrap().call_normal(
+        //     map_editor,
+        //     block_info,
+        //     block_desc.coord,
+        //     block_desc.dir,
+        // );
+    };
 
     Ok(())
 }
@@ -572,8 +555,8 @@ fn handle_place_item(context: &mut Context, item_desc: &ItemDesc) -> Result<(), 
             item_desc.yaw,
             item_desc.pitch,
             item_desc.roll,
-            item_desc.position.clone(),
-            item_desc.pivot_position.clone(),
+            item_desc.pos.clone(),
+            item_desc.pivot_pos.clone(),
             item_desc.elem_color,
             item_desc.anim_offset,
         )
@@ -590,48 +573,50 @@ unsafe extern "system" fn remove_block_callback(context: &mut Context, block: &B
             return;
         }
 
-        let kind = if block.is_free() {
-            BlockDescKind::Free {
-                position: block.position.clone(),
-                yaw: block.yaw,
-                pitch: block.pitch,
-                roll: block.roll,
-            }
-        } else {
-            BlockDescKind::Normal {
-                coordinate: Vec3 {
-                    x: block.coordinate.x as u8,
-                    y: block.coordinate.y as u8,
-                    z: block.coordinate.z as u8,
-                },
-                direction: block.direction,
-                is_ground: block.is_ground(),
-                is_ghost: block.is_ghost(),
-            }
-        };
+        todo!();
 
-        let name = context.id_name_fn.unwrap().call(block.block_info().id);
+        // let kind = if block.is_free() {
+        //     BlockDescKind::Free {
+        //         position: block.position.clone(),
+        //         yaw: block.yaw,
+        //         pitch: block.pitch,
+        //         roll: block.roll,
+        //     }
+        // } else {
+        //     BlockDescKind::Normal {
+        //         coordinate: Vec3 {
+        //             x: block.coordinate.x as u8,
+        //             y: block.coordinate.y as u8,
+        //             z: block.coordinate.z as u8,
+        //         },
+        //         direction: block.direction,
+        //         is_ground: block.is_ground(),
+        //         is_ghost: block.is_ghost(),
+        //     }
+        // };
 
-        let block_desc = BlockDesc {
-            model_id: ModelId::Game { name },
-            variant_index: block.variant_index(),
-            elem_color: block.elem_color,
-            kind,
-        };
+        // let name = context.id_name_fn.unwrap().call(block.block_info().id);
 
-        context.blocks.as_mut().unwrap().remove(&block_desc);
+        // let block_desc = BlockDesc {
+        //     model_id: ModelId::Game { name },
+        //     variant_index: block.variant_index(),
+        //     elem_color: block.elem_color,
+        //     kind,
+        // };
 
-        let message = Message::RemoveBlock(block_desc);
+        // context.blocks.as_mut().unwrap().remove(&block_desc);
 
-        let frame = serialize(&message).unwrap();
+        // let message = Message::RemoveBlock(block_desc);
 
-        context
-            .framed_tcp_stream
-            .as_mut()
-            .unwrap()
-            .send(frame.into())
-            .await
-            .unwrap();
+        // let frame = serialize(&message).unwrap();
+
+        // context
+        //     .framed_tcp_stream
+        //     .as_mut()
+        //     .unwrap()
+        //     .send(frame.into())
+        //     .await
+        //     .unwrap();
     })
 }
 
@@ -654,11 +639,11 @@ unsafe extern "system" fn place_item_callback(
 
             let item_desc = ItemDesc {
                 model_id: ModelId::Game { name },
-                position: params.position.clone(),
+                pos: params.position.clone(),
                 yaw: params.yaw,
                 pitch: params.pitch,
                 roll: params.roll,
-                pivot_position: params.pivot_position.clone(),
+                pivot_pos: params.pivot_position.clone(),
                 elem_color: params.elem_color,
                 anim_offset: params.anim_offset,
             };
@@ -696,11 +681,11 @@ unsafe extern "system" fn remove_item_callback(context: &mut Context, item: &Ite
 
         let item_desc = ItemDesc {
             model_id: ModelId::Game { name },
-            position: params.position.clone(),
+            pos: params.position.clone(),
             yaw: params.yaw,
             pitch: params.pitch,
             roll: params.roll,
-            pivot_position: params.pivot_position.clone(),
+            pivot_pos: params.pivot_position.clone(),
             elem_color: params.elem_color,
             anim_offset: params.anim_offset,
         };

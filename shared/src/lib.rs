@@ -48,35 +48,19 @@ pub enum Message {
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct BlockDesc {
     pub model_id: ModelId,
-    pub variant_index: u8,
+    pub coord: Vec3<u8>,
+    pub dir: Direction,
     pub elem_color: ElemColor,
-    pub kind: BlockDescKind,
-}
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-pub enum BlockDescKind {
-    Normal {
-        coordinate: Vec3<u8>,
-        direction: Direction,
-        is_ground: bool,
-        is_ghost: bool,
-    },
-    Free {
-        position: Vec3<NotNan<f32>>,
-        yaw: NotNan<f32>,
-        pitch: NotNan<f32>,
-        roll: NotNan<f32>,
-    },
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct ItemDesc {
     pub model_id: ModelId,
-    pub position: Vec3<NotNan<f32>>,
+    pub pos: Vec3<NotNan<f32>>,
     pub yaw: NotNan<f32>,
     pub pitch: NotNan<f32>,
     pub roll: NotNan<f32>,
-    pub pivot_position: Vec3<NotNan<f32>>,
+    pub pivot_pos: Vec3<NotNan<f32>>,
     pub elem_color: ElemColor,
     pub anim_offset: PhaseOffset,
 }
