@@ -53,7 +53,23 @@ autopad! {
     #[repr(C)]
     pub struct BlockInfo {
                     nod: Nod,
-        0x28 => pub id: u32
+        0x028 => pub id: u32,
+        0x0f8 =>     variant_base_air: *const BlockInfoVariant,
+        0x110 =>     additional_variants_air: Array<BlockInfoVariant>
+    }
+}
+
+impl BlockInfo {
+    pub fn variant_base_air(&self) -> Option<&BlockInfoVariant> {
+        if self.variant_base_air.is_null() {
+            None
+        } else {
+            unsafe { Some(&*self.variant_base_air) }
+        }
+    }
+
+    pub fn additional_variants_air(&self) -> &[&BlockInfoVariant] {
+        self.additional_variants_air.as_slice()
     }
 }
 
@@ -209,4 +225,18 @@ autopad! {
 
 impl Class for MapEditor {
     const ID: u32 = 0x0310f000;
+}
+
+autopad! {
+    /// CGameCtnBlockInfoVariant.
+    #[repr(C)]
+    pub struct BlockInfoVariant {
+        0x174 => flags: u8
+    }
+}
+
+impl BlockInfoVariant {
+    pub fn is_no_pillar_below(&self) -> bool {
+        self.flags & 0x20 != 0
+    }
 }

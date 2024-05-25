@@ -142,18 +142,28 @@ impl PlaceBlockFn {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub unsafe fn call_normal(
+    pub unsafe fn call(
         &self,
         map_editor: &mut MapEditor,
         block_info: &BlockInfo,
         coord: Vec3<u8>,
         dir: Direction,
+        is_ground: bool,
         variant_index: u8,
+        is_ghost: bool,
         elem_color: ElemColor,
     ) -> Option<&Block> {
-        let weird_air_variant = false;
-        let ghost = false;
-        let ground = false;
+        let is_no_pillar_below = if is_ground {
+            false
+        } else {
+            let variant = if variant_index == 0 {
+                block_info.variant_base_air().unwrap()
+            } else {
+                block_info.additional_variants_air()[variant_index as usize - 1]
+            };
+
+            variant.is_no_pillar_below()
+        };
 
         let mut coord = [coord.x as u32, coord.y as u32, coord.z as u32];
 
@@ -167,12 +177,12 @@ impl PlaceBlockFn {
             0,
             0,
             0xffffffff,
-            if ghost || weird_air_variant { 1 } else { 0 },
-            if !weird_air_variant { 1 } else { 0 },
+            if is_ghost || is_no_pillar_below { 1 } else { 0 },
+            if !is_no_pillar_below { 1 } else { 0 },
             0,
-            if ground { 1 } else { 0 },
+            if is_ground { 1 } else { 0 },
             variant_index as u32,
-            if ghost { 1 } else { 0 },
+            if is_ghost { 1 } else { 0 },
             0,
             0,
             null_mut(),
@@ -185,86 +195,6 @@ impl PlaceBlockFn {
         } else {
             Some(&*block)
         }
-    }
-}
-
-type PlaceNormalBlockFnType = unsafe extern "system" fn(
-    editor: *mut MapEditor,
-    block_info: *const BlockInfo,
-    coordinate: *const [u32; 3],
-    direction: u32,
-    elem_color: u8,
-    param_6: u8,
-    param_7: u32,
-    param_8: *mut usize,
-    param_9: u32,
-    is_ground: u32,
-    param_11: u32,
-    param_12: usize,
-    param_13: u32,
-    param_14: u32,
-    param_15: u32,
-    param_16: u32,
-    param_17: u32,
-    param_18: usize,
-    param_19: u32,
-) -> *const Block;
-
-pub struct PlaceNormalBlockFn(PlaceNormalBlockFnType);
-
-impl PlaceNormalBlockFn {
-    pub fn find(exe_module_memory: &[u8]) -> Result<Self, Box<dyn Error>> {
-        let pattern = &[
-            0x4c, 0x8b, 0xdc, 0x55, 0x53, 0x56, 0x41, 0x54, 0x41, 0x56, 0x49, 0x8d, 0x6b, 0xd1,
-        ];
-
-        let place_normal_block_fn = find_fn(exe_module_memory, pattern, 0)?;
-
-        Ok(Self(place_normal_block_fn))
-    }
-
-    pub unsafe fn call(
-        &self,
-        map_editor: &mut MapEditor,
-        block_info: &BlockInfo,
-        coordinate: Vec3<u8>,
-        direction: Direction,
-        is_ground: bool,
-        element_color: ElemColor,
-    ) -> &Block {
-        let coordinate = [
-            coordinate.x as u32,
-            coordinate.y as u32,
-            coordinate.z as u32,
-        ];
-
-        let mut param_8 = 0;
-
-        let block = unsafe {
-            (self.0)(
-                map_editor,
-                block_info,
-                &coordinate,
-                direction as u32,
-                element_color as u8,
-                0,
-                1,
-                &mut param_8,
-                0,
-                is_ground as u32,
-                1,
-                2,
-                0,
-                1,
-                0,
-                0,
-                0,
-                0,
-                0,
-            )
-        };
-
-        unsafe { &*block }
     }
 }
 

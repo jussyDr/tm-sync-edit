@@ -28,8 +28,8 @@ use futures::{executor::block_on, task::noop_waker_ref, SinkExt, TryStreamExt};
 use game::{
     cast_nod, fids_folder_full_path, fids_folder_get_subfolder, hook_place_block, hook_place_item,
     hook_remove_block, hook_remove_item, Block, BlockInfo, FidFile, FidsFolder, IdNameFn, Item,
-    ItemModel, ManiaPlanet, MapEditor, Nod, NodRef, PlaceBlockFn, PlaceItemFn, PlaceNormalBlockFn,
-    PreloadBlockInfoFn, PreloadFidFn, RemoveBlockFn, RemoveItemFn,
+    ItemModel, ManiaPlanet, MapEditor, Nod, NodRef, PlaceBlockFn, PlaceItemFn, PreloadBlockInfoFn,
+    PreloadFidFn, RemoveBlockFn, RemoveItemFn,
 };
 use gamebox::{
     engines::game::map::{Direction, ElemColor},
@@ -143,7 +143,6 @@ struct Context {
     game_item_models: Option<AHashMap<String, NodRef<ItemModel>>>,
     id_name_fn: Option<IdNameFn>,
     place_block_fn: Option<PlaceBlockFn>,
-    place_normal_block_fn: Option<PlaceNormalBlockFn>,
     remove_block_fn: Option<RemoveBlockFn>,
     place_item_fn: Option<PlaceItemFn>,
     remove_item_fn: Option<RemoveItemFn>,
@@ -166,7 +165,6 @@ impl Context {
             game_item_models: None,
             id_name_fn: None,
             place_block_fn: None,
-            place_normal_block_fn: None,
             remove_block_fn: None,
             place_item_fn: None,
             remove_item_fn: None,
@@ -256,7 +254,6 @@ async fn connection(
     load_custom_item_models(game_folder, map_desc.custom_item_models, preload_fid_fn)?;
 
     context.place_block_fn = Some(PlaceBlockFn::find(exe_module_memory)?);
-    context.place_normal_block_fn = Some(PlaceNormalBlockFn::find(exe_module_memory)?);
     context.remove_block_fn = Some(RemoveBlockFn::find(exe_module_memory)?);
     context.place_item_fn = Some(PlaceItemFn::find(exe_module_memory)?);
     context.remove_item_fn = Some(RemoveItemFn::find(exe_module_memory)?);
@@ -273,7 +270,7 @@ async fn connection(
         context,
         &BlockDesc {
             model_id: ModelId::Game {
-                name: "RoadTechSlopeEnd2x1".to_string(),
+                name: "PlatformTechSlopeBase".to_string(),
             },
             coord: Vec3 {
                 x: 20,
@@ -522,12 +519,16 @@ fn handle_place_block(context: &mut Context, block_desc: &BlockDesc) -> Result<(
     };
 
     unsafe {
-        // context.place_block_fn.as_mut().unwrap().call_normal(
-        //     map_editor,
-        //     block_info,
-        //     block_desc.coord,
-        //     block_desc.dir,
-        // );
+        context.place_block_fn.as_mut().unwrap().call(
+            map_editor,
+            block_info,
+            block_desc.coord,
+            block_desc.dir,
+            false,
+            0,
+            false,
+            block_desc.elem_color,
+        );
     };
 
     Ok(())
