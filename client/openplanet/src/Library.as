@@ -25,6 +25,12 @@ Library@ LoadLibrary() {
         return null;
     }
 
+    auto joinFunc = library.GetFunction("Join");
+
+    if (joinFunc is null) {
+        return null;
+    }
+
     auto maniaPlanet = cast<CGameManiaPlanet>(GetApp());
 
     if (maniaPlanet is null) {
@@ -37,19 +43,27 @@ Library@ LoadLibrary() {
         return null;
     }
 
-    return Library(library, destroyFunc, updateFunc, context);
+    return Library(library, destroyFunc, updateFunc, joinFunc, context);
 }
 
 class Library {
     private Import::Library@ m_library;
     private Import::Function@ m_destroyFunc;
     private Import::Function@ m_updateFunc;
+    private Import::Function@ m_joinFunc;
     private uint64 m_context;
 
-    Library(Import::Library@ library, Import::Function@ destroyFunc, Import::Function@ updateFunc, uint64 context) {
+    Library(
+        Import::Library@ library, 
+        Import::Function@ destroyFunc,
+        Import::Function@ updateFunc, 
+        Import::Function@ joinFunc, 
+        uint64 context
+    ) {
         @m_library = library;
         @m_destroyFunc = destroyFunc;
         @m_updateFunc = updateFunc;
+        @m_joinFunc = joinFunc;
         m_context = context;
     }
 
@@ -59,5 +73,9 @@ class Library {
 
     void Update() {
         m_updateFunc.Call(m_context);
+    }
+
+    void Join() {
+        m_joinFunc.Call(m_context);
     }
 }

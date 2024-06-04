@@ -1,10 +1,13 @@
 use std::{
-    ffi::c_char,
     ops::{Deref, DerefMut},
     slice,
 };
 
 use autopad::autopad;
+
+pub trait Class {
+    const ID: u32;
+}
 
 /// Reference-counted pointer to a `Nod` instance.
 #[repr(transparent)]
@@ -40,8 +43,8 @@ autopad! {
 }
 
 impl Nod {
-    pub fn is_instance_of(&self, class_id: u32) -> bool {
-        unsafe { ((*self.vtable).is_instance_of)(self, class_id) }
+    pub fn is_instance_of<T: Class>(&self) -> bool {
+        unsafe { ((*self.vtable).is_instance_of)(self, T::ID) }
     }
 }
 
@@ -49,33 +52,15 @@ impl Nod {
 #[repr(C)]
 pub struct Array<T> {
     ptr: *mut T,
-    len: usize,
-    cap: usize,
+    len: u32,
+    cap: u32,
 }
 
 impl<T> Deref for Array<T> {
     type Target = [T];
 
     fn deref(&self) -> &[T] {
-        unsafe { slice::from_raw_parts(self.ptr, self.len) }
-    }
-}
-
-/// CMwSConstString.
-#[repr(C)]
-struct ConstString {
-    ptr: *const c_char,
-    len: u32,
-    cap: u32,
-}
-
-impl From<&str> for ConstString {
-    fn from(s: &str) -> Self {
-        Self {
-            ptr: s.as_ptr() as *const c_char,
-            len: s.len() as u32,
-            cap: 0,
-        }
+        unsafe { slice::from_raw_parts(self.ptr, self.len as usize) }
     }
 }
 
@@ -88,16 +73,41 @@ autopad! {
     }
 }
 
+/// CGameCtnMenus.
+pub struct Menus;
+
+impl Class for Menus {
+    const ID: u32 = 0x030c9000;
+}
+
 autopad! {
     /// CGameSwitcher.
     #[repr(C)]
     pub struct Switcher {
-        0x20 => pub module_stack: Array<NodRef<Nod>>,
+        0x20 => pub module_stack: Array<NodRef<SwitcherModule>>,
+    }
+}
+
+/// CGameSwitcherModule.
+#[repr(C)]
+pub struct SwitcherModule {
+    nod: Nod,
+}
+
+impl Deref for SwitcherModule {
+    type Target = Nod;
+
+    fn deref(&self) -> &Nod {
+        &self.nod
     }
 }
 
 /// CGameCtnEditorCommon.
 pub struct EditorCommon;
+
+impl Class for EditorCommon {
+    const ID: u32 = 0x0310e000;
+}
 
 /// CGameManiaTitleControlScriptAPI.
 pub struct ManiaTitleControlScriptApi;

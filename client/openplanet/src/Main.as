@@ -24,7 +24,7 @@ void RenderInterface() {
         UI::PopStyleColor();
     } else {
         if (UI::Button("Join")) {
-           
+           g_library.Join();
         }
     }
 
