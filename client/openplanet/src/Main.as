@@ -7,8 +7,6 @@ Library@ g_library = null;
 
 void Main() {
     @g_library = LoadLibrary();
-
-    // cast<CGameManiaPlanet>(GetApp()).ManiaTitleControlScriptAPI.EditNewMap2("Stadium", "48x48Screen155Day", "", "CarSport", "", false, "", "");
 }
 
 void RenderInterface() {
@@ -41,9 +39,7 @@ void RenderMenu() {
 
 void Update(float dt) {
     if (g_library !is null) {
-        auto editor = cast<CGameCtnEditorCommon>(GetApp().Editor);
-
-        g_library.Update(editor);
+        g_library.Update();
     }
 }
 

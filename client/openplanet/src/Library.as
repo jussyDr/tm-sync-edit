@@ -57,11 +57,7 @@ class Library {
         m_destroyFunc.Call(m_context);
     }
 
-    void Update(CGameCtnEditorCommon@ editor) {
-        if (editor is null) {
-            m_updateFunc.Call(m_context, uint64(0));
-        } else {
-            m_updateFunc.Call(m_context, editor);
-        }
+    void Update() {
+        m_updateFunc.Call(m_context);
     }
 }

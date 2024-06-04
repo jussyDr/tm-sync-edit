@@ -1,9 +1,16 @@
-mod game;
 mod process;
+
+mod game {
+    mod classes;
+    mod fns;
+
+    pub use classes::*;
+    pub use fns::*;
+}
 
 use std::panic;
 
-use game::{edit_new_map, EditorCommon, ManiaPlanet};
+use game::ManiaPlanet;
 
 #[no_mangle]
 extern "system" fn Init(mania_planet: &'static mut ManiaPlanet) -> *mut Context {
@@ -13,13 +20,6 @@ extern "system" fn Init(mania_planet: &'static mut ManiaPlanet) -> *mut Context 
             .set_text(&panic_info.to_string())
             .show_alert();
     }));
-
-    // let _ = native_dialog::MessageDialog::new()
-    //     .set_title("Error")
-    //     .set_text("editing...")
-    //     .show_alert();
-
-    unsafe { edit_new_map(&mania_planet.mania_title_control_script_api) };
 
     let context = Context::new(mania_planet);
 
@@ -32,7 +32,7 @@ unsafe extern "system" fn Destroy(context: *mut Context) {
 }
 
 #[no_mangle]
-extern "system" fn Update(context: &mut Context, editor: Option<&mut EditorCommon>) {}
+extern "system" fn Update(context: &mut Context) {}
 
 struct Context {
     mania_planet: &'static mut ManiaPlanet,
