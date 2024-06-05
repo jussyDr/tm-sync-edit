@@ -17,13 +17,16 @@ pub fn deserialize<'de, T: Deserialize<'de>>(bytes: &'de [u8]) -> Result<T, post
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct MapParamsDesc {
-    pub player_model: PlayerModel,
+pub enum Mood {
+    Day,
+    Sunset,
+    Night,
+    Sunrise,
 }
 
 #[derive(Serialize, Deserialize)]
-pub enum PlayerModel {
-    CarSport,
+pub struct MapParamsDesc {
+    pub mood: Mood,
 }
 
 #[derive(Serialize, Deserialize)]

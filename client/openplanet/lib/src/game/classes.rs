@@ -73,6 +73,9 @@ autopad! {
     }
 }
 
+/// CGameCtnBlockInfo.
+pub struct BlockInfo;
+
 /// CGameCtnMenus.
 pub struct Menus;
 

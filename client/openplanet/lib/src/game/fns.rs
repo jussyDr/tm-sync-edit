@@ -2,7 +2,7 @@ use std::{marker::PhantomData, mem::transmute};
 
 use crate::process::ModuleMemory;
 
-use super::{ManiaPlanet, ManiaTitleControlScriptApi};
+use super::{BlockInfo, EditorCommon, ManiaPlanet, ManiaTitleControlScriptApi};
 
 #[repr(C)]
 struct ScriptString<'a> {
@@ -40,10 +40,10 @@ union ScriptStringUnion<'a> {
     marker: PhantomData<&'a ()>,
 }
 
-type EditNewMap2FnTy =
+type EditNewMap2FnType =
     unsafe extern "system" fn(this: *mut ManiaTitleControlScriptApi, args: *mut u8);
 
-pub struct EditNewMap2Fn(EditNewMap2FnTy);
+pub struct EditNewMap2Fn(EditNewMap2FnType);
 
 impl EditNewMap2Fn {
     pub fn find(main_module_memory: &ModuleMemory) -> Option<Self> {
@@ -51,15 +51,20 @@ impl EditNewMap2Fn {
 
         let ptr = unsafe { main_module_memory.find_pattern(pattern).unwrap()?.sub(754) };
 
-        let f = unsafe { transmute::<*const u8, EditNewMap2FnTy>(ptr) };
+        let f = unsafe { transmute::<*const u8, EditNewMap2FnType>(ptr) };
 
         Some(Self(f))
     }
 
-    pub unsafe fn call(&self, this: &mut ManiaTitleControlScriptApi, player_model: &str) {
+    pub unsafe fn call(
+        &self,
+        this: &mut ManiaTitleControlScriptApi,
+        decoration: &str,
+        player_model: &str,
+    ) {
         let mut arg_1 = ScriptString::from("Stadium");
 
-        let mut arg_2 = ScriptString::from("48x48Screen155Day");
+        let mut arg_2 = ScriptString::from(decoration);
 
         let mut arg_3 = ScriptString::from("");
 
@@ -97,9 +102,9 @@ impl EditNewMap2Fn {
     }
 }
 
-type BackToMainMenuFnTy = unsafe extern "system" fn(this: *mut ManiaPlanet);
+type BackToMainMenuFnType = unsafe extern "system" fn(this: *mut ManiaPlanet);
 
-pub struct BackToMainMenuFn(BackToMainMenuFnTy);
+pub struct BackToMainMenuFn(BackToMainMenuFnType);
 
 impl BackToMainMenuFn {
     pub fn find(main_module_memory: &ModuleMemory) -> Option<Self> {
@@ -107,12 +112,74 @@ impl BackToMainMenuFn {
 
         let ptr = main_module_memory.find_pattern(pattern).unwrap()?;
 
-        let f = unsafe { transmute::<*const u8, BackToMainMenuFnTy>(ptr) };
+        let f = unsafe { transmute::<*const u8, BackToMainMenuFnType>(ptr) };
 
         Some(Self(f))
     }
 
     pub unsafe fn call(&self, this: &mut ManiaPlanet) {
         (self.0)(this);
+    }
+}
+
+type PlaceBlockFnType = unsafe extern "system" fn(
+    this: *mut EditorCommon,
+    block_info: *mut BlockInfo,
+    coord: *mut u32,
+    dir: u32,
+    param_5: u8,
+    param_6: u8,
+    param_7: u32,
+    param_8: u32,
+    param_9: u32,
+    param_10: u32,
+    param_11: u32,
+    param_12: u32,
+    param_13: u32,
+    param_14: u32,
+    param_15: u32,
+    param_16: u32,
+    param_17: u32,
+    param_18: usize,
+    param_19: u32,
+) -> usize;
+
+pub struct PlaceBlockFn(PlaceBlockFnType);
+
+impl PlaceBlockFn {
+    pub fn find(main_module_memory: &ModuleMemory) -> Option<Self> {
+        let pattern = "4c 8b dc 55 53 56 41 54 41 56 49 8d 6b d1";
+
+        let ptr = main_module_memory.find_pattern(pattern).unwrap()?;
+
+        let f = unsafe { transmute::<*const u8, PlaceBlockFnType>(ptr) };
+
+        Some(Self(f))
+    }
+
+    pub unsafe fn call(&self, this: &mut EditorCommon, block_info: &mut BlockInfo) -> usize {
+        let mut coord = [20, 20, 20];
+
+        (self.0)(
+            this,
+            block_info,
+            coord.as_mut_ptr(),
+            0,
+            0,
+            0,
+            1,
+            0,
+            0xffffffff,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+        )
     }
 }

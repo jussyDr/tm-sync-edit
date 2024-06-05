@@ -20,7 +20,7 @@ use async_compat::CompatExt;
 use futures::{executor::block_on, poll, TryStreamExt};
 use game::{BackToMainMenuFn, EditNewMap2Fn, EditorCommon, ManiaPlanet, Menus, NodRef};
 use process::Process;
-use shared::{deserialize, framed_tcp_stream, FramedTcpStream, MapDesc, MapParamsDesc};
+use shared::{deserialize, framed_tcp_stream, FramedTcpStream, MapDesc, MapParamsDesc, Mood};
 use tokio::net::TcpStream;
 
 #[no_mangle]
@@ -87,7 +87,7 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
     let frame = framed_tcp_stream.try_next().await?.unwrap();
     let map_params_desc: MapParamsDesc = deserialize(&frame)?;
 
-    open_map_editor(context).await?;
+    open_map_editor(context, map_params_desc).await?;
 
     let frame = framed_tcp_stream.try_next().await?.unwrap();
     let map_desc: MapDesc = deserialize(&frame)?;
@@ -97,7 +97,10 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-async fn open_map_editor(context: &mut Context) -> Result<(), Box<dyn Error>> {
+async fn open_map_editor(
+    context: &mut Context,
+    params: MapParamsDesc,
+) -> Result<(), Box<dyn Error>> {
     let process = Process::open_current()?;
     let main_module_memory = process.main_module_memory()?;
 
@@ -117,9 +120,19 @@ async fn open_map_editor(context: &mut Context) -> Result<(), Box<dyn Error>> {
 
         if let Some(current_module) = module_stack.last() {
             if current_module.is_instance_of::<Menus>() {
+                let mood = match params.mood {
+                    Mood::Day => "Day",
+                    Mood::Sunset => "Sunset",
+                    Mood::Night => "Night",
+                    Mood::Sunrise => "Sunrise",
+                };
+
+                let decoration_id = format!("48x48Screen155{mood}");
+
                 unsafe {
                     edit_new_map_2_fn.call(
                         &mut context.mania_planet.mania_title_control_script_api,
+                        &decoration_id,
                         "CarSport",
                     );
                 };
