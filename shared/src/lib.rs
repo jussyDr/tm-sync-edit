@@ -17,7 +17,14 @@ pub fn deserialize<'de, T: Deserialize<'de>>(bytes: &'de [u8]) -> Result<T, post
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct MapParamsDesc;
+pub struct MapParamsDesc {
+    pub player_model: PlayerModel,
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum PlayerModel {
+    CarSport,
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct MapDesc;

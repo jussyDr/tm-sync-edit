@@ -18,7 +18,7 @@ use std::{
 
 use async_compat::CompatExt;
 use futures::{executor::block_on, poll, TryStreamExt};
-use game::{BackToMainMenuFn, EditNewMap2Fn, EditorCommon, ManiaPlanet, Menus};
+use game::{BackToMainMenuFn, EditNewMap2Fn, EditorCommon, ManiaPlanet, Menus, NodRef};
 use process::Process;
 use shared::{deserialize, framed_tcp_stream, FramedTcpStream, MapDesc, MapParamsDesc};
 use tokio::net::TcpStream;
@@ -118,7 +118,10 @@ async fn open_map_editor(context: &mut Context) -> Result<(), Box<dyn Error>> {
         if let Some(current_module) = module_stack.last() {
             if current_module.is_instance_of::<Menus>() {
                 unsafe {
-                    edit_new_map_2_fn.call(&mut context.mania_planet.mania_title_control_script_api)
+                    edit_new_map_2_fn.call(
+                        &mut context.mania_planet.mania_title_control_script_api,
+                        "CarSport",
+                    );
                 };
             } else {
                 unsafe {
@@ -133,4 +136,8 @@ async fn open_map_editor(context: &mut Context) -> Result<(), Box<dyn Error>> {
     future.await;
 
     Ok(())
+}
+
+fn get_map_editor(context: &mut Context) -> Option<NodRef<EditorCommon>> {
+    None
 }

@@ -7,7 +7,7 @@ use std::{
 
 use futures_util::{SinkExt, TryStreamExt};
 use log::LevelFilter;
-use shared::{framed_tcp_stream, serialize, MapDesc, MapParamsDesc};
+use shared::{framed_tcp_stream, serialize, MapDesc, MapParamsDesc, PlayerModel};
 use tokio::{net::TcpListener, runtime, spawn, sync::Mutex};
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -38,7 +38,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                 let mut framed_tcp_stream = framed_tcp_stream(tcp_stream);
 
-                let map_params_desc = MapParamsDesc;
+                let map_params_desc = MapParamsDesc {
+                    player_model: PlayerModel::CarSport,
+                };
+
                 let frame = serialize(&map_params_desc).unwrap();
                 framed_tcp_stream.send(frame.into()).await.unwrap();
 
