@@ -120,14 +120,14 @@ async fn open_map_editor(
 
         if let Some(current_module) = module_stack.last() {
             if current_module.is_instance_of::<Menus>() {
-                let mood = match params.mood {
+                let mood_name = match params.mood {
                     Mood::Day => "Day",
                     Mood::Sunset => "Sunset",
                     Mood::Night => "Night",
                     Mood::Sunrise => "Sunrise",
                 };
 
-                let decoration_id = format!("48x48Screen155{mood}");
+                let decoration_id = format!("48x48Screen155{mood_name}");
 
                 unsafe {
                     edit_new_map_2_fn.call(
@@ -151,6 +151,6 @@ async fn open_map_editor(
     Ok(())
 }
 
-fn get_map_editor(context: &mut Context) -> Option<NodRef<EditorCommon>> {
-    None
+fn get_map_editor(context: &mut Context) -> Option<&NodRef<EditorCommon>> {
+    todo!();
 }

@@ -105,11 +105,24 @@ impl Deref for SwitcherModule {
     }
 }
 
-/// CGameCtnEditorCommon.
-pub struct EditorCommon;
+autopad! {
+    /// CGameCtnEditorCommon.
+    #[repr(C)]
+    pub struct EditorCommon {
+        0xfb0 => pub plugin_map_type: NodRef<EditorPluginMap>,
+    }
+}
 
 impl Class for EditorCommon {
     const ID: u32 = 0x0310e000;
+}
+
+autopad! {
+    /// CGameEditorPluginMap.
+    #[repr(C)]
+    pub struct EditorPluginMap {
+        0x520 => pub block_infos: Array<NodRef<BlockInfo>>,
+    }
 }
 
 /// CGameManiaTitleControlScriptAPI.
