@@ -15,6 +15,16 @@ pub struct NodRef<T: DerefMut<Target = Nod>> {
     ptr: *mut T,
 }
 
+impl<T: DerefMut<Target = Nod>> NodRef<T> {
+    pub fn cast<U: Class + DerefMut<Target = Nod>>(&self) -> Option<&NodRef<U>> {
+        if self.is_instance_of::<U>() {
+            unsafe { Some(&*(self as *const Self as *const NodRef<U>)) }
+        } else {
+            None
+        }
+    }
+}
+
 impl<T: DerefMut<Target = Nod>> Clone for NodRef<T> {
     fn clone(&self) -> Self {
         let nod = unsafe { (*self.ptr).deref_mut() };
@@ -173,12 +183,27 @@ autopad! {
     /// CGameCtnEditorCommon.
     #[repr(C)]
     pub struct EditorCommon {
+                     nod: Nod,
         0xfb0 => pub plugin_map_type: NodRef<EditorPluginMap>,
     }
 }
 
 impl Class for EditorCommon {
     const ID: u32 = 0x0310e000;
+}
+
+impl Deref for EditorCommon {
+    type Target = Nod;
+
+    fn deref(&self) -> &Nod {
+        &self.nod
+    }
+}
+
+impl DerefMut for EditorCommon {
+    fn deref_mut(&mut self) -> &mut Nod {
+        &mut self.nod
+    }
 }
 
 autopad! {

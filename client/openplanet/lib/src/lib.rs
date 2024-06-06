@@ -92,6 +92,8 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
     let frame = framed_tcp_stream.try_next().await?.unwrap();
     let map_desc: MapDesc = deserialize(&frame)?;
 
+    let map_editor = get_map_editor(context).unwrap();
+
     while framed_tcp_stream.try_next().await?.is_some() {}
 
     Ok(())
@@ -149,4 +151,14 @@ async fn open_map_editor(
     future.await;
 
     Ok(())
+}
+
+fn get_map_editor(context: &mut Context) -> Option<&NodRef<EditorCommon>> {
+    context
+        .mania_planet
+        .switcher
+        .module_stack
+        .iter()
+        .filter_map(|module| module.cast::<EditorCommon>())
+        .next()
 }
