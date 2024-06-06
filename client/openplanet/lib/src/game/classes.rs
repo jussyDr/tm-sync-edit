@@ -11,11 +11,21 @@ pub trait Class {
 
 /// Reference-counted pointer to a `Nod` instance.
 #[repr(transparent)]
-pub struct NodRef<T> {
+pub struct NodRef<T: DerefMut<Target = Nod>> {
     ptr: *mut T,
 }
 
-impl<T> Deref for NodRef<T> {
+impl<T: DerefMut<Target = Nod>> Clone for NodRef<T> {
+    fn clone(&self) -> Self {
+        let nod = unsafe { (*self.ptr).deref_mut() };
+
+        nod.ref_count += 1;
+
+        Self { ptr: self.ptr }
+    }
+}
+
+impl<T: DerefMut<Target = Nod>> Deref for NodRef<T> {
     type Target = T;
 
     fn deref(&self) -> &T {
@@ -23,21 +33,37 @@ impl<T> Deref for NodRef<T> {
     }
 }
 
-impl<T> DerefMut for NodRef<T> {
+impl<T: DerefMut<Target = Nod>> DerefMut for NodRef<T> {
     fn deref_mut(&mut self) -> &mut T {
         unsafe { &mut *self.ptr }
     }
 }
 
-/// CMwNod.
-#[repr(C)]
-pub struct Nod {
-    vtable: *const NodVtable,
+impl<T: DerefMut<Target = Nod>> Drop for NodRef<T> {
+    fn drop(&mut self) {
+        let nod = unsafe { (*self.ptr).deref_mut() };
+
+        nod.ref_count -= 1;
+
+        if nod.ref_count == 0 {
+            unsafe { ((*nod.vtable).destructor)(nod, true) };
+        }
+    }
+}
+
+autopad! {
+    /// CMwNod.
+    #[repr(C)]
+    pub struct Nod {
+                vtable: *const NodVtable,
+        0x10 => ref_count: u32,
+    }
 }
 
 autopad! {
     #[repr(C)]
     struct NodVtable {
+        0x08 => destructor: unsafe extern "system" fn(this: *mut Nod, free_memory: bool),
         0x20 => is_instance_of: unsafe extern "system" fn(this: *const Nod, class_id: u32) -> bool,
     }
 }
@@ -74,7 +100,24 @@ autopad! {
 }
 
 /// CGameCtnBlockInfo.
-pub struct BlockInfo;
+#[repr(C)]
+pub struct BlockInfo {
+    nod: Nod,
+}
+
+impl Deref for BlockInfo {
+    type Target = Nod;
+
+    fn deref(&self) -> &Nod {
+        &self.nod
+    }
+}
+
+impl DerefMut for BlockInfo {
+    fn deref_mut(&mut self) -> &mut Nod {
+        &mut self.nod
+    }
+}
 
 /// CGameCtnMenus.
 pub struct Menus;
@@ -87,7 +130,22 @@ autopad! {
     /// CGameSwitcher.
     #[repr(C)]
     pub struct Switcher {
+                    nod: Nod,
         0x20 => pub module_stack: Array<NodRef<SwitcherModule>>,
+    }
+}
+
+impl Deref for Switcher {
+    type Target = Nod;
+
+    fn deref(&self) -> &Nod {
+        &self.nod
+    }
+}
+
+impl DerefMut for Switcher {
+    fn deref_mut(&mut self) -> &mut Nod {
+        &mut self.nod
     }
 }
 
@@ -102,6 +160,12 @@ impl Deref for SwitcherModule {
 
     fn deref(&self) -> &Nod {
         &self.nod
+    }
+}
+
+impl DerefMut for SwitcherModule {
+    fn deref_mut(&mut self) -> &mut Nod {
+        &mut self.nod
     }
 }
 
@@ -121,9 +185,41 @@ autopad! {
     /// CGameEditorPluginMap.
     #[repr(C)]
     pub struct EditorPluginMap {
+                     nod: Nod,
         0x520 => pub block_infos: Array<NodRef<BlockInfo>>,
     }
 }
 
+impl Deref for EditorPluginMap {
+    type Target = Nod;
+
+    fn deref(&self) -> &Nod {
+        &self.nod
+    }
+}
+
+impl DerefMut for EditorPluginMap {
+    fn deref_mut(&mut self) -> &mut Nod {
+        &mut self.nod
+    }
+}
+
 /// CGameManiaTitleControlScriptAPI.
-pub struct ManiaTitleControlScriptApi;
+#[repr(C)]
+pub struct ManiaTitleControlScriptApi {
+    nod: Nod,
+}
+
+impl Deref for ManiaTitleControlScriptApi {
+    type Target = Nod;
+
+    fn deref(&self) -> &Nod {
+        &self.nod
+    }
+}
+
+impl DerefMut for ManiaTitleControlScriptApi {
+    fn deref_mut(&mut self) -> &mut Nod {
+        &mut self.nod
+    }
+}

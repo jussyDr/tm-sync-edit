@@ -150,7 +150,3 @@ async fn open_map_editor(
 
     Ok(())
 }
-
-fn get_map_editor(context: &mut Context) -> Option<&NodRef<EditorCommon>> {
-    todo!();
-}
