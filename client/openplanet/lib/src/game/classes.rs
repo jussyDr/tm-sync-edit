@@ -1,6 +1,6 @@
 use std::{
     ops::{Deref, DerefMut},
-    slice,
+    slice, str,
 };
 
 use autopad::autopad;
@@ -19,6 +19,14 @@ impl<T: DerefMut<Target = Nod>> NodRef<T> {
     pub fn cast<U: Class + DerefMut<Target = Nod>>(&self) -> Option<&NodRef<U>> {
         if self.is_instance_of::<U>() {
             unsafe { Some(&*(self as *const Self as *const NodRef<U>)) }
+        } else {
+            None
+        }
+    }
+
+    pub fn cast_mut<U: Class + DerefMut<Target = Nod>>(&mut self) -> Option<&mut NodRef<U>> {
+        if self.is_instance_of::<U>() {
+            unsafe { Some(&mut *(self as *mut Self as *mut NodRef<U>)) }
         } else {
             None
         }
@@ -84,6 +92,33 @@ impl Nod {
     }
 }
 
+#[repr(C)]
+pub struct FastString {
+    union: FastStringUnion,
+    is_ptr: bool,
+    len: u32,
+}
+
+impl Deref for FastString {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        if self.is_ptr {
+            let bytes = unsafe { slice::from_raw_parts(self.union.ptr, self.len as usize) };
+            unsafe { str::from_utf8_unchecked(bytes) }
+        } else {
+            let bytes = unsafe { &self.union.chars[..self.len as usize] };
+            unsafe { str::from_utf8_unchecked(bytes) }
+        }
+    }
+}
+
+#[repr(packed)]
+union FastStringUnion {
+    chars: [u8; 11],
+    ptr: *const u8,
+}
+
 /// CMwSArray.
 #[repr(C)]
 pub struct Array<T> {
@@ -100,6 +135,12 @@ impl<T> Deref for Array<T> {
     }
 }
 
+impl<T> DerefMut for Array<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { slice::from_raw_parts_mut(self.ptr, self.len as usize) }
+    }
+}
+
 autopad! {
     /// CGameManiaPlanet.
     #[repr(C)]
@@ -109,10 +150,13 @@ autopad! {
     }
 }
 
-/// CGameCtnBlockInfo.
-#[repr(C)]
-pub struct BlockInfo {
-    nod: Nod,
+autopad! {
+    /// CGameCtnBlockInfo.
+    #[repr(C)]
+    pub struct BlockInfo {
+                    nod: Nod,
+        0x38 => pub name: FastString,
+    }
 }
 
 impl Deref for BlockInfo {

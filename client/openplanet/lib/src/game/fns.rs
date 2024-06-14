@@ -56,19 +56,14 @@ impl EditNewMap2Fn {
         Some(Self(f))
     }
 
-    pub unsafe fn call(
-        &self,
-        this: &mut ManiaTitleControlScriptApi,
-        decoration: &str,
-        player_model: &str,
-    ) {
+    pub unsafe fn call(&self, this: &mut ManiaTitleControlScriptApi, decoration: &str) {
         let mut arg_1 = ScriptString::from("Stadium");
 
         let mut arg_2 = ScriptString::from(decoration);
 
         let mut arg_3 = ScriptString::from("");
 
-        let mut arg_4 = ScriptString::from(player_model);
+        let mut arg_4 = ScriptString::from("CarSport");
 
         let mut arg_5 = ScriptString::from("");
 
@@ -124,7 +119,7 @@ impl BackToMainMenuFn {
 
 type PlaceBlockFnType = unsafe extern "system" fn(
     this: *mut EditorCommon,
-    block_info: *mut BlockInfo,
+    block_info: *const BlockInfo,
     coord: *mut u32,
     dir: u32,
     param_5: u8,
@@ -157,7 +152,7 @@ impl PlaceBlockFn {
         Some(Self(f))
     }
 
-    pub unsafe fn call(&self, this: &mut EditorCommon, block_info: &mut BlockInfo) -> usize {
+    pub unsafe fn call(&self, this: &mut EditorCommon, block_info: &BlockInfo) -> usize {
         let mut coord = [20, 20, 20];
 
         (self.0)(

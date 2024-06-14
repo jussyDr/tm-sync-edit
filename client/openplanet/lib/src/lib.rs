@@ -9,6 +9,7 @@ mod game {
 }
 
 use std::{
+    collections::HashMap,
     error::Error,
     future::{poll_fn, Future},
     panic,
@@ -18,7 +19,10 @@ use std::{
 
 use async_compat::CompatExt;
 use futures::{executor::block_on, poll, TryStreamExt};
-use game::{BackToMainMenuFn, EditNewMap2Fn, EditorCommon, ManiaPlanet, Menus, NodRef};
+use game::{
+    BackToMainMenuFn, BlockInfo, EditNewMap2Fn, EditorCommon, ManiaPlanet, Menus, NodRef,
+    PlaceBlockFn,
+};
 use process::Process;
 use shared::{deserialize, framed_tcp_stream, FramedTcpStream, MapDesc, MapParamsDesc, Mood};
 use tokio::net::TcpStream;
@@ -94,6 +98,20 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
 
     let map_editor = get_map_editor(context).unwrap();
 
+    let mut block_infos: HashMap<String, NodRef<BlockInfo>> = HashMap::new();
+
+    for block_info in map_editor.plugin_map_type.block_infos.iter() {
+        block_infos.insert(block_info.name.to_owned(), NodRef::clone(block_info));
+    }
+
+    let block_info = block_infos.get("RoadTechStraight").unwrap();
+
+    let process = Process::open_current()?;
+    let main_module_memory = process.main_module_memory()?;
+    let place_block_fn = PlaceBlockFn::find(&main_module_memory).unwrap();
+
+    unsafe { place_block_fn.call(map_editor, block_info) };
+
     while framed_tcp_stream.try_next().await?.is_some() {}
 
     Ok(())
@@ -135,7 +153,6 @@ async fn open_map_editor(
                     edit_new_map_2_fn.call(
                         &mut context.mania_planet.mania_title_control_script_api,
                         &decoration_id,
-                        "CarSport",
                     );
                 };
             } else {
@@ -153,12 +170,12 @@ async fn open_map_editor(
     Ok(())
 }
 
-fn get_map_editor(context: &mut Context) -> Option<&NodRef<EditorCommon>> {
+fn get_map_editor(context: &mut Context) -> Option<&mut NodRef<EditorCommon>> {
     context
         .mania_planet
         .switcher
         .module_stack
-        .iter()
-        .filter_map(|module| module.cast::<EditorCommon>())
+        .iter_mut()
+        .filter_map(|module| module.cast_mut::<EditorCommon>())
         .next()
 }
