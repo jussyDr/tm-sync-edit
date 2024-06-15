@@ -110,7 +110,11 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
     let main_module_memory = process.main_module_memory()?;
     let place_block_fn = PlaceBlockFn::find(&main_module_memory).unwrap();
 
+    map_editor.air_mode = true;
+
     unsafe { place_block_fn.call(map_editor, block_info) };
+
+    map_editor.air_mode = false;
 
     while framed_tcp_stream.try_next().await?.is_some() {}
 

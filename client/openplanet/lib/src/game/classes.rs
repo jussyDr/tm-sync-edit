@@ -228,6 +228,7 @@ autopad! {
     #[repr(C)]
     pub struct EditorCommon {
                      nod: Nod,
+        0xbdc => pub air_mode: bool,
         0xfb0 => pub plugin_map_type: NodRef<EditorPluginMap>,
     }
 }
