@@ -104,15 +104,25 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
         block_infos.insert(block_info.name.to_owned(), NodRef::clone(block_info));
     }
 
-    let block_info = block_infos.get("RoadTechStraight").unwrap();
-
     let process = Process::open_current()?;
     let main_module_memory = process.main_module_memory()?;
     let place_block_fn = PlaceBlockFn::find(&main_module_memory).unwrap();
 
     let air_mode = mem::replace(&mut map_editor.air_mode, false);
 
-    unsafe { place_block_fn.call(map_editor, block_info, 20, 20, 20) };
+    for block in map_desc.blocks {
+        let block_info = block_infos.get(&block.block_info_name);
+
+        if block_info.is_none() {
+            let _ = native_dialog::MessageDialog::new()
+                .set_type(native_dialog::MessageType::Error)
+                .set_title("SyncEdit.dll")
+                .set_text(&block.block_info_name)
+                .show_alert();
+        }
+
+        unsafe { place_block_fn.call(map_editor, block_info.unwrap(), block.x, block.y, block.z) };
+    }
 
     map_editor.air_mode = air_mode;
 

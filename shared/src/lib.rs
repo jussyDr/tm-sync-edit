@@ -30,4 +30,14 @@ pub struct MapParamsDesc {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct MapDesc;
+pub struct MapDesc {
+    pub blocks: Vec<BlockDesc>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct BlockDesc {
+    pub block_info_name: String,
+    pub x: u8,
+    pub y: u8,
+    pub z: u8,
+}

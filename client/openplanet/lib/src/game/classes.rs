@@ -66,6 +66,7 @@ autopad! {
     #[repr(C)]
     pub struct Nod {
                 vtable: *const NodVTable,
+        0x08 => pub fid_file: NodRef<FidFile>,
         0x10 => ref_count: u32,
     }
 }
@@ -358,6 +359,54 @@ impl Deref for ManiaTitleControlScriptApi {
 }
 
 impl DerefMut for ManiaTitleControlScriptApi {
+    fn deref_mut(&mut self) -> &mut Nod {
+        &mut self.nod
+    }
+}
+
+autopad! {
+    /// CSystemFidsFolder.
+    #[repr(C)]
+    pub struct FidsFolder {
+                    nod: Nod,
+        0x28 => pub leaves: Array<FidFile>,
+        0x38 => pub trees: Array<FidsFolder>,
+        0x58 => pub name: FastString
+    }
+}
+
+impl Deref for FidsFolder {
+    type Target = Nod;
+
+    fn deref(&self) -> &Nod {
+        &self.nod
+    }
+}
+
+impl DerefMut for FidsFolder {
+    fn deref_mut(&mut self) -> &mut Nod {
+        &mut self.nod
+    }
+}
+
+autopad! {
+    /// CSystemFidFile.
+    #[repr(C)]
+    pub struct FidFile {
+                    nod: Nod,
+        0x18 => pub parent_folder: NodRef<FidsFolder>
+    }
+}
+
+impl Deref for FidFile {
+    type Target = Nod;
+
+    fn deref(&self) -> &Nod {
+        &self.nod
+    }
+}
+
+impl DerefMut for FidFile {
     fn deref_mut(&mut self) -> &mut Nod {
         &mut self.nod
     }
