@@ -12,7 +12,7 @@ use std::{
     collections::HashMap,
     error::Error,
     future::{poll_fn, Future},
-    panic,
+    mem, panic,
     pin::Pin,
     task::Poll,
 };
@@ -110,11 +110,11 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
     let main_module_memory = process.main_module_memory()?;
     let place_block_fn = PlaceBlockFn::find(&main_module_memory).unwrap();
 
-    map_editor.air_mode = true;
+    let air_mode = mem::replace(&mut map_editor.air_mode, false);
 
-    unsafe { place_block_fn.call(map_editor, block_info) };
+    unsafe { place_block_fn.call(map_editor, block_info, 20, 20, 20) };
 
-    map_editor.air_mode = false;
+    map_editor.air_mode = air_mode;
 
     while framed_tcp_stream.try_next().await?.is_some() {}
 

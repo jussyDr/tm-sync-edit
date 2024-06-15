@@ -16,14 +16,6 @@ pub struct NodRef<T: DerefMut<Target = Nod>> {
 }
 
 impl<T: DerefMut<Target = Nod>> NodRef<T> {
-    pub fn cast<U: Class + DerefMut<Target = Nod>>(&self) -> Option<&NodRef<U>> {
-        if self.is_instance_of::<U>() {
-            unsafe { Some(&*(self as *const Self as *const NodRef<U>)) }
-        } else {
-            None
-        }
-    }
-
     pub fn cast_mut<U: Class + DerefMut<Target = Nod>>(&mut self) -> Option<&mut NodRef<U>> {
         if self.is_instance_of::<U>() {
             unsafe { Some(&mut *(self as *mut Self as *mut NodRef<U>)) }
@@ -73,14 +65,14 @@ autopad! {
     /// CMwNod.
     #[repr(C)]
     pub struct Nod {
-                vtable: *const NodVtable,
+                vtable: *const NodVTable,
         0x10 => ref_count: u32,
     }
 }
 
 autopad! {
     #[repr(C)]
-    struct NodVtable {
+    struct NodVTable {
         0x08 => destructor: unsafe extern "system" fn(this: *mut Nod, free_memory: bool),
         0x20 => is_instance_of: unsafe extern "system" fn(this: *const Nod, class_id: u32) -> bool,
     }
@@ -173,6 +165,9 @@ impl DerefMut for BlockInfo {
     }
 }
 
+/// CGameCtnBlock.
+pub struct Block;
+
 /// CGameCtnMenus.
 pub struct Menus;
 
@@ -203,6 +198,41 @@ impl DerefMut for Switcher {
     }
 }
 
+autopad! {
+    /// CGameCtnAnchoredObject.
+    #[repr(C)]
+    pub struct Item {
+        0x28 => pub params: ItemParams,
+    }
+}
+
+#[repr(C)]
+pub struct ItemParams {
+    pub coord: [u32; 3],
+    pub yaw_pitch_roll: [f32; 3],
+    pub param_3: u32,
+    pub pos: [f32; 3],
+    pub param_5: [f32; 9],
+    pub pivot_pos: [f32; 3],
+    pub param_7: f32,
+    pub param_8: u32,
+    pub param_9: u32,
+    pub param_10: u32,
+    pub param_11: u32,
+    pub param_12: u32,
+    pub param_13: u32,
+    pub param_14: u32,
+    pub param_15: u32,
+    pub param_16: u32,
+    pub param_17: u32,
+    pub param_18: u32,
+    pub param_19: u32,
+    pub param_20: [f32; 3],
+    pub elem_color: u8,
+    pub anim_offset: u8,
+    pub param_22: u32,
+}
+
 /// CGameSwitcherModule.
 #[repr(C)]
 pub struct SwitcherModule {
@@ -230,6 +260,45 @@ autopad! {
                      nod: Nod,
         0xbdc => pub air_mode: bool,
         0xfb0 => pub plugin_map_type: NodRef<EditorPluginMap>,
+    }
+}
+
+autopad! {
+    #[repr(C)]
+    struct EditorCommonVTable {
+        0x270 => place_block: unsafe extern "system" fn(
+            this: *mut EditorCommon,
+            block_info: *const BlockInfo,
+            param_3: usize,
+            coord: *const [u32; 3],
+            param_5: u32,
+            param_6: u32,
+            param_7: u8,
+            param_8: u32,
+            param_9: u32,
+            param_10: u32,
+            param_11: u32,
+            param_12: u32,
+            param_13: u32,
+            param_14: u32,
+            param_15: u32,
+            param_16: usize,
+            param_17: u32,
+            param_18: usize,
+            param_19: u32,
+            param_20: u32,
+        ) -> *mut Block,
+    }
+}
+
+impl EditorCommon {
+    pub unsafe fn place_block(&mut self, block_info: &BlockInfo) -> &mut Block {
+        let coord = [20, 20, 20];
+
+        &mut *((*(self.vtable as *const EditorCommonVTable)).place_block)(
+            self, block_info, 0, &coord, 0, 0, 0, 0, 0xffffffff, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+            0xffffffff, 0,
+        )
     }
 }
 
@@ -293,3 +362,6 @@ impl DerefMut for ManiaTitleControlScriptApi {
         &mut self.nod
     }
 }
+
+/// CGameItemModel.
+pub struct ItemModel;

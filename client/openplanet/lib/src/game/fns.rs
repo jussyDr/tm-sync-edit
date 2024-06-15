@@ -1,8 +1,14 @@
-use std::{marker::PhantomData, mem::transmute};
+use std::{
+    marker::PhantomData,
+    mem::{transmute, MaybeUninit},
+    ptr::null_mut,
+};
 
 use crate::process::ModuleMemory;
 
-use super::{BlockInfo, EditorCommon, ManiaPlanet, ManiaTitleControlScriptApi};
+use super::{
+    BlockInfo, EditorCommon, Item, ItemModel, ItemParams, ManiaPlanet, ManiaTitleControlScriptApi,
+};
 
 #[repr(C)]
 struct ScriptString<'a> {
@@ -40,10 +46,10 @@ union ScriptStringUnion<'a> {
     marker: PhantomData<&'a ()>,
 }
 
+pub struct EditNewMap2Fn(EditNewMap2FnType);
+
 type EditNewMap2FnType =
     unsafe extern "system" fn(this: *mut ManiaTitleControlScriptApi, args: *mut u8);
-
-pub struct EditNewMap2Fn(EditNewMap2FnType);
 
 impl EditNewMap2Fn {
     pub fn find(main_module_memory: &ModuleMemory) -> Option<Self> {
@@ -97,9 +103,9 @@ impl EditNewMap2Fn {
     }
 }
 
-type BackToMainMenuFnType = unsafe extern "system" fn(this: *mut ManiaPlanet);
-
 pub struct BackToMainMenuFn(BackToMainMenuFnType);
+
+type BackToMainMenuFnType = unsafe extern "system" fn(this: *mut ManiaPlanet);
 
 impl BackToMainMenuFn {
     pub fn find(main_module_memory: &ModuleMemory) -> Option<Self> {
@@ -116,6 +122,8 @@ impl BackToMainMenuFn {
         (self.0)(this);
     }
 }
+
+pub struct PlaceBlockFn(PlaceBlockFnType);
 
 type PlaceBlockFnType = unsafe extern "system" fn(
     this: *mut EditorCommon,
@@ -139,8 +147,6 @@ type PlaceBlockFnType = unsafe extern "system" fn(
     param_19: u32,
 ) -> usize;
 
-pub struct PlaceBlockFn(PlaceBlockFnType);
-
 impl PlaceBlockFn {
     pub fn find(main_module_memory: &ModuleMemory) -> Option<Self> {
         let pattern = "4c 8b dc 55 53 56 41 54 41 56 49 8d 6b d1";
@@ -152,8 +158,15 @@ impl PlaceBlockFn {
         Some(Self(f))
     }
 
-    pub unsafe fn call(&self, this: &mut EditorCommon, block_info: &BlockInfo) -> usize {
-        let mut coord = [20, 20, 20];
+    pub unsafe fn call(
+        &self,
+        this: &mut EditorCommon,
+        block_info: &BlockInfo,
+        x: u8,
+        y: u8,
+        z: u8,
+    ) -> usize {
+        let mut coord = [x as u32, y as u32, z as u32];
 
         (self.0)(
             this,
@@ -176,5 +189,68 @@ impl PlaceBlockFn {
             0,
             1,
         )
+    }
+}
+
+pub struct PlaceItemFn(PlaceItemFnType);
+
+type PlaceItemFnType = unsafe extern "system" fn(
+    this: *mut EditorCommon,
+    item_model: *const ItemModel,
+    params: *const ItemParams,
+    item: *mut *mut Item,
+) -> bool;
+
+impl PlaceItemFn {
+    pub fn find(main_module_memory: &ModuleMemory) -> Option<Self> {
+        let pattern = "48 89 5c 24 10 48 89 6c 24 18 48 89 74 24 20 57 48 83 ec 40 49 8b f9";
+
+        let ptr = main_module_memory.find_pattern(pattern).unwrap()?;
+
+        let f = unsafe { transmute::<*const u8, PlaceItemFnType>(ptr) };
+
+        Some(Self(f))
+    }
+
+    pub unsafe fn call(
+        &self,
+        editor: &mut EditorCommon,
+        item_model: &ItemModel,
+    ) -> Option<&mut Item> {
+        let params = ItemParams {
+            coord: [20, 20, 20],
+            yaw_pitch_roll: [0.0, 0.0, 0.0],
+            param_3: 0xffffffff,
+            pos: [0.0, 0.0, 0.0],
+            param_5: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+            pivot_pos: [0.0, 0.0, 0.0],
+            param_7: 1.0,
+            param_8: 1,
+            param_9: 0xffffffff,
+            param_10: 0,
+            param_11: 0,
+            param_12: 0,
+            param_13: 0,
+            param_14: 0,
+            param_15: 0,
+            param_16: 0,
+            param_17: 0,
+            param_18: 0,
+            param_19: 0,
+            param_20: [-1.0, -1.0, -1.0],
+            elem_color: 0,
+            anim_offset: 0,
+            param_22: 0xffffffff,
+        };
+
+        let mut item = MaybeUninit::uninit();
+
+        let success = (self.0)(editor, item_model, &params, item.as_mut_ptr());
+
+        if success {
+            Some(&mut *item.assume_init())
+        } else {
+            None
+        }
     }
 }
