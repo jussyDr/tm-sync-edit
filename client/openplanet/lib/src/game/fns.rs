@@ -1,13 +1,13 @@
 use std::{
     marker::PhantomData,
     mem::{transmute, MaybeUninit},
-    ptr::null_mut,
 };
 
 use crate::process::ModuleMemory;
 
 use super::{
-    BlockInfo, EditorCommon, Item, ItemModel, ItemParams, ManiaPlanet, ManiaTitleControlScriptApi,
+    BlockInfo, EditorCommon, FidFile, Item, ItemModel, ItemParams, ManiaPlanet,
+    ManiaTitleControlScriptApi, Nod, NodRef,
 };
 
 #[repr(C)]
@@ -251,6 +251,38 @@ impl PlaceItemFn {
             Some(&mut *item.assume_init())
         } else {
             None
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct LoadFidFileFn(LoadFidFileFnType);
+
+type LoadFidFileFnType =
+    unsafe extern "system" fn(nod: *mut *mut Nod, fid_file: *mut FidFile, param_3: usize);
+
+impl LoadFidFileFn {
+    pub fn find(main_module_memory: &ModuleMemory) -> Option<Self> {
+        let pattern = "40 53 56 57 48 81 ec b0 00 00 00 48 8b 05 ?? ?? ?? ?? 48 33 c4 48 89 84 24 a0 00 00 00 49 8b f8";
+
+        let ptr = main_module_memory.find_pattern(pattern).unwrap()?;
+
+        let f = unsafe { transmute::<*const u8, LoadFidFileFnType>(ptr) };
+
+        Some(Self(f))
+    }
+
+    pub unsafe fn call(&self, fid_file: &mut FidFile) -> Option<NodRef<Nod>> {
+        let mut nod = MaybeUninit::uninit();
+
+        (self.0)(nod.as_mut_ptr(), fid_file, 0);
+
+        let nod = nod.assume_init();
+
+        if nod.is_null() {
+            None
+        } else {
+            Some(NodRef::from_ptr(nod))
         }
     }
 }

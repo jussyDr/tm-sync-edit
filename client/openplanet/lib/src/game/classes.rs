@@ -9,15 +9,25 @@ pub trait Class {
     const ID: u32;
 }
 
+trait Inherits {
+    type Parent;
+
+    fn parent(&mut self) -> &mut Self::Parent;
+}
+
 /// Reference-counted pointer to a `Nod` instance.
 #[repr(transparent)]
-pub struct NodRef<T: DerefMut<Target = Nod>> {
+pub struct NodRef<T: Inherits<Parent = Nod>> {
     ptr: *mut T,
 }
 
-impl<T: DerefMut<Target = Nod>> NodRef<T> {
-    pub fn cast_mut<U: Class + DerefMut<Target = Nod>>(&mut self) -> Option<&mut NodRef<U>> {
-        if self.is_instance_of::<U>() {
+impl<T: Inherits<Parent = Nod>> NodRef<T> {
+    pub unsafe fn from_ptr(ptr: *mut T) -> Self {
+        Self { ptr }
+    }
+
+    pub fn cast_mut<U: Class + Inherits<Parent = Nod>>(&mut self) -> Option<&mut NodRef<U>> {
+        if self.parent().is_instance_of::<U>() {
             unsafe { Some(&mut *(self as *mut Self as *mut NodRef<U>)) }
         } else {
             None
@@ -25,9 +35,9 @@ impl<T: DerefMut<Target = Nod>> NodRef<T> {
     }
 }
 
-impl<T: DerefMut<Target = Nod>> Clone for NodRef<T> {
+impl<T: Inherits<Parent = Nod>> Clone for NodRef<T> {
     fn clone(&self) -> Self {
-        let nod = unsafe { (*self.ptr).deref_mut() };
+        let nod = unsafe { (*self.ptr).parent() };
 
         nod.ref_count += 1;
 
@@ -35,7 +45,7 @@ impl<T: DerefMut<Target = Nod>> Clone for NodRef<T> {
     }
 }
 
-impl<T: DerefMut<Target = Nod>> Deref for NodRef<T> {
+impl<T: Inherits<Parent = Nod>> Deref for NodRef<T> {
     type Target = T;
 
     fn deref(&self) -> &T {
@@ -43,15 +53,15 @@ impl<T: DerefMut<Target = Nod>> Deref for NodRef<T> {
     }
 }
 
-impl<T: DerefMut<Target = Nod>> DerefMut for NodRef<T> {
+impl<T: Inherits<Parent = Nod>> DerefMut for NodRef<T> {
     fn deref_mut(&mut self) -> &mut T {
         unsafe { &mut *self.ptr }
     }
 }
 
-impl<T: DerefMut<Target = Nod>> Drop for NodRef<T> {
+impl<T: Inherits<Parent = Nod>> Drop for NodRef<T> {
     fn drop(&mut self) {
-        let nod = unsafe { (*self.ptr).deref_mut() };
+        let nod = unsafe { (*self.ptr).parent() };
 
         nod.ref_count -= 1;
 
@@ -65,9 +75,9 @@ autopad! {
     /// CMwNod.
     #[repr(C)]
     pub struct Nod {
-                vtable: *const NodVTable,
+                    vtable: *const NodVTable,
         0x08 => pub fid_file: NodRef<FidFile>,
-        0x10 => ref_count: u32,
+        0x10 =>     ref_count: u32,
     }
 }
 
@@ -82,6 +92,14 @@ autopad! {
 impl Nod {
     pub fn is_instance_of<T: Class>(&self) -> bool {
         unsafe { ((*self.vtable).is_instance_of)(self, T::ID) }
+    }
+}
+
+impl Inherits for Nod {
+    type Parent = Nod;
+
+    fn parent(&mut self) -> &mut Nod {
+        self
     }
 }
 
@@ -138,8 +156,23 @@ autopad! {
     /// CGameManiaPlanet.
     #[repr(C)]
     pub struct ManiaPlanet {
+                     nod: Nod,
         0x7f0 => pub switcher: NodRef<Switcher>,
         0xb18 => pub mania_title_control_script_api: NodRef<ManiaTitleControlScriptApi>,
+    }
+}
+
+impl Deref for ManiaPlanet {
+    type Target = Nod;
+
+    fn deref(&self) -> &Nod {
+        &self.nod
+    }
+}
+
+impl DerefMut for ManiaPlanet {
+    fn deref_mut(&mut self) -> &mut Nod {
+        &mut self.nod
     }
 }
 
@@ -152,16 +185,14 @@ autopad! {
     }
 }
 
-impl Deref for BlockInfo {
-    type Target = Nod;
-
-    fn deref(&self) -> &Nod {
-        &self.nod
-    }
+impl Class for BlockInfo {
+    const ID: u32 = 0x0304e000;
 }
 
-impl DerefMut for BlockInfo {
-    fn deref_mut(&mut self) -> &mut Nod {
+impl Inherits for BlockInfo {
+    type Parent = Nod;
+
+    fn parent(&mut self) -> &mut Nod {
         &mut self.nod
     }
 }
@@ -185,16 +216,10 @@ autopad! {
     }
 }
 
-impl Deref for Switcher {
-    type Target = Nod;
+impl Inherits for Switcher {
+    type Parent = Nod;
 
-    fn deref(&self) -> &Nod {
-        &self.nod
-    }
-}
-
-impl DerefMut for Switcher {
-    fn deref_mut(&mut self) -> &mut Nod {
+    fn parent(&mut self) -> &mut Nod {
         &mut self.nod
     }
 }
@@ -254,6 +279,14 @@ impl DerefMut for SwitcherModule {
     }
 }
 
+impl Inherits for SwitcherModule {
+    type Parent = Nod;
+
+    fn parent(&mut self) -> &mut Nod {
+        &mut self.nod
+    }
+}
+
 autopad! {
     /// CGameCtnEditorCommon.
     #[repr(C)]
@@ -296,7 +329,7 @@ impl EditorCommon {
     pub unsafe fn place_block(&mut self, block_info: &BlockInfo) -> &mut Block {
         let coord = [20, 20, 20];
 
-        &mut *((*(self.vtable as *const EditorCommonVTable)).place_block)(
+        &mut *((*(self.nod.vtable as *const EditorCommonVTable)).place_block)(
             self, block_info, 0, &coord, 0, 0, 0, 0, 0xffffffff, 0, 1, 0, 0, 0, 0, 0, 0, 0,
             0xffffffff, 0,
         )
@@ -307,39 +340,24 @@ impl Class for EditorCommon {
     const ID: u32 = 0x0310e000;
 }
 
-impl Deref for EditorCommon {
-    type Target = Nod;
+impl Inherits for EditorCommon {
+    type Parent = Nod;
 
-    fn deref(&self) -> &Nod {
-        &self.nod
-    }
-}
-
-impl DerefMut for EditorCommon {
-    fn deref_mut(&mut self) -> &mut Nod {
+    fn parent(&mut self) -> &mut Nod {
         &mut self.nod
     }
 }
 
-autopad! {
-    /// CGameEditorPluginMap.
-    #[repr(C)]
-    pub struct EditorPluginMap {
-                     nod: Nod,
-        0x520 => pub block_infos: Array<NodRef<BlockInfo>>,
-    }
+/// CGameEditorPluginMap.
+#[repr(C)]
+pub struct EditorPluginMap {
+    nod: Nod,
 }
 
-impl Deref for EditorPluginMap {
-    type Target = Nod;
+impl Inherits for EditorPluginMap {
+    type Parent = Nod;
 
-    fn deref(&self) -> &Nod {
-        &self.nod
-    }
-}
-
-impl DerefMut for EditorPluginMap {
-    fn deref_mut(&mut self) -> &mut Nod {
+    fn parent(&mut self) -> &mut Nod {
         &mut self.nod
     }
 }
@@ -350,16 +368,10 @@ pub struct ManiaTitleControlScriptApi {
     nod: Nod,
 }
 
-impl Deref for ManiaTitleControlScriptApi {
-    type Target = Nod;
+impl Inherits for ManiaTitleControlScriptApi {
+    type Parent = Nod;
 
-    fn deref(&self) -> &Nod {
-        &self.nod
-    }
-}
-
-impl DerefMut for ManiaTitleControlScriptApi {
-    fn deref_mut(&mut self) -> &mut Nod {
+    fn parent(&mut self) -> &mut Nod {
         &mut self.nod
     }
 }
@@ -369,22 +381,16 @@ autopad! {
     #[repr(C)]
     pub struct FidsFolder {
                     nod: Nod,
-        0x28 => pub leaves: Array<FidFile>,
-        0x38 => pub trees: Array<FidsFolder>,
+        0x28 => pub leaves: Array<NodRef<FidFile>>,
+        0x38 => pub trees: Array<NodRef<FidsFolder>>,
         0x58 => pub name: FastString
     }
 }
 
-impl Deref for FidsFolder {
-    type Target = Nod;
+impl Inherits for FidsFolder {
+    type Parent = Nod;
 
-    fn deref(&self) -> &Nod {
-        &self.nod
-    }
-}
-
-impl DerefMut for FidsFolder {
-    fn deref_mut(&mut self) -> &mut Nod {
+    fn parent(&mut self) -> &mut Nod {
         &mut self.nod
     }
 }
@@ -398,16 +404,10 @@ autopad! {
     }
 }
 
-impl Deref for FidFile {
-    type Target = Nod;
+impl Inherits for FidFile {
+    type Parent = Nod;
 
-    fn deref(&self) -> &Nod {
-        &self.nod
-    }
-}
-
-impl DerefMut for FidFile {
-    fn deref_mut(&mut self) -> &mut Nod {
+    fn parent(&mut self) -> &mut Nod {
         &mut self.nod
     }
 }

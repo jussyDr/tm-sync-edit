@@ -20,8 +20,8 @@ use std::{
 use async_compat::CompatExt;
 use futures::{executor::block_on, poll, TryStreamExt};
 use game::{
-    BackToMainMenuFn, BlockInfo, EditNewMap2Fn, EditorCommon, ManiaPlanet, Menus, NodRef,
-    PlaceBlockFn,
+    BackToMainMenuFn, BlockInfo, EditNewMap2Fn, EditorCommon, FidsFolder, LoadFidFileFn,
+    ManiaPlanet, Menus, NodRef, PlaceBlockFn,
 };
 use process::Process;
 use shared::{deserialize, framed_tcp_stream, FramedTcpStream, MapDesc, MapParamsDesc, Mood};
@@ -96,16 +96,30 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
     let frame = framed_tcp_stream.try_next().await?.unwrap();
     let map_desc: MapDesc = deserialize(&frame)?;
 
-    let map_editor = get_map_editor(context).unwrap();
+    let game_data_folder = &mut context.mania_planet.fid_file.parent_folder;
+
+    let stadium_folder = game_data_folder
+        .trees
+        .iter_mut()
+        .find(|folder| &*folder.name == "Stadium")
+        .unwrap();
+
+    let block_info_folder = stadium_folder
+        .trees
+        .iter_mut()
+        .find(|folder| &*folder.name == "GameCtnBlockInfo")
+        .unwrap();
 
     let mut block_infos: HashMap<String, NodRef<BlockInfo>> = HashMap::new();
 
-    for block_info in map_editor.plugin_map_type.block_infos.iter() {
-        block_infos.insert(block_info.name.to_owned(), NodRef::clone(block_info));
-    }
-
     let process = Process::open_current()?;
     let main_module_memory = process.main_module_memory()?;
+    let load_fid_file_fn = LoadFidFileFn::find(&main_module_memory).unwrap();
+
+    preload_all_block_infos(block_info_folder, &mut block_infos, load_fid_file_fn);
+
+    let map_editor = get_map_editor(context).unwrap();
+
     let place_block_fn = PlaceBlockFn::find(&main_module_memory).unwrap();
 
     let air_mode = mem::replace(&mut map_editor.air_mode, false);
@@ -192,4 +206,18 @@ fn get_map_editor(context: &mut Context) -> Option<&mut NodRef<EditorCommon>> {
         .iter_mut()
         .filter_map(|module| module.cast_mut::<EditorCommon>())
         .next()
+}
+
+fn preload_all_block_infos(
+    folder: &mut FidsFolder,
+    block_infos: &mut HashMap<String, NodRef<BlockInfo>>,
+    load_fid_file_fn: LoadFidFileFn,
+) {
+    for folder in folder.trees.iter_mut() {
+        preload_all_block_infos(folder, block_infos, load_fid_file_fn);
+    }
+
+    for file in folder.leaves.iter_mut() {
+        let nod = unsafe { load_fid_file_fn.call(file).unwrap() };
+    }
 }
