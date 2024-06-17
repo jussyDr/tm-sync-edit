@@ -32,12 +32,19 @@ pub struct MapParamsDesc {
 #[derive(Serialize, Deserialize)]
 pub struct MapDesc {
     pub blocks: Vec<BlockDesc>,
+    pub ghost_blocks: Vec<GhostBlockDesc>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct BlockDesc {
     pub block_info_name: String,
-    pub x: u8,
-    pub y: u8,
-    pub z: u8,
+    pub coord: [u8; 3],
+    pub dir: u8,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct GhostBlockDesc {
+    pub block_info_name: String,
+    pub coord: [u8; 3],
+    pub dir: u8,
 }

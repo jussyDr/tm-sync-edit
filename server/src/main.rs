@@ -8,7 +8,9 @@ use std::{
 use futures_util::{SinkExt, TryStreamExt};
 use gamebox::engines::game::map::BlockKind;
 use log::LevelFilter;
-use shared::{framed_tcp_stream, serialize, BlockDesc, MapDesc, MapParamsDesc, Mood};
+use shared::{
+    framed_tcp_stream, serialize, BlockDesc, GhostBlockDesc, MapDesc, MapParamsDesc, Mood,
+};
 use tokio::{net::TcpListener, runtime, spawn, sync::Mutex};
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -73,17 +75,36 @@ pub fn load_map() -> MapDesc {
         gamebox::read_file("C:\\Users\\Justin\\Projects\\tm-sync-edit\\G H O S T.Map.Gbx").unwrap();
 
     let mut blocks = vec![];
+    let mut ghost_blocks = vec![];
 
     for block in map.blocks() {
         if let BlockKind::Normal(block_kind) = block.kind() {
-            blocks.push(BlockDesc {
-                block_info_name: block.id().to_owned(),
-                x: block_kind.coord().x,
-                y: block_kind.coord().y,
-                z: block_kind.coord().z,
-            })
+            if block_kind.is_ghost() {
+                ghost_blocks.push(GhostBlockDesc {
+                    block_info_name: block.id().to_owned(),
+                    coord: [
+                        block_kind.coord().x,
+                        block_kind.coord().y,
+                        block_kind.coord().z,
+                    ],
+                    dir: block_kind.direction() as u8,
+                })
+            } else {
+                blocks.push(BlockDesc {
+                    block_info_name: block.id().to_owned(),
+                    coord: [
+                        block_kind.coord().x,
+                        block_kind.coord().y,
+                        block_kind.coord().z,
+                    ],
+                    dir: block_kind.direction() as u8,
+                })
+            }
         }
     }
 
-    MapDesc { blocks }
+    MapDesc {
+        blocks,
+        ghost_blocks,
+    }
 }

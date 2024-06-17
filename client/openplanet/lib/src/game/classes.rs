@@ -9,7 +9,7 @@ pub trait Class {
     const ID: u32;
 }
 
-trait Inherits {
+pub trait Inherits {
     type Parent;
 
     fn parent(&mut self) -> &mut Self::Parent;
@@ -300,6 +300,27 @@ autopad! {
 autopad! {
     #[repr(C)]
     struct EditorCommonVTable {
+        0x268 => can_place_block: unsafe extern "system" fn(
+            this: *mut EditorCommon,
+            block_info: *const BlockInfo,
+            coord: *const [u32; 3],
+            dir: u32,
+            param_5: usize,
+            param_6: usize,
+            param_7: usize,
+            param_8: usize,
+            param_9: usize,
+            param_10: usize,
+            param_11: u32,
+            param_12: usize,
+            param_13: usize,
+            param_14: u32,
+            param_15: u32,
+            param_16: u32,
+            param_17: u32,
+            param_18: u32,
+            param_19: u32
+        ) -> bool,
         0x270 => place_block: unsafe extern "system" fn(
             this: *mut EditorCommon,
             block_info: *const BlockInfo,
@@ -326,13 +347,38 @@ autopad! {
 }
 
 impl EditorCommon {
-    pub unsafe fn place_block(&mut self, block_info: &BlockInfo) -> &mut Block {
-        let coord = [20, 20, 20];
+    pub unsafe fn can_place_block(
+        &mut self,
+        block_info: &BlockInfo,
+        coord: [u8; 3],
+        dir: u8,
+    ) -> bool {
+        let coord = [coord[0] as u32, coord[1] as u32, coord[2] as u32];
 
-        &mut *((*(self.nod.vtable as *const EditorCommonVTable)).place_block)(
-            self, block_info, 0, &coord, 0, 0, 0, 0, 0xffffffff, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+        ((*(self.nod.vtable as *const EditorCommonVTable)).can_place_block)(
+            self, block_info, &coord, dir as u32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0xffffffff, 0,
         )
+    }
+
+    pub unsafe fn place_block(
+        &mut self,
+        block_info: &BlockInfo,
+        coord: [u8; 3],
+        dir: u8,
+    ) -> Option<&mut Block> {
+        let coord = [coord[0] as u32, coord[1] as u32, coord[2] as u32];
+
+        let block = ((*(self.nod.vtable as *const EditorCommonVTable)).place_block)(
+            self, block_info, 0, &coord, dir as u32, 0, 0, 0, 0xffffffff, 1, 1, 0, 0, 0xffffffff,
+            1, 0, 0, 0, 0xffffffff, 0,
+        );
+
+        if block.is_null() {
+            None
+        } else {
+            Some(&mut *block)
+        }
     }
 }
 

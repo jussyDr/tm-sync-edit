@@ -123,6 +123,7 @@ impl BackToMainMenuFn {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct PlaceBlockFn(PlaceBlockFnType);
 
 type PlaceBlockFnType = unsafe extern "system" fn(
@@ -162,17 +163,16 @@ impl PlaceBlockFn {
         &self,
         this: &mut EditorCommon,
         block_info: &BlockInfo,
-        x: u8,
-        y: u8,
-        z: u8,
+        coord: [u8; 3],
+        dir: u8,
     ) -> usize {
-        let mut coord = [x as u32, y as u32, z as u32];
+        let mut coord = [coord[0] as u32, coord[1] as u32, coord[2] as u32];
 
         (self.0)(
             this,
             block_info,
             coord.as_mut_ptr(),
-            0,
+            dir as u32,
             0,
             0,
             1,

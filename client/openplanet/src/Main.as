@@ -7,11 +7,6 @@ Library@ g_library = null;
 
 void Main() {
     @g_library = LoadLibrary();
-
-    auto app = GetApp();
-    print(Text::FormatPointer(Dev::ForceCast<uint64>(app).Get()));
-    print(Text::FormatPointer(Dev::ForceCast<uint64>(GetFidFromNod(app)).Get()));
-    print(Text::FormatPointer(Dev::ForceCast<uint64>(GetFidFromNod(app).ParentFolder).Get()));
 }
 
 void RenderInterface() {

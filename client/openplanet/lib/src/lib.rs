@@ -118,11 +118,11 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
 
     preload_all_block_infos(block_info_folder, &mut block_infos, load_fid_file_fn);
 
-    let map_editor = get_map_editor(context).unwrap();
+    let editor_common = get_map_editor(context).unwrap();
 
     let place_block_fn = PlaceBlockFn::find(&main_module_memory).unwrap();
 
-    let air_mode = mem::replace(&mut map_editor.air_mode, false);
+    let air_mode = mem::replace(&mut editor_common.air_mode, false);
 
     for block in map_desc.blocks {
         let block_info = block_infos.get(&block.block_info_name);
@@ -135,10 +135,39 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
                 .show_alert();
         }
 
-        unsafe { place_block_fn.call(map_editor, block_info.unwrap(), block.x, block.y, block.z) };
+        unsafe {
+            place_block(
+                editor_common,
+                block_info.unwrap(),
+                block.coord,
+                block.dir,
+                place_block_fn,
+            )
+        };
     }
 
-    map_editor.air_mode = air_mode;
+    for ghost_block in map_desc.ghost_blocks {
+        let block_info = block_infos.get(&ghost_block.block_info_name);
+
+        if block_info.is_none() {
+            let _ = native_dialog::MessageDialog::new()
+                .set_type(native_dialog::MessageType::Error)
+                .set_title("SyncEdit.dll")
+                .set_text(&ghost_block.block_info_name)
+                .show_alert();
+        }
+
+        unsafe {
+            place_ghost_block(
+                editor_common,
+                block_info.unwrap(),
+                ghost_block.coord,
+                ghost_block.dir,
+            )
+        };
+    }
+
+    editor_common.air_mode = air_mode;
 
     while framed_tcp_stream.try_next().await?.is_some() {}
 
@@ -218,6 +247,33 @@ fn preload_all_block_infos(
     }
 
     for file in folder.leaves.iter_mut() {
-        let nod = unsafe { load_fid_file_fn.call(file).unwrap() };
+        let mut nod = unsafe { load_fid_file_fn.call(file).unwrap() };
+
+        if let Some(block_info) = nod.cast_mut::<BlockInfo>() {
+            block_infos.insert(block_info.name.to_owned(), NodRef::clone(block_info));
+        }
+    }
+}
+
+unsafe fn place_block(
+    editor_common: &mut EditorCommon,
+    block_info: &BlockInfo,
+    coord: [u8; 3],
+    dir: u8,
+    place_block_fn: PlaceBlockFn,
+) {
+    if editor_common.can_place_block(block_info, coord, dir) {
+        place_block_fn.call(editor_common, block_info, coord, dir);
+    }
+}
+
+unsafe fn place_ghost_block(
+    editor_common: &mut EditorCommon,
+    block_info: &BlockInfo,
+    coord: [u8; 3],
+    dir: u8,
+) {
+    if editor_common.can_place_block(block_info, coord, dir) {
+        editor_common.place_block(block_info, coord, dir);
     }
 }
