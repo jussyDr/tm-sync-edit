@@ -122,7 +122,7 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
 
     let place_block_fn = PlaceBlockFn::find(&main_module_memory).unwrap();
 
-    let air_mode = mem::replace(&mut editor_common.air_mode, false);
+    let air_mode = mem::replace(&mut editor_common.air_mode, true);
 
     for block in map_desc.blocks {
         let block_info = block_infos.get(&block.block_info_name);
