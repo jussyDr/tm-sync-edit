@@ -3,6 +3,8 @@ use std::{
     mem::{transmute, MaybeUninit},
 };
 
+use gamebox::{engines::game::map::Direction, Vec3};
+
 use crate::process::ModuleMemory;
 
 use super::{
@@ -163,10 +165,10 @@ impl PlaceBlockFn {
         &self,
         this: &mut EditorCommon,
         block_info: &BlockInfo,
-        coord: [u8; 3],
-        dir: u8,
+        coord: Vec3<u8>,
+        dir: Direction,
     ) -> usize {
-        let mut coord = [coord[0] as u32, coord[1] as u32, coord[2] as u32];
+        let mut coord = [coord.x as u32, coord.y as u32, coord.z as u32];
 
         (self.0)(
             this,

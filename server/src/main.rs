@@ -76,35 +76,32 @@ pub fn load_map() -> MapDesc {
 
     let mut blocks = vec![];
     let mut ghost_blocks = vec![];
+    let free_blocks = vec![];
 
     for block in map.blocks() {
         if let BlockKind::Normal(block_kind) = block.kind() {
             if block_kind.is_ghost() {
                 ghost_blocks.push(GhostBlockDesc {
                     block_info_name: block.id().to_owned(),
-                    coord: [
-                        block_kind.coord().x,
-                        block_kind.coord().y,
-                        block_kind.coord().z,
-                    ],
-                    dir: block_kind.direction() as u8,
+                    coord: block_kind.coord(),
+                    dir: block_kind.direction(),
                 })
             } else {
                 blocks.push(BlockDesc {
                     block_info_name: block.id().to_owned(),
-                    coord: [
-                        block_kind.coord().x,
-                        block_kind.coord().y,
-                        block_kind.coord().z,
-                    ],
-                    dir: block_kind.direction() as u8,
+                    coord: block_kind.coord(),
+                    dir: block_kind.direction(),
                 })
             }
         }
     }
 
+    let items = vec![];
+
     MapDesc {
         blocks,
         ghost_blocks,
+        free_blocks,
+        items,
     }
 }

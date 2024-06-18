@@ -12,6 +12,7 @@ shared = { path = "../../../shared" }
 async-compat = "0.2.4"
 autopad = "1.0.0"
 futures = "0.3.30"
+gamebox = { git = "https://github.com/jussyDr/gamebox" }
 native-dialog = "0.7.0"
 tokio = { version = "1.38.0", features = ["net"] }
 windows-sys = { version = "0.52.0", features = [

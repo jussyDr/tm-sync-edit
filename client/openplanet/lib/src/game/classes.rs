@@ -4,6 +4,7 @@ use std::{
 };
 
 use autopad::autopad;
+use gamebox::{engines::game::map::Direction, Vec3};
 
 pub trait Class {
     const ID: u32;
@@ -350,10 +351,10 @@ impl EditorCommon {
     pub unsafe fn can_place_block(
         &mut self,
         block_info: &BlockInfo,
-        coord: [u8; 3],
-        dir: u8,
+        coord: Vec3<u8>,
+        dir: Direction,
     ) -> bool {
-        let coord = [coord[0] as u32, coord[1] as u32, coord[2] as u32];
+        let coord = [coord.x as u32, coord.y as u32, coord.z as u32];
 
         ((*(self.nod.vtable as *const EditorCommonVTable)).can_place_block)(
             self, block_info, &coord, dir as u32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -364,10 +365,10 @@ impl EditorCommon {
     pub unsafe fn place_block(
         &mut self,
         block_info: &BlockInfo,
-        coord: [u8; 3],
-        dir: u8,
+        coord: Vec3<u8>,
+        dir: Direction,
     ) -> Option<&mut Block> {
-        let coord = [coord[0] as u32, coord[1] as u32, coord[2] as u32];
+        let coord = [coord.x as u32, coord.y as u32, coord.z as u32];
 
         let block = ((*(self.nod.vtable as *const EditorCommonVTable)).place_block)(
             self, block_info, 0, &coord, dir as u32, 0, 0, 0, 0xffffffff, 1, 1, 0, 0, 0xffffffff,

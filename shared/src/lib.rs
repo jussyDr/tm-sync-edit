@@ -1,3 +1,4 @@
+use gamebox::{engines::game::map::Direction, Vec3};
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpStream;
 use tokio_util::codec::{Decoder, Framed, LengthDelimitedCodec};
@@ -33,18 +34,30 @@ pub struct MapParamsDesc {
 pub struct MapDesc {
     pub blocks: Vec<BlockDesc>,
     pub ghost_blocks: Vec<GhostBlockDesc>,
+    pub free_blocks: Vec<FreeBlockDesc>,
+    pub items: Vec<ItemDesc>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct BlockDesc {
     pub block_info_name: String,
-    pub coord: [u8; 3],
-    pub dir: u8,
+    pub coord: Vec3<u8>,
+    pub dir: Direction,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct GhostBlockDesc {
     pub block_info_name: String,
-    pub coord: [u8; 3],
-    pub dir: u8,
+    pub coord: Vec3<u8>,
+    pub dir: Direction,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct FreeBlockDesc {
+    pub block_info_name: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ItemDesc {
+    pub item_model_name: String,
 }

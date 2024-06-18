@@ -23,6 +23,7 @@ use game::{
     BackToMainMenuFn, BlockInfo, EditNewMap2Fn, EditorCommon, FidsFolder, LoadFidFileFn,
     ManiaPlanet, Menus, NodRef, PlaceBlockFn,
 };
+use gamebox::{engines::game::map::Direction, Vec3};
 use process::Process;
 use shared::{deserialize, framed_tcp_stream, FramedTcpStream, MapDesc, MapParamsDesc, Mood};
 use tokio::net::TcpStream;
@@ -258,8 +259,8 @@ fn preload_all_block_infos(
 unsafe fn place_block(
     editor_common: &mut EditorCommon,
     block_info: &BlockInfo,
-    coord: [u8; 3],
-    dir: u8,
+    coord: Vec3<u8>,
+    dir: Direction,
     place_block_fn: PlaceBlockFn,
 ) {
     if editor_common.can_place_block(block_info, coord, dir) {
@@ -270,8 +271,8 @@ unsafe fn place_block(
 unsafe fn place_ghost_block(
     editor_common: &mut EditorCommon,
     block_info: &BlockInfo,
-    coord: [u8; 3],
-    dir: u8,
+    coord: Vec3<u8>,
+    dir: Direction,
 ) {
     if editor_common.can_place_block(block_info, coord, dir) {
         editor_common.place_block(block_info, coord, dir);
