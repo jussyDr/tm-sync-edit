@@ -9,7 +9,8 @@ use futures_util::{SinkExt, TryStreamExt};
 use gamebox::engines::game::map::BlockKind;
 use log::LevelFilter;
 use shared::{
-    framed_tcp_stream, serialize, BlockDesc, GhostBlockDesc, MapDesc, MapParamsDesc, Mood,
+    framed_tcp_stream, serialize, BlockDesc, FreeBlockDesc, GhostBlockDesc, ItemDesc, MapDesc,
+    MapParamsDesc, Mood,
 };
 use tokio::{net::TcpListener, runtime, spawn, sync::Mutex};
 
@@ -76,27 +77,46 @@ pub fn load_map() -> MapDesc {
 
     let mut blocks = vec![];
     let mut ghost_blocks = vec![];
-    let free_blocks = vec![];
+    let mut free_blocks = vec![];
 
     for block in map.blocks() {
-        if let BlockKind::Normal(block_kind) = block.kind() {
-            if block_kind.is_ghost() {
-                ghost_blocks.push(GhostBlockDesc {
-                    block_info_name: block.id().to_owned(),
-                    coord: block_kind.coord(),
-                    dir: block_kind.direction(),
-                })
-            } else {
-                blocks.push(BlockDesc {
-                    block_info_name: block.id().to_owned(),
-                    coord: block_kind.coord(),
-                    dir: block_kind.direction(),
-                })
+        match block.kind() {
+            BlockKind::Normal(block_kind) => {
+                if block_kind.is_ghost() {
+                    ghost_blocks.push(GhostBlockDesc {
+                        block_info_name: block.id().to_owned(),
+                        coord: block_kind.coord(),
+                        dir: block_kind.direction(),
+                        elem_color: block.elem_color(),
+                    })
+                } else {
+                    blocks.push(BlockDesc {
+                        block_info_name: block.id().to_owned(),
+                        coord: block_kind.coord(),
+                        dir: block_kind.direction(),
+                        elem_color: block.elem_color(),
+                    })
+                }
             }
+            BlockKind::Free(block_kind) => free_blocks.push(FreeBlockDesc {
+                block_info_name: block.id().to_owned(),
+                position: block_kind.position().clone(),
+                rotation: block_kind.rotation().clone(),
+                elem_color: block.elem_color(),
+            }),
         }
     }
 
-    let items = vec![];
+    let mut items = vec![];
+
+    for item in map.items() {
+        items.push(ItemDesc {
+            item_model_name: item.id().to_owned(),
+            position: item.position().clone(),
+            rotation: item.rotation().clone(),
+            elem_color: item.elem_color(),
+        })
+    }
 
     MapDesc {
         blocks,

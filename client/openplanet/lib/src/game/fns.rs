@@ -1,3 +1,5 @@
+//! Game functions.
+
 use std::{
     marker::PhantomData,
     mem::{transmute, MaybeUninit},
@@ -8,7 +10,7 @@ use gamebox::{engines::game::map::Direction, Vec3};
 use crate::process::ModuleMemory;
 
 use super::{
-    BlockInfo, EditorCommon, FidFile, Item, ItemModel, ItemParams, ManiaPlanet,
+    Block, BlockInfo, EditorCommon, FidFile, Item, ItemModel, ItemParams, ManiaPlanet,
     ManiaTitleControlScriptApi, Nod, NodRef,
 };
 
@@ -125,6 +127,9 @@ impl BackToMainMenuFn {
     }
 }
 
+/// Function to place a block using the default block mode.
+///
+/// Pillar blocks will be placed if not in air mode.
 #[derive(Clone, Copy)]
 pub struct PlaceBlockFn(PlaceBlockFnType);
 
@@ -148,7 +153,7 @@ type PlaceBlockFnType = unsafe extern "system" fn(
     param_17: u32,
     param_18: usize,
     param_19: u32,
-) -> usize;
+) -> *mut Block;
 
 impl PlaceBlockFn {
     pub fn find(main_module_memory: &ModuleMemory) -> Option<Self> {
@@ -167,10 +172,10 @@ impl PlaceBlockFn {
         block_info: &BlockInfo,
         coord: Vec3<u8>,
         dir: Direction,
-    ) -> usize {
+    ) -> Option<NodRef<Block>> {
         let mut coord = [coord.x as u32, coord.y as u32, coord.z as u32];
 
-        (self.0)(
+        let block = (self.0)(
             this,
             block_info,
             coord.as_mut_ptr(),
@@ -190,7 +195,13 @@ impl PlaceBlockFn {
             0,
             0,
             1,
-        )
+        );
+
+        if block.is_null() {
+            None
+        } else {
+            Some(NodRef::from_ptr(block))
+        }
     }
 }
 

@@ -1,4 +1,7 @@
-use gamebox::{engines::game::map::Direction, Vec3};
+use gamebox::{
+    engines::game::map::{Direction, ElemColor, YawPitchRoll},
+    Vec3,
+};
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpStream;
 use tokio_util::codec::{Decoder, Framed, LengthDelimitedCodec};
@@ -43,6 +46,7 @@ pub struct BlockDesc {
     pub block_info_name: String,
     pub coord: Vec3<u8>,
     pub dir: Direction,
+    pub elem_color: ElemColor,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -50,14 +54,21 @@ pub struct GhostBlockDesc {
     pub block_info_name: String,
     pub coord: Vec3<u8>,
     pub dir: Direction,
+    pub elem_color: ElemColor,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct FreeBlockDesc {
     pub block_info_name: String,
+    pub position: Vec3<f32>,
+    pub rotation: YawPitchRoll,
+    pub elem_color: ElemColor,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct ItemDesc {
     pub item_model_name: String,
+    pub position: Vec3<f32>,
+    pub rotation: YawPitchRoll,
+    pub elem_color: ElemColor,
 }

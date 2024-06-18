@@ -1,5 +1,6 @@
 mod process;
 
+/// Interacting with the game.
 mod game {
     mod classes;
     mod fns;
@@ -20,7 +21,7 @@ use std::{
 use async_compat::CompatExt;
 use futures::{executor::block_on, poll, TryStreamExt};
 use game::{
-    BackToMainMenuFn, BlockInfo, EditNewMap2Fn, EditorCommon, FidsFolder, LoadFidFileFn,
+    BackToMainMenuFn, Block, BlockInfo, EditNewMap2Fn, EditorCommon, FidsFolder, LoadFidFileFn,
     ManiaPlanet, Menus, NodRef, PlaceBlockFn,
 };
 use gamebox::{engines::game::map::Direction, Vec3};
@@ -128,45 +129,28 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
     unsafe { editor_common.remove_all() };
 
     for block in map_desc.blocks {
-        let block_info = block_infos.get(&block.block_info_name);
-
-        if block_info.is_none() {
-            let _ = native_dialog::MessageDialog::new()
-                .set_type(native_dialog::MessageType::Error)
-                .set_title("SyncEdit.dll")
-                .set_text(&block.block_info_name)
-                .show_alert();
-        }
+        let block_info = block_infos.get(&block.block_info_name).unwrap();
 
         unsafe {
             place_block(
                 editor_common,
-                block_info.unwrap(),
+                block_info,
                 block.coord,
                 block.dir,
                 place_block_fn,
-            )
+            );
         };
     }
 
     for ghost_block in map_desc.ghost_blocks {
-        let block_info = block_infos.get(&ghost_block.block_info_name);
-
-        if block_info.is_none() {
-            let _ = native_dialog::MessageDialog::new()
-                .set_type(native_dialog::MessageType::Error)
-                .set_title("SyncEdit.dll")
-                .set_text(&ghost_block.block_info_name)
-                .show_alert();
-        }
-
+        let block_info = block_infos.get(&ghost_block.block_info_name).unwrap();
         unsafe {
             place_ghost_block(
                 editor_common,
-                block_info.unwrap(),
+                block_info,
                 ghost_block.coord,
                 ghost_block.dir,
-            )
+            );
         };
     }
 
@@ -264,9 +248,11 @@ unsafe fn place_block(
     coord: Vec3<u8>,
     dir: Direction,
     place_block_fn: PlaceBlockFn,
-) {
+) -> Option<NodRef<Block>> {
     if editor_common.can_place_block(block_info, coord, dir) {
-        place_block_fn.call(editor_common, block_info, coord, dir);
+        place_block_fn.call(editor_common, block_info, coord, dir)
+    } else {
+        None
     }
 }
 
@@ -275,8 +261,10 @@ unsafe fn place_ghost_block(
     block_info: &BlockInfo,
     coord: Vec3<u8>,
     dir: Direction,
-) {
+) -> Option<NodRef<Block>> {
     if editor_common.can_place_block(block_info, coord, dir) {
-        editor_common.place_block(block_info, coord, dir);
+        editor_common.place_block(block_info, coord, dir)
+    } else {
+        None
     }
 }

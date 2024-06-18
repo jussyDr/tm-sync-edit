@@ -1,3 +1,5 @@
+//! Game classes.
+
 use std::{
     ops::{Deref, DerefMut},
     slice, str,
@@ -62,13 +64,13 @@ impl<T: Inherits<Parent = Nod>> DerefMut for NodRef<T> {
 
 impl<T: Inherits<Parent = Nod>> Drop for NodRef<T> {
     fn drop(&mut self) {
-        let nod = unsafe { (*self.ptr).parent() };
+        // let nod = unsafe { (*self.ptr).parent() };
 
-        nod.ref_count -= 1;
+        // nod.ref_count -= 1;
 
-        if nod.ref_count == 0 {
-            unsafe { ((*nod.vtable).destructor)(nod, true) };
-        }
+        // if nod.ref_count == 0 {
+        //     unsafe { ((*nod.vtable).destructor)(nod, true) };
+        // }
     }
 }
 
@@ -199,7 +201,18 @@ impl Inherits for BlockInfo {
 }
 
 /// CGameCtnBlock.
-pub struct Block;
+#[repr(C)]
+pub struct Block {
+    nod: Nod,
+}
+
+impl Inherits for Block {
+    type Parent = Nod;
+
+    fn parent(&mut self) -> &mut Nod {
+        &mut self.nod
+    }
+}
 
 /// CGameCtnMenus.
 pub struct Menus;
@@ -368,7 +381,7 @@ impl EditorCommon {
         block_info: &BlockInfo,
         coord: Vec3<u8>,
         dir: Direction,
-    ) -> Option<&mut Block> {
+    ) -> Option<NodRef<Block>> {
         let coord = [coord.x as u32, coord.y as u32, coord.z as u32];
 
         let block = ((*(self.nod.vtable as *const EditorCommonVTable)).place_block)(
@@ -379,7 +392,7 @@ impl EditorCommon {
         if block.is_null() {
             None
         } else {
-            Some(&mut *block)
+            Some(NodRef::from_ptr(block))
         }
     }
 
