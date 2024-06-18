@@ -344,6 +344,7 @@ autopad! {
             param_19: u32,
             param_20: u32,
         ) -> *mut Block,
+        0x2c8 => remove_all: unsafe extern "system" fn(this: *mut EditorCommon, param_2: u32)
     }
 }
 
@@ -380,6 +381,10 @@ impl EditorCommon {
         } else {
             Some(&mut *block)
         }
+    }
+
+    pub unsafe fn remove_all(&mut self) {
+        ((*(self.nod.vtable as *const EditorCommonVTable)).remove_all)(self, 0);
     }
 }
 
