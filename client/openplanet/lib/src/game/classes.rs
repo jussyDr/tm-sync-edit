@@ -6,7 +6,10 @@ use std::{
 };
 
 use autopad::autopad;
-use gamebox::{engines::game::map::Direction, Vec3};
+use gamebox::{
+    engines::game::map::{Direction, ElemColor},
+    Vec3,
+};
 
 pub trait Class {
     const ID: u32;
@@ -340,8 +343,8 @@ autopad! {
             block_info: *const BlockInfo,
             param_3: usize,
             coord: *const [u32; 3],
-            param_5: u32,
-            param_6: u32,
+            dir: u32,
+            elem_color: u8,
             param_7: u8,
             param_8: u32,
             param_9: u32,
@@ -381,12 +384,31 @@ impl EditorCommon {
         block_info: &BlockInfo,
         coord: Vec3<u8>,
         dir: Direction,
+        elem_color: ElemColor,
     ) -> Option<NodRef<Block>> {
         let coord = [coord.x as u32, coord.y as u32, coord.z as u32];
 
         let block = ((*(self.nod.vtable as *const EditorCommonVTable)).place_block)(
-            self, block_info, 0, &coord, dir as u32, 0, 0, 0, 0xffffffff, 1, 1, 0, 0, 0xffffffff,
-            1, 0, 0, 0, 0xffffffff, 0,
+            self,
+            block_info,
+            0,
+            &coord,
+            dir as u32,
+            elem_color as u8,
+            0,
+            0,
+            0xffffffff,
+            1,
+            1,
+            0,
+            0,
+            0xffffffff,
+            1,
+            0,
+            0,
+            0,
+            0xffffffff,
+            0,
         );
 
         if block.is_null() {

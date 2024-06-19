@@ -115,6 +115,7 @@ pub fn load_map() -> MapDesc {
             position: item.position().clone(),
             rotation: item.rotation().clone(),
             elem_color: item.elem_color(),
+            anim_offset: item.animation_offset(),
         })
     }
 

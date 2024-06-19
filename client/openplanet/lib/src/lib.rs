@@ -24,7 +24,10 @@ use game::{
     BackToMainMenuFn, Block, BlockInfo, EditNewMap2Fn, EditorCommon, FidsFolder, LoadFidFileFn,
     ManiaPlanet, Menus, NodRef, PlaceBlockFn,
 };
-use gamebox::{engines::game::map::Direction, Vec3};
+use gamebox::{
+    engines::game::map::{Direction, ElemColor},
+    Vec3,
+};
 use process::Process;
 use shared::{deserialize, framed_tcp_stream, FramedTcpStream, MapDesc, MapParamsDesc, Mood};
 use tokio::net::TcpStream;
@@ -131,27 +134,26 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
     for block in map_desc.blocks {
         let block_info = block_infos.get(&block.block_info_name).unwrap();
 
-        unsafe {
-            place_block(
-                editor_common,
-                block_info,
-                block.coord,
-                block.dir,
-                place_block_fn,
-            );
-        };
+        place_block(
+            editor_common,
+            block_info,
+            block.coord,
+            block.dir,
+            block.elem_color,
+            place_block_fn,
+        );
     }
 
     for ghost_block in map_desc.ghost_blocks {
         let block_info = block_infos.get(&ghost_block.block_info_name).unwrap();
-        unsafe {
-            place_ghost_block(
-                editor_common,
-                block_info,
-                ghost_block.coord,
-                ghost_block.dir,
-            );
-        };
+
+        place_ghost_block(
+            editor_common,
+            block_info,
+            ghost_block.coord,
+            ghost_block.dir,
+            ghost_block.elem_color,
+        );
     }
 
     editor_common.air_mode = air_mode;
@@ -242,29 +244,35 @@ fn preload_all_block_infos(
     }
 }
 
-unsafe fn place_block(
+fn place_block(
     editor_common: &mut EditorCommon,
     block_info: &BlockInfo,
     coord: Vec3<u8>,
     dir: Direction,
+    elem_color: ElemColor,
     place_block_fn: PlaceBlockFn,
 ) -> Option<NodRef<Block>> {
-    if editor_common.can_place_block(block_info, coord, dir) {
-        place_block_fn.call(editor_common, block_info, coord, dir)
-    } else {
-        None
+    unsafe {
+        if editor_common.can_place_block(block_info, coord, dir) {
+            place_block_fn.call(editor_common, block_info, coord, dir, elem_color)
+        } else {
+            None
+        }
     }
 }
 
-unsafe fn place_ghost_block(
+fn place_ghost_block(
     editor_common: &mut EditorCommon,
     block_info: &BlockInfo,
     coord: Vec3<u8>,
     dir: Direction,
+    elem_color: ElemColor,
 ) -> Option<NodRef<Block>> {
-    if editor_common.can_place_block(block_info, coord, dir) {
-        editor_common.place_block(block_info, coord, dir)
-    } else {
-        None
+    unsafe {
+        if editor_common.can_place_block(block_info, coord, dir) {
+            editor_common.place_block(block_info, coord, dir, elem_color)
+        } else {
+            None
+        }
     }
 }

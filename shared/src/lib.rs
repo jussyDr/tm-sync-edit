@@ -1,5 +1,5 @@
 use gamebox::{
-    engines::game::map::{Direction, ElemColor, YawPitchRoll},
+    engines::game::map::{Direction, ElemColor, PhaseOffset, YawPitchRoll},
     Vec3,
 };
 use serde::{Deserialize, Serialize};
@@ -71,4 +71,5 @@ pub struct ItemDesc {
     pub position: Vec3<f32>,
     pub rotation: YawPitchRoll,
     pub elem_color: ElemColor,
+    pub anim_offset: PhaseOffset,
 }

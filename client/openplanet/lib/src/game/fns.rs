@@ -5,7 +5,10 @@ use std::{
     mem::{transmute, MaybeUninit},
 };
 
-use gamebox::{engines::game::map::Direction, Vec3};
+use gamebox::{
+    engines::game::map::{Direction, ElemColor},
+    Vec3,
+};
 
 use crate::process::ModuleMemory;
 
@@ -138,7 +141,7 @@ type PlaceBlockFnType = unsafe extern "system" fn(
     block_info: *const BlockInfo,
     coord: *mut u32,
     dir: u32,
-    param_5: u8,
+    elem_color: u8,
     param_6: u8,
     param_7: u32,
     param_8: u32,
@@ -172,6 +175,7 @@ impl PlaceBlockFn {
         block_info: &BlockInfo,
         coord: Vec3<u8>,
         dir: Direction,
+        elem_color: ElemColor,
     ) -> Option<NodRef<Block>> {
         let mut coord = [coord.x as u32, coord.y as u32, coord.z as u32];
 
@@ -180,7 +184,7 @@ impl PlaceBlockFn {
             block_info,
             coord.as_mut_ptr(),
             dir as u32,
-            0,
+            elem_color as u8,
             0,
             1,
             0,
