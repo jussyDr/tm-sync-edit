@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     error::Error,
+    io::{Cursor, Read},
     net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::Arc,
 };
@@ -9,10 +10,11 @@ use futures_util::{SinkExt, TryStreamExt};
 use gamebox::engines::game::map::BlockKind;
 use log::LevelFilter;
 use shared::{
-    framed_tcp_stream, serialize, BlockDesc, FreeBlockDesc, GhostBlockDesc, ItemDesc, MapDesc,
-    MapParamsDesc, Mood,
+    framed_tcp_stream, hash, serialize, BlockDesc, CustomBlockDesc, CustomItemDesc, FreeBlockDesc,
+    GhostBlockDesc, ItemDesc, MapDesc, MapParamsDesc, ModelId, Mood,
 };
 use tokio::{net::TcpListener, runtime, spawn, sync::Mutex};
+use zip::ZipArchive;
 
 fn main() -> Result<(), Box<dyn Error>> {
     env_logger::builder()
@@ -77,23 +79,65 @@ pub fn load_map() -> MapDesc {
     )
     .unwrap();
 
+    let mut custom_block_hashes = HashMap::new();
+    let mut custom_item_hashes = HashMap::new();
+    let mut custom_blocks = vec![];
+    let mut custom_items = vec![];
+
+    if let Some(embedded_objects) = map.embedded_objects() {
+        let mut zip_archive = ZipArchive::new(Cursor::new(embedded_objects.data())).unwrap();
+
+        for file_index in 0..zip_archive.len() {
+            let mut file = zip_archive.by_index(file_index).unwrap();
+
+            let mut bytes = vec![];
+            file.read_to_end(&mut bytes).unwrap();
+
+            let hash = hash(&bytes);
+
+            if file.name().ends_with("Block.Gbx") {
+                custom_block_hashes.insert(
+                    embedded_objects.ids().get(file_index).unwrap().to_owned(),
+                    hash,
+                );
+
+                custom_blocks.push(CustomBlockDesc { bytes })
+            } else if file.name().ends_with("Item.Gbx") {
+                custom_item_hashes.insert(
+                    embedded_objects.ids().get(file_index).unwrap().to_owned(),
+                    hash,
+                );
+
+                custom_items.push(CustomItemDesc { bytes })
+            }
+        }
+    }
+
     let mut blocks = vec![];
     let mut ghost_blocks = vec![];
     let mut free_blocks = vec![];
 
     for block in map.blocks() {
+        let model_id = if let Some(&hash) = custom_block_hashes.get(block.id()) {
+            ModelId::Custom { hash }
+        } else {
+            ModelId::Game {
+                id: block.id().to_owned(),
+            }
+        };
+
         match block.kind() {
             BlockKind::Normal(block_kind) => {
                 if block_kind.is_ghost() {
                     ghost_blocks.push(GhostBlockDesc {
-                        block_info_id: block.id().to_owned(),
+                        block_info_id: model_id,
                         coord: block_kind.coord(),
                         dir: block_kind.direction(),
                         elem_color: block.elem_color(),
                     })
                 } else {
                     blocks.push(BlockDesc {
-                        block_info_id: block.id().to_owned(),
+                        block_info_id: model_id,
                         coord: block_kind.coord(),
                         dir: block_kind.direction(),
                         elem_color: block.elem_color(),
@@ -101,7 +145,7 @@ pub fn load_map() -> MapDesc {
                 }
             }
             BlockKind::Free(block_kind) => free_blocks.push(FreeBlockDesc {
-                block_info_id: block.id().to_owned(),
+                block_info_id: model_id,
                 pos: block_kind.position().clone(),
                 rotation: block_kind.rotation().clone(),
                 elem_color: block.elem_color(),
@@ -112,8 +156,16 @@ pub fn load_map() -> MapDesc {
     let mut items = vec![];
 
     for item in map.items() {
+        let model_id = if let Some(&hash) = custom_item_hashes.get(item.id()) {
+            ModelId::Custom { hash }
+        } else {
+            ModelId::Game {
+                id: item.id().to_owned(),
+            }
+        };
+
         items.push(ItemDesc {
-            item_model_id: item.id().to_owned(),
+            item_model_id: model_id,
             pos: item.position().clone(),
             pivot_pos: item.pivot_position().clone(),
             rotation: item.rotation().clone(),
@@ -123,8 +175,8 @@ pub fn load_map() -> MapDesc {
     }
 
     MapDesc {
-        custom_block_models: vec![],
-        custom_item_models: vec![],
+        custom_blocks,
+        custom_items,
         blocks,
         ghost_blocks,
         free_blocks,

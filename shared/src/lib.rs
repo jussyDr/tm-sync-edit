@@ -40,8 +40,8 @@ pub struct MapParamsDesc {
 
 #[derive(Serialize, Deserialize)]
 pub struct MapDesc {
-    pub custom_block_models: Vec<CustomBlockModelDesc>,
-    pub custom_item_models: Vec<CustomItemModelDesc>,
+    pub custom_blocks: Vec<CustomBlockDesc>,
+    pub custom_items: Vec<CustomItemDesc>,
     pub blocks: Vec<BlockDesc>,
     pub ghost_blocks: Vec<GhostBlockDesc>,
     pub free_blocks: Vec<FreeBlockDesc>,
@@ -49,18 +49,18 @@ pub struct MapDesc {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct CustomBlockModelDesc {
+pub struct CustomBlockDesc {
     pub bytes: Vec<u8>,
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct CustomItemModelDesc {
+pub struct CustomItemDesc {
     pub bytes: Vec<u8>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct BlockDesc {
-    pub block_info_id: String,
+    pub block_info_id: ModelId,
     pub coord: Vec3<u8>,
     pub dir: Direction,
     pub elem_color: ElemColor,
@@ -68,7 +68,7 @@ pub struct BlockDesc {
 
 #[derive(Serialize, Deserialize)]
 pub struct GhostBlockDesc {
-    pub block_info_id: String,
+    pub block_info_id: ModelId,
     pub coord: Vec3<u8>,
     pub dir: Direction,
     pub elem_color: ElemColor,
@@ -76,7 +76,7 @@ pub struct GhostBlockDesc {
 
 #[derive(Serialize, Deserialize)]
 pub struct FreeBlockDesc {
-    pub block_info_id: String,
+    pub block_info_id: ModelId,
     pub pos: Vec3<f32>,
     pub rotation: YawPitchRoll,
     pub elem_color: ElemColor,
@@ -84,10 +84,16 @@ pub struct FreeBlockDesc {
 
 #[derive(Serialize, Deserialize)]
 pub struct ItemDesc {
-    pub item_model_id: String,
+    pub item_model_id: ModelId,
     pub pos: Vec3<f32>,
     pub pivot_pos: Vec3<f32>,
     pub rotation: YawPitchRoll,
     pub elem_color: ElemColor,
     pub anim_offset: PhaseOffset,
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum ModelId {
+    Game { id: String },
+    Custom { hash: Hash },
 }

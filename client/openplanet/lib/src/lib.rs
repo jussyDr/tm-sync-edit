@@ -31,7 +31,10 @@ use gamebox::{
     Vec3,
 };
 use process::Process;
-use shared::{deserialize, framed_tcp_stream, hash, FramedTcpStream, MapDesc, MapParamsDesc, Mood};
+use shared::{
+    deserialize, framed_tcp_stream, hash, FramedTcpStream, Hash, MapDesc, MapParamsDesc, ModelId,
+    Mood,
+};
 use tokio::net::TcpStream;
 
 #[no_mangle]
@@ -141,6 +144,9 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
 
     load_all_item_models(items_folder, &mut item_models, load_fid_file_fn);
 
+    let mut custom_block_infos: HashMap<Hash, NodRef<BlockInfo>> = HashMap::new();
+    let mut custom_item_models: HashMap<Hash, NodRef<ItemModel>> = HashMap::new();
+
     load_custom_objects(context, &map_desc, load_fid_file_fn).unwrap();
 
     let editor_common = get_map_editor(context).unwrap();
@@ -152,7 +158,10 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
     let air_mode = mem::replace(&mut editor_common.air_mode, true);
 
     for block in map_desc.blocks {
-        let block_info = block_infos.get(&block.block_info_id).unwrap();
+        let block_info = match block.block_info_id {
+            ModelId::Game { id } => block_infos.get(&id).unwrap(),
+            ModelId::Custom { hash } => custom_block_infos.get(&hash).unwrap(),
+        };
 
         place_block(
             editor_common,
@@ -167,7 +176,10 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
     editor_common.air_mode = air_mode;
 
     for ghost_block in map_desc.ghost_blocks {
-        let block_info = block_infos.get(&ghost_block.block_info_id).unwrap();
+        let block_info = match ghost_block.block_info_id {
+            ModelId::Game { id } => block_infos.get(&id).unwrap(),
+            ModelId::Custom { hash } => custom_block_infos.get(&hash).unwrap(),
+        };
 
         editor_common.place_ghost_block(
             block_info,
@@ -178,7 +190,10 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
     }
 
     for free_block in map_desc.free_blocks {
-        let block_info = block_infos.get(&free_block.block_info_id).unwrap();
+        let block_info = match free_block.block_info_id {
+            ModelId::Game { id } => block_infos.get(&id).unwrap(),
+            ModelId::Custom { hash } => custom_block_infos.get(&hash).unwrap(),
+        };
 
         editor_common.place_free_block(
             block_info,
@@ -189,7 +204,10 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
     }
 
     for item in map_desc.items {
-        let item_model = item_models.get(&item.item_model_id).unwrap();
+        let item_model = match item.item_model_id {
+            ModelId::Game { id } => item_models.get(&id).unwrap(),
+            ModelId::Custom { hash } => custom_item_models.get(&hash).unwrap(),
+        };
 
         unsafe {
             place_item_fn.call(
@@ -323,8 +341,8 @@ fn load_custom_objects(
     let mut f = || {
         let mut custom_block_file_names = vec![];
 
-        for custom_block_model in &map_desc.custom_block_models {
-            let hash = hash(&custom_block_model.bytes);
+        for custom_block in &map_desc.custom_blocks {
+            let hash = hash(&custom_block.bytes);
 
             let file_name = hash.to_hex();
 
@@ -332,15 +350,15 @@ fn load_custom_objects(
             file_path.push(file_name.as_str());
             file_path.set_extension("Block.Gbx");
 
-            fs::write(&file_path, &custom_block_model.bytes).unwrap();
+            fs::write(&file_path, &custom_block.bytes).unwrap();
 
             custom_block_file_names.push(file_name);
         }
 
         let mut custom_item_file_names = vec![];
 
-        for custom_item_model in &map_desc.custom_item_models {
-            let hash = hash(&custom_item_model.bytes);
+        for custom_item in &map_desc.custom_items {
+            let hash = hash(&custom_item.bytes);
 
             let file_name = hash.to_hex();
 
@@ -348,7 +366,7 @@ fn load_custom_objects(
             file_path.push(file_name.as_str());
             file_path.set_extension("Item.Gbx");
 
-            fs::write(&file_path, &custom_item_model.bytes).unwrap();
+            fs::write(&file_path, &custom_item.bytes).unwrap();
 
             custom_item_file_names.push(file_name);
         }
