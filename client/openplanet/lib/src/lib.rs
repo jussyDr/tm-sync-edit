@@ -21,8 +21,8 @@ use std::{
 use async_compat::CompatExt;
 use futures::{executor::block_on, poll, TryStreamExt};
 use game::{
-    BackToMainMenuFn, Block, BlockInfo, EditNewMap2Fn, EditorCommon, FidsFolder, LoadFidFileFn,
-    ManiaPlanet, Menus, NodRef, PlaceBlockFn,
+    BackToMainMenuFn, Block, BlockInfo, EditNewMap2Fn, EditorCommon, FidsFolder, ItemModel,
+    LoadFidFileFn, ManiaPlanet, Menus, NodRef, PlaceBlockFn, PlaceItemFn,
 };
 use gamebox::{
     engines::game::map::{Direction, ElemColor},
@@ -109,27 +109,44 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
         .find(|folder| &*folder.name == "Stadium")
         .unwrap();
 
+    let mut block_infos = HashMap::new();
+    let mut item_models = HashMap::new();
+
+    let process = Process::open_current()?;
+    let main_module_memory = process.main_module_memory()?;
+    let load_fid_file_fn = LoadFidFileFn::find(&main_module_memory).unwrap();
+
+    let place_item_fn = PlaceItemFn::find(&main_module_memory).unwrap();
+
     let block_info_folder = stadium_folder
         .trees
         .iter_mut()
         .find(|folder| &*folder.name == "GameCtnBlockInfo")
         .unwrap();
 
-    let mut block_infos: HashMap<String, NodRef<BlockInfo>> = HashMap::new();
+    load_all_block_infos(block_info_folder, &mut block_infos, load_fid_file_fn);
 
-    let process = Process::open_current()?;
-    let main_module_memory = process.main_module_memory()?;
-    let load_fid_file_fn = LoadFidFileFn::find(&main_module_memory).unwrap();
+    let items_folder = stadium_folder
+        .trees
+        .iter_mut()
+        .find(|folder| &*folder.name == "Items")
+        .unwrap();
 
-    preload_all_block_infos(block_info_folder, &mut block_infos, load_fid_file_fn);
+    load_all_item_models(items_folder, &mut item_models, load_fid_file_fn);
+
+    let _ = native_dialog::MessageDialog::new()
+        .set_type(native_dialog::MessageType::Error)
+        .set_title("SyncEdit.dll")
+        .set_text(&format!("{}", item_models.len()))
+        .show_alert();
 
     let editor_common = get_map_editor(context).unwrap();
 
     let place_block_fn = PlaceBlockFn::find(&main_module_memory).unwrap();
 
-    let air_mode = mem::replace(&mut editor_common.air_mode, true);
+    editor_common.remove_all();
 
-    unsafe { editor_common.remove_all() };
+    let air_mode = mem::replace(&mut editor_common.air_mode, true);
 
     for block in map_desc.blocks {
         let block_info = block_infos.get(&block.block_info_id).unwrap();
@@ -144,11 +161,12 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
         );
     }
 
+    editor_common.air_mode = air_mode;
+
     for ghost_block in map_desc.ghost_blocks {
         let block_info = block_infos.get(&ghost_block.block_info_id).unwrap();
 
-        place_ghost_block(
-            editor_common,
+        editor_common.place_ghost_block(
             block_info,
             ghost_block.coord,
             ghost_block.dir,
@@ -156,7 +174,16 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
         );
     }
 
-    editor_common.air_mode = air_mode;
+    for free_block in map_desc.free_blocks {
+        let block_info = block_infos.get(&free_block.block_info_id).unwrap();
+
+        editor_common.place_free_block(
+            block_info,
+            free_block.pos,
+            free_block.rotation,
+            free_block.elem_color,
+        );
+    }
 
     while framed_tcp_stream.try_next().await?.is_some() {}
 
@@ -226,13 +253,13 @@ fn get_map_editor(context: &mut Context) -> Option<&mut NodRef<EditorCommon>> {
         .next()
 }
 
-fn preload_all_block_infos(
+fn load_all_block_infos(
     folder: &mut FidsFolder,
     block_infos: &mut HashMap<String, NodRef<BlockInfo>>,
     load_fid_file_fn: LoadFidFileFn,
 ) {
     for folder in folder.trees.iter_mut() {
-        preload_all_block_infos(folder, block_infos, load_fid_file_fn);
+        load_all_block_infos(folder, block_infos, load_fid_file_fn);
     }
 
     for file in folder.leaves.iter_mut() {
@@ -240,6 +267,24 @@ fn preload_all_block_infos(
 
         if let Some(block_info) = nod.cast_mut::<BlockInfo>() {
             block_infos.insert(block_info.name.to_owned(), NodRef::clone(block_info));
+        }
+    }
+}
+
+fn load_all_item_models(
+    folder: &mut FidsFolder,
+    item_models: &mut HashMap<String, NodRef<ItemModel>>,
+    load_fid_file_fn: LoadFidFileFn,
+) {
+    for folder in folder.trees.iter_mut() {
+        load_all_item_models(folder, item_models, load_fid_file_fn);
+    }
+
+    for file in folder.leaves.iter_mut() {
+        let mut nod = unsafe { load_fid_file_fn.call(file).unwrap() };
+
+        if let Some(item_model) = nod.cast_mut::<ItemModel>() {
+            item_models.insert(item_model.name.to_owned(), NodRef::clone(item_model));
         }
     }
 }
@@ -255,22 +300,6 @@ fn place_block(
     unsafe {
         if editor_common.can_place_block(block_info, coord, dir) {
             place_block_fn.call(editor_common, block_info, coord, dir, elem_color)
-        } else {
-            None
-        }
-    }
-}
-
-fn place_ghost_block(
-    editor_common: &mut EditorCommon,
-    block_info: &BlockInfo,
-    coord: Vec3<u8>,
-    dir: Direction,
-    elem_color: ElemColor,
-) -> Option<NodRef<Block>> {
-    unsafe {
-        if editor_common.can_place_block(block_info, coord, dir) {
-            editor_common.place_block(block_info, coord, dir, elem_color)
         } else {
             None
         }

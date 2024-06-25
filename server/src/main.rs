@@ -72,6 +72,13 @@ impl State {
 }
 
 pub fn load_map() -> MapDesc {
+    return MapDesc {
+        blocks: vec![],
+        ghost_blocks: vec![],
+        free_blocks: vec![],
+        items: vec![],
+    };
+
     let map: gamebox::Map =
         gamebox::read_file("C:\\Users\\Justin\\Projects\\tm-sync-edit\\G H O S T.Map.Gbx").unwrap();
 

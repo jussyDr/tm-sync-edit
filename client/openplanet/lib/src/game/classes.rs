@@ -2,12 +2,13 @@
 
 use std::{
     ops::{Deref, DerefMut},
+    ptr::null,
     slice, str,
 };
 
 use autopad::autopad;
 use gamebox::{
-    engines::game::map::{Direction, ElemColor},
+    engines::game::map::{Direction, ElemColor, YawPitchRoll},
     Vec3,
 };
 
@@ -182,24 +183,29 @@ impl DerefMut for ManiaPlanet {
     }
 }
 
-autopad! {
-    /// CGameCtnBlockInfo.
-    #[repr(C)]
-    pub struct BlockInfo {
-                    nod: Nod,
-        0x38 => pub name: FastString,
-    }
+/// CGameCtnBlockInfo.
+#[repr(C)]
+pub struct BlockInfo {
+    collector: Collector,
 }
 
 impl Class for BlockInfo {
     const ID: u32 = 0x0304e000;
 }
 
+impl Deref for BlockInfo {
+    type Target = Collector;
+
+    fn deref(&self) -> &Collector {
+        &self.collector
+    }
+}
+
 impl Inherits for BlockInfo {
     type Parent = Nod;
 
     fn parent(&mut self) -> &mut Nod {
-        &mut self.nod
+        &mut self.collector.nod
     }
 }
 
@@ -338,6 +344,7 @@ autopad! {
             param_18: u32,
             param_19: u32
         ) -> bool,
+        #[allow(clippy::type_complexity)]
         0x270 => place_block: unsafe extern "system" fn(
             this: *mut EditorCommon,
             block_info: *const BlockInfo,
@@ -355,8 +362,8 @@ autopad! {
             param_14: u32,
             param_15: u32,
             param_16: usize,
-            param_17: u32,
-            param_18: usize,
+            is_free: u32,
+            transform: *const [f32; 6],
             param_19: u32,
             param_20: u32,
         ) -> *mut Block,
@@ -365,7 +372,7 @@ autopad! {
 }
 
 impl EditorCommon {
-    pub unsafe fn can_place_block(
+    pub fn can_place_block(
         &mut self,
         block_info: &BlockInfo,
         coord: Vec3<u8>,
@@ -373,53 +380,111 @@ impl EditorCommon {
     ) -> bool {
         let coord = [coord.x as u32, coord.y as u32, coord.z as u32];
 
-        ((*(self.nod.vtable as *const EditorCommonVTable)).can_place_block)(
-            self, block_info, &coord, dir as u32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0xffffffff, 0,
-        )
+        unsafe {
+            ((*(self.nod.vtable as *const EditorCommonVTable)).can_place_block)(
+                self, block_info, &coord, dir as u32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0xffffffff, 0,
+            )
+        }
     }
 
-    pub unsafe fn place_block(
+    pub fn place_ghost_block(
         &mut self,
         block_info: &BlockInfo,
         coord: Vec3<u8>,
         dir: Direction,
         elem_color: ElemColor,
     ) -> Option<NodRef<Block>> {
-        let coord = [coord.x as u32, coord.y as u32, coord.z as u32];
+        if self.can_place_block(block_info, coord, dir) {
+            let coord = [coord.x as u32, coord.y as u32, coord.z as u32];
 
-        let block = ((*(self.nod.vtable as *const EditorCommonVTable)).place_block)(
-            self,
-            block_info,
-            0,
-            &coord,
-            dir as u32,
-            elem_color as u8,
-            0,
-            0,
-            0xffffffff,
-            1,
-            1,
-            0,
-            0,
-            0xffffffff,
-            1,
-            0,
-            0,
-            0,
-            0xffffffff,
-            0,
-        );
+            let block = unsafe {
+                ((*(self.nod.vtable as *const EditorCommonVTable)).place_block)(
+                    self,
+                    block_info,
+                    0,
+                    &coord,
+                    dir as u32,
+                    elem_color as u8,
+                    0,
+                    0,
+                    0xffffffff,
+                    1,
+                    1,
+                    0,
+                    0,
+                    0xffffffff,
+                    1,
+                    0,
+                    0,
+                    null(),
+                    0xffffffff,
+                    0,
+                )
+            };
+
+            if block.is_null() {
+                None
+            } else {
+                unsafe { Some(NodRef::from_ptr(block)) }
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn place_free_block(
+        &mut self,
+        block_info: &BlockInfo,
+        pos: Vec3<f32>,
+        rotation: YawPitchRoll,
+        elem_color: ElemColor,
+    ) -> Option<NodRef<Block>> {
+        let coord = [0xffffffff, 0, 0xffffffff];
+
+        let transform = [
+            pos.x,
+            pos.y,
+            pos.z,
+            rotation.yaw,
+            rotation.pitch,
+            rotation.roll,
+        ];
+
+        let block = unsafe {
+            ((*(self.nod.vtable as *const EditorCommonVTable)).place_block)(
+                self,
+                block_info,
+                0,
+                &coord,
+                0,
+                elem_color as u8,
+                0,
+                0,
+                0x3f,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                1,
+                &transform,
+                0xffffffff,
+                0,
+            )
+        };
 
         if block.is_null() {
             None
         } else {
-            Some(NodRef::from_ptr(block))
+            unsafe { Some(NodRef::from_ptr(block)) }
         }
     }
 
-    pub unsafe fn remove_all(&mut self) {
-        ((*(self.nod.vtable as *const EditorCommonVTable)).remove_all)(self, 0);
+    pub fn remove_all(&mut self) {
+        unsafe { ((*(self.nod.vtable as *const EditorCommonVTable)).remove_all)(self, 0) };
     }
 }
 
@@ -499,5 +564,37 @@ impl Inherits for FidFile {
     }
 }
 
+autopad! {
+    /// CGameCtnCollector.
+    #[repr(C)]
+    pub struct Collector {
+                    nod: Nod,
+        0x38 => pub name: FastString,
+    }
+}
+
 /// CGameItemModel.
-pub struct ItemModel;
+#[repr(C)]
+pub struct ItemModel {
+    collector: Collector,
+}
+
+impl Class for ItemModel {
+    const ID: u32 = 0x2e002000;
+}
+
+impl Deref for ItemModel {
+    type Target = Collector;
+
+    fn deref(&self) -> &Collector {
+        &self.collector
+    }
+}
+
+impl Inherits for ItemModel {
+    type Parent = Nod;
+
+    fn parent(&mut self) -> &mut Nod {
+        &mut self.collector.nod
+    }
+}
