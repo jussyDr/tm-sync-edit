@@ -573,7 +573,8 @@ autopad! {
     #[repr(C)]
     pub struct FidFile {
                     nod: Nod,
-        0x18 => pub parent_folder: NodRef<FidsFolder>
+        0x18 => pub parent_folder: NodRef<FidsFolder>,
+        0xd0 => pub name: FastString,
     }
 }
 

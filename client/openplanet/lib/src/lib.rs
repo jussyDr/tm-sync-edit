@@ -14,7 +14,7 @@ use std::{
     error::Error,
     fs,
     future::{poll_fn, Future},
-    mem, panic,
+    io, mem, panic,
     path::Path,
     pin::Pin,
     task::Poll,
@@ -141,36 +141,7 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
 
     load_all_item_models(items_folder, &mut item_models, load_fid_file_fn);
 
-    let program_data_folder_path = Path::new(&*context.program_data_folder.path);
-
-    let mut sync_edit_folder_path = program_data_folder_path.to_owned();
-    sync_edit_folder_path.push("SyncEdit");
-
-    fs::create_dir(&sync_edit_folder_path).unwrap();
-
-    for custom_block_model in map_desc.custom_block_models {
-        let hash = hash(&custom_block_model.bytes);
-
-        let mut file_path = sync_edit_folder_path.clone();
-        file_path.push(hash.to_hex().as_str());
-        file_path.set_extension("Block.Gbx");
-
-        fs::write(file_path, custom_block_model.bytes).unwrap();
-    }
-
-    for custom_item_model in map_desc.custom_item_models {
-        let hash = hash(&custom_item_model.bytes);
-
-        let mut file_path = sync_edit_folder_path.clone();
-        file_path.push(hash.to_hex().as_str());
-        file_path.set_extension("Item.Gbx");
-
-        fs::write(file_path, custom_item_model.bytes).unwrap();
-    }
-
-    context.program_data_folder.update_tree(false);
-
-    fs::remove_dir_all(sync_edit_folder_path).unwrap();
+    load_custom_objects(context, &map_desc, load_fid_file_fn).unwrap();
 
     let editor_common = get_map_editor(context).unwrap();
 
@@ -335,6 +306,90 @@ fn load_all_item_models(
             item_models.insert(item_model.name.to_owned(), NodRef::clone(item_model));
         }
     }
+}
+
+fn load_custom_objects(
+    context: &mut Context,
+    map_desc: &MapDesc,
+    load_fid_file_fn: LoadFidFileFn,
+) -> io::Result<()> {
+    let program_data_folder_path = Path::new(&*context.program_data_folder.path);
+
+    let mut sync_edit_folder_path = program_data_folder_path.to_owned();
+    sync_edit_folder_path.push("SyncEdit");
+
+    fs::create_dir(&sync_edit_folder_path)?;
+
+    let mut f = || {
+        let mut custom_block_file_names = vec![];
+
+        for custom_block_model in &map_desc.custom_block_models {
+            let hash = hash(&custom_block_model.bytes);
+
+            let file_name = hash.to_hex();
+
+            let mut file_path = sync_edit_folder_path.clone();
+            file_path.push(file_name.as_str());
+            file_path.set_extension("Block.Gbx");
+
+            fs::write(&file_path, &custom_block_model.bytes).unwrap();
+
+            custom_block_file_names.push(file_name);
+        }
+
+        let mut custom_item_file_names = vec![];
+
+        for custom_item_model in &map_desc.custom_item_models {
+            let hash = hash(&custom_item_model.bytes);
+
+            let file_name = hash.to_hex();
+
+            let mut file_path = sync_edit_folder_path.clone();
+            file_path.push(file_name.as_str());
+            file_path.set_extension("Item.Gbx");
+
+            fs::write(&file_path, &custom_item_model.bytes).unwrap();
+
+            custom_item_file_names.push(file_name);
+        }
+
+        context.program_data_folder.update_tree(false);
+
+        let sync_edit_folder = context
+            .program_data_folder
+            .trees
+            .iter_mut()
+            .find(|folder| &*folder.path == "SyncEdit")
+            .unwrap();
+
+        for file_name in custom_block_file_names {
+            let file = sync_edit_folder
+                .leaves
+                .iter_mut()
+                .find(|file| *file.name == *file_name)
+                .unwrap();
+
+            let nod = unsafe { load_fid_file_fn.call(file).unwrap() };
+        }
+
+        for file_name in custom_item_file_names {
+            let file = sync_edit_folder
+                .leaves
+                .iter_mut()
+                .find(|file| *file.name == *file_name)
+                .unwrap();
+
+            let nod = unsafe { load_fid_file_fn.call(file).unwrap() };
+        }
+
+        Ok(())
+    };
+
+    let result = f();
+
+    fs::remove_dir_all(sync_edit_folder_path)?;
+
+    result
 }
 
 fn place_block(
