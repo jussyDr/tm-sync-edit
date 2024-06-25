@@ -84,14 +84,14 @@ pub fn load_map() -> MapDesc {
             BlockKind::Normal(block_kind) => {
                 if block_kind.is_ghost() {
                     ghost_blocks.push(GhostBlockDesc {
-                        block_info_name: block.id().to_owned(),
+                        block_info_id: block.id().to_owned(),
                         coord: block_kind.coord(),
                         dir: block_kind.direction(),
                         elem_color: block.elem_color(),
                     })
                 } else {
                     blocks.push(BlockDesc {
-                        block_info_name: block.id().to_owned(),
+                        block_info_id: block.id().to_owned(),
                         coord: block_kind.coord(),
                         dir: block_kind.direction(),
                         elem_color: block.elem_color(),
@@ -99,8 +99,8 @@ pub fn load_map() -> MapDesc {
                 }
             }
             BlockKind::Free(block_kind) => free_blocks.push(FreeBlockDesc {
-                block_info_name: block.id().to_owned(),
-                position: block_kind.position().clone(),
+                block_info_id: block.id().to_owned(),
+                pos: block_kind.position().clone(),
                 rotation: block_kind.rotation().clone(),
                 elem_color: block.elem_color(),
             }),
@@ -111,8 +111,9 @@ pub fn load_map() -> MapDesc {
 
     for item in map.items() {
         items.push(ItemDesc {
-            item_model_name: item.id().to_owned(),
-            position: item.position().clone(),
+            item_model_id: item.id().to_owned(),
+            pos: item.position().clone(),
+            pivot_pos: item.pivot_position().clone(),
             rotation: item.rotation().clone(),
             elem_color: item.elem_color(),
             anim_offset: item.animation_offset(),

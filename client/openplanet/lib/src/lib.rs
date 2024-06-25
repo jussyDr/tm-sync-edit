@@ -132,7 +132,7 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
     unsafe { editor_common.remove_all() };
 
     for block in map_desc.blocks {
-        let block_info = block_infos.get(&block.block_info_name).unwrap();
+        let block_info = block_infos.get(&block.block_info_id).unwrap();
 
         place_block(
             editor_common,
@@ -145,7 +145,7 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
     }
 
     for ghost_block in map_desc.ghost_blocks {
-        let block_info = block_infos.get(&ghost_block.block_info_name).unwrap();
+        let block_info = block_infos.get(&ghost_block.block_info_id).unwrap();
 
         place_ghost_block(
             editor_common,

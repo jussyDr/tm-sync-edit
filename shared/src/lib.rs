@@ -43,7 +43,7 @@ pub struct MapDesc {
 
 #[derive(Serialize, Deserialize)]
 pub struct BlockDesc {
-    pub block_info_name: String,
+    pub block_info_id: String,
     pub coord: Vec3<u8>,
     pub dir: Direction,
     pub elem_color: ElemColor,
@@ -51,7 +51,7 @@ pub struct BlockDesc {
 
 #[derive(Serialize, Deserialize)]
 pub struct GhostBlockDesc {
-    pub block_info_name: String,
+    pub block_info_id: String,
     pub coord: Vec3<u8>,
     pub dir: Direction,
     pub elem_color: ElemColor,
@@ -59,16 +59,17 @@ pub struct GhostBlockDesc {
 
 #[derive(Serialize, Deserialize)]
 pub struct FreeBlockDesc {
-    pub block_info_name: String,
-    pub position: Vec3<f32>,
+    pub block_info_id: String,
+    pub pos: Vec3<f32>,
     pub rotation: YawPitchRoll,
     pub elem_color: ElemColor,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct ItemDesc {
-    pub item_model_name: String,
-    pub position: Vec3<f32>,
+    pub item_model_id: String,
+    pub pos: Vec3<f32>,
+    pub pivot_pos: Vec3<f32>,
     pub rotation: YawPitchRoll,
     pub elem_color: ElemColor,
     pub anim_offset: PhaseOffset,
