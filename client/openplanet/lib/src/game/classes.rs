@@ -258,7 +258,7 @@ autopad! {
 #[repr(C)]
 pub struct ItemParams {
     pub coord: [u32; 3],
-    pub yaw_pitch_roll: [f32; 3],
+    pub rotation: [f32; 3],
     pub param_3: u32,
     pub pos: [f32; 3],
     pub param_5: [f32; 9],

@@ -6,7 +6,7 @@ use std::{
 };
 
 use gamebox::{
-    engines::game::map::{Direction, ElemColor},
+    engines::game::map::{Direction, ElemColor, PhaseOffset, YawPitchRoll},
     Vec3,
 };
 
@@ -229,18 +229,24 @@ impl PlaceItemFn {
         Some(Self(f))
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub unsafe fn call(
         &self,
         editor: &mut EditorCommon,
         item_model: &ItemModel,
+        pos: Vec3<f32>,
+        rotation: YawPitchRoll,
+        pivot_pos: Vec3<f32>,
+        elem_color: ElemColor,
+        anim_offset: PhaseOffset,
     ) -> Option<&mut Item> {
         let params = ItemParams {
             coord: [20, 20, 20],
-            yaw_pitch_roll: [0.0, 0.0, 0.0],
+            rotation: rotation.into_array(),
             param_3: 0xffffffff,
-            pos: [0.0, 0.0, 0.0],
+            pos: pos.into_array(),
             param_5: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
-            pivot_pos: [0.0, 0.0, 0.0],
+            pivot_pos: pivot_pos.into_array(),
             param_7: 1.0,
             param_8: 1,
             param_9: 0xffffffff,
@@ -255,8 +261,8 @@ impl PlaceItemFn {
             param_18: 0,
             param_19: 0,
             param_20: [-1.0, -1.0, -1.0],
-            elem_color: 0,
-            anim_offset: 0,
+            elem_color: elem_color as u8,
+            anim_offset: anim_offset as u8,
             param_22: 0xffffffff,
         };
 

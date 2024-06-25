@@ -185,6 +185,22 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
         );
     }
 
+    for item in map_desc.items {
+        let item_model = item_models.get(&item.item_model_id).unwrap();
+
+        unsafe {
+            place_item_fn.call(
+                editor_common,
+                item_model,
+                item.pos,
+                item.rotation,
+                item.pivot_pos,
+                item.elem_color,
+                item.anim_offset,
+            )
+        };
+    }
+
     while framed_tcp_stream.try_next().await?.is_some() {}
 
     Ok(())
