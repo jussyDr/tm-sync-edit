@@ -37,7 +37,7 @@ Library@ LoadLibrary() {
         return null;
     }
 
-    auto context = initFunc.CallPointer(maniaPlanet);
+    auto context = initFunc.CallPointer(maniaPlanet, Fids::GetProgramDataFolder(""));
 
     if (context == 0) {
         return null;

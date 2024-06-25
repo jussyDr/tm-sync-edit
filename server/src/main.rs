@@ -123,6 +123,8 @@ pub fn load_map() -> MapDesc {
     }
 
     MapDesc {
+        custom_block_models: vec![],
+        custom_item_models: vec![],
         blocks,
         ghost_blocks,
         free_blocks,

@@ -7,6 +7,7 @@ use tokio::net::TcpStream;
 use tokio_util::codec::{Decoder, Framed, LengthDelimitedCodec};
 
 pub type FramedTcpStream = Framed<TcpStream, LengthDelimitedCodec>;
+pub type Hash = blake3::Hash;
 
 pub fn framed_tcp_stream(tcp_stream: TcpStream) -> FramedTcpStream {
     LengthDelimitedCodec::new().framed(tcp_stream)
@@ -18,6 +19,10 @@ pub fn serialize<T: Serialize>(value: &T) -> Result<Vec<u8>, postcard::Error> {
 
 pub fn deserialize<'de, T: Deserialize<'de>>(bytes: &'de [u8]) -> Result<T, postcard::Error> {
     postcard::from_bytes(bytes)
+}
+
+pub fn hash(bytes: &[u8]) -> Hash {
+    blake3::Hasher::new().update(bytes).finalize()
 }
 
 #[derive(Serialize, Deserialize)]
@@ -35,10 +40,22 @@ pub struct MapParamsDesc {
 
 #[derive(Serialize, Deserialize)]
 pub struct MapDesc {
+    pub custom_block_models: Vec<CustomBlockModelDesc>,
+    pub custom_item_models: Vec<CustomItemModelDesc>,
     pub blocks: Vec<BlockDesc>,
     pub ghost_blocks: Vec<GhostBlockDesc>,
     pub free_blocks: Vec<FreeBlockDesc>,
     pub items: Vec<ItemDesc>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct CustomBlockModelDesc {
+    pub bytes: Vec<u8>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct CustomItemModelDesc {
+    pub bytes: Vec<u8>,
 }
 
 #[derive(Serialize, Deserialize)]

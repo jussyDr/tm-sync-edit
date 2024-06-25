@@ -183,6 +183,14 @@ impl DerefMut for ManiaPlanet {
     }
 }
 
+impl Inherits for ManiaPlanet {
+    type Parent = Nod;
+
+    fn parent(&mut self) -> &mut Nod {
+        &mut self.nod
+    }
+}
+
 /// CGameCtnBlockInfo.
 #[repr(C)]
 pub struct BlockInfo {
@@ -535,7 +543,20 @@ autopad! {
                     nod: Nod,
         0x28 => pub leaves: Array<NodRef<FidFile>>,
         0x38 => pub trees: Array<NodRef<FidsFolder>>,
-        0x58 => pub name: FastString
+        0x58 => pub path: FastString
+    }
+}
+
+autopad! {
+    #[repr(C)]
+    struct FidsFolderVTable {
+        0xf8 => update_tree: unsafe extern "system" fn(this: *mut FidsFolder, recurse: bool),
+    }
+}
+
+impl FidsFolder {
+    pub fn update_tree(&mut self, recurse: bool) {
+        unsafe { ((*(self.nod.vtable as *const FidsFolderVTable)).update_tree)(self, recurse) };
     }
 }
 

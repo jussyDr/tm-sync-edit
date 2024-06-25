@@ -12,8 +12,10 @@ mod game {
 use std::{
     collections::HashMap,
     error::Error,
+    fs,
     future::{poll_fn, Future},
     mem, panic,
+    path::Path,
     pin::Pin,
     task::Poll,
 };
@@ -29,11 +31,14 @@ use gamebox::{
     Vec3,
 };
 use process::Process;
-use shared::{deserialize, framed_tcp_stream, FramedTcpStream, MapDesc, MapParamsDesc, Mood};
+use shared::{deserialize, framed_tcp_stream, hash, FramedTcpStream, MapDesc, MapParamsDesc, Mood};
 use tokio::net::TcpStream;
 
 #[no_mangle]
-extern "system" fn Init(mania_planet: &'static mut ManiaPlanet) -> *mut Context {
+extern "system" fn Init(
+    mania_planet: NodRef<ManiaPlanet>,
+    program_data_folder: NodRef<FidsFolder>,
+) -> *mut Context {
     panic::set_hook(Box::new(|panic_info| {
         let _ = native_dialog::MessageDialog::new()
             .set_type(native_dialog::MessageType::Error)
@@ -42,7 +47,7 @@ extern "system" fn Init(mania_planet: &'static mut ManiaPlanet) -> *mut Context 
             .show_alert();
     }));
 
-    let context = Context::new(mania_planet);
+    let context = Context::new(mania_planet, program_data_folder);
 
     Box::into_raw(Box::new(context))
 }
@@ -73,15 +78,17 @@ extern "system" fn Join(context: &mut Context) {
 type ConnectionFuture = dyn Future<Output = Result<(), Box<dyn Error>>>;
 
 struct Context {
-    mania_planet: &'static mut ManiaPlanet,
+    mania_planet: NodRef<ManiaPlanet>,
+    program_data_folder: NodRef<FidsFolder>,
     connection_future: Option<Pin<Box<ConnectionFuture>>>,
     framed_tcp_stream: Option<FramedTcpStream>,
 }
 
 impl Context {
-    fn new(mania_planet: &'static mut ManiaPlanet) -> Self {
+    fn new(mania_planet: NodRef<ManiaPlanet>, program_data_folder: NodRef<FidsFolder>) -> Self {
         Self {
             mania_planet,
+            program_data_folder,
             connection_future: None,
             framed_tcp_stream: None,
         }
@@ -106,7 +113,7 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
     let stadium_folder = game_data_folder
         .trees
         .iter_mut()
-        .find(|folder| &*folder.name == "Stadium")
+        .find(|folder| &*folder.path == "Stadium")
         .unwrap();
 
     let mut block_infos = HashMap::new();
@@ -121,7 +128,7 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
     let block_info_folder = stadium_folder
         .trees
         .iter_mut()
-        .find(|folder| &*folder.name == "GameCtnBlockInfo")
+        .find(|folder| &*folder.path == "GameCtnBlockInfo")
         .unwrap();
 
     load_all_block_infos(block_info_folder, &mut block_infos, load_fid_file_fn);
@@ -129,16 +136,41 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
     let items_folder = stadium_folder
         .trees
         .iter_mut()
-        .find(|folder| &*folder.name == "Items")
+        .find(|folder| &*folder.path == "Items")
         .unwrap();
 
     load_all_item_models(items_folder, &mut item_models, load_fid_file_fn);
 
-    let _ = native_dialog::MessageDialog::new()
-        .set_type(native_dialog::MessageType::Error)
-        .set_title("SyncEdit.dll")
-        .set_text(&format!("{}", item_models.len()))
-        .show_alert();
+    let program_data_folder_path = Path::new(&*context.program_data_folder.path);
+
+    let mut sync_edit_folder_path = program_data_folder_path.to_owned();
+    sync_edit_folder_path.push("SyncEdit");
+
+    fs::create_dir(&sync_edit_folder_path).unwrap();
+
+    for custom_block_model in map_desc.custom_block_models {
+        let hash = hash(&custom_block_model.bytes);
+
+        let mut file_path = sync_edit_folder_path.clone();
+        file_path.push(hash.to_hex().as_str());
+        file_path.set_extension("Block.Gbx");
+
+        fs::write(file_path, custom_block_model.bytes).unwrap();
+    }
+
+    for custom_item_model in map_desc.custom_item_models {
+        let hash = hash(&custom_item_model.bytes);
+
+        let mut file_path = sync_edit_folder_path.clone();
+        file_path.push(hash.to_hex().as_str());
+        file_path.set_extension("Item.Gbx");
+
+        fs::write(file_path, custom_item_model.bytes).unwrap();
+    }
+
+    context.program_data_folder.update_tree(false);
+
+    fs::remove_dir_all(sync_edit_folder_path).unwrap();
 
     let editor_common = get_map_editor(context).unwrap();
 
@@ -246,7 +278,7 @@ async fn open_map_editor(
                 };
             } else {
                 unsafe {
-                    back_to_main_menu_fn.call(context.mania_planet);
+                    back_to_main_menu_fn.call(&mut context.mania_planet);
                 }
             }
         }
