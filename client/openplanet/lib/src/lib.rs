@@ -23,8 +23,9 @@ use std::{
 use async_compat::CompatExt;
 use futures::{executor::block_on, poll, TryStreamExt};
 use game::{
-    BackToMainMenuFn, Block, BlockInfo, EditNewMap2Fn, EditorCommon, FidsFolder, ItemModel,
-    LoadFidFileFn, ManiaPlanet, Menus, NodRef, PlaceBlockFn, PlaceItemFn,
+    BackToMainMenuFn, Block, BlockInfo, EditNewMap2Fn, EditorCommon, FidsFolder,
+    GenerateBlockInfoFn, ItemModel, LoadFidFileFn, ManiaPlanet, Menus, NodRef, PlaceBlockFn,
+    PlaceItemFn,
 };
 use gamebox::{
     engines::game::map::{Direction, ElemColor},
@@ -127,6 +128,7 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
     let load_fid_file_fn = LoadFidFileFn::find(&main_module_memory).unwrap();
 
     let place_item_fn = PlaceItemFn::find(&main_module_memory).unwrap();
+    let generate_block_info_fn = GenerateBlockInfoFn::find(&main_module_memory).unwrap();
 
     let block_info_folder = stadium_folder
         .trees
@@ -144,10 +146,18 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
 
     load_all_item_models(items_folder, &mut item_models, load_fid_file_fn);
 
-    let mut custom_block_infos: HashMap<Hash, NodRef<BlockInfo>> = HashMap::new();
-    let mut custom_item_models: HashMap<Hash, NodRef<ItemModel>> = HashMap::new();
+    let mut custom_block_infos = HashMap::new();
+    let mut custom_item_models = HashMap::new();
 
-    load_custom_objects(context, &map_desc, load_fid_file_fn).unwrap();
+    load_custom_objects(
+        context,
+        &map_desc,
+        &mut custom_block_infos,
+        &mut custom_item_models,
+        load_fid_file_fn,
+        generate_block_info_fn,
+    )
+    .unwrap();
 
     let editor_common = get_map_editor(context).unwrap();
 
@@ -329,7 +339,10 @@ fn load_all_item_models(
 fn load_custom_objects(
     context: &mut Context,
     map_desc: &MapDesc,
+    custom_block_infos: &mut HashMap<Hash, NodRef<BlockInfo>>,
+    custom_item_models: &mut HashMap<Hash, NodRef<ItemModel>>,
     load_fid_file_fn: LoadFidFileFn,
+    generate_block_info_fn: GenerateBlockInfoFn,
 ) -> io::Result<()> {
     let program_data_folder_path = Path::new(&*context.program_data_folder.path);
 
@@ -339,36 +352,32 @@ fn load_custom_objects(
     fs::create_dir(&sync_edit_folder_path)?;
 
     let mut f = || {
-        let mut custom_block_file_names = vec![];
+        let mut custom_block_hashes = vec![];
 
         for custom_block in &map_desc.custom_blocks {
             let hash = hash(&custom_block.bytes);
 
-            let file_name = hash.to_hex();
-
             let mut file_path = sync_edit_folder_path.clone();
-            file_path.push(file_name.as_str());
+            file_path.push(hash.to_hex().as_str());
             file_path.set_extension("Block.Gbx");
 
             fs::write(&file_path, &custom_block.bytes).unwrap();
 
-            custom_block_file_names.push(file_name);
+            custom_block_hashes.push(hash);
         }
 
-        let mut custom_item_file_names = vec![];
+        let mut custom_item_hashes = vec![];
 
         for custom_item in &map_desc.custom_items {
             let hash = hash(&custom_item.bytes);
 
-            let file_name = hash.to_hex();
-
             let mut file_path = sync_edit_folder_path.clone();
-            file_path.push(file_name.as_str());
+            file_path.push(hash.to_hex().as_str());
             file_path.set_extension("Item.Gbx");
 
             fs::write(&file_path, &custom_item.bytes).unwrap();
 
-            custom_item_file_names.push(file_name);
+            custom_item_hashes.push(hash);
         }
 
         context.program_data_folder.update_tree(false);
@@ -380,24 +389,40 @@ fn load_custom_objects(
             .find(|folder| &*folder.path == "SyncEdit")
             .unwrap();
 
-        for file_name in custom_block_file_names {
+        for hash in custom_block_hashes {
+            let file_name = hash.to_hex();
+
             let file = sync_edit_folder
                 .leaves
                 .iter_mut()
                 .find(|file| *file.name == *file_name)
                 .unwrap();
 
-            let nod = unsafe { load_fid_file_fn.call(file).unwrap() };
+            let mut nod = unsafe { load_fid_file_fn.call(file).unwrap() };
+
+            let item_model = nod.cast_mut::<ItemModel>().unwrap();
+
+            generate_block_info_fn.call(item_model);
+
+            let block_info = item_model.entity_model.cast_mut::<BlockInfo>().unwrap();
+
+            custom_block_infos.insert(hash, NodRef::clone(block_info));
         }
 
-        for file_name in custom_item_file_names {
+        for hash in custom_item_hashes {
+            let file_name = hash.to_hex();
+
             let file = sync_edit_folder
                 .leaves
                 .iter_mut()
                 .find(|file| *file.name == *file_name)
                 .unwrap();
 
-            let nod = unsafe { load_fid_file_fn.call(file).unwrap() };
+            let mut nod = unsafe { load_fid_file_fn.call(file).unwrap() };
+
+            let item_model = nod.cast_mut::<ItemModel>().unwrap();
+
+            custom_item_models.insert(hash, NodRef::clone(item_model));
         }
 
         Ok(())

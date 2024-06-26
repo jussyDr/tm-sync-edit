@@ -595,10 +595,13 @@ autopad! {
     }
 }
 
-/// CGameItemModel.
-#[repr(C)]
-pub struct ItemModel {
-    collector: Collector,
+autopad! {
+    /// CGameItemModel.
+    #[repr(C)]
+    pub struct ItemModel {
+                     collector: Collector,
+        0x288 => pub entity_model: NodRef<Nod>
+    }
 }
 
 impl Class for ItemModel {

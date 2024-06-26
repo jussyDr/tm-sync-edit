@@ -309,3 +309,23 @@ impl LoadFidFileFn {
         }
     }
 }
+
+pub struct GenerateBlockInfoFn(GenerateBlockInfoFnType);
+
+type GenerateBlockInfoFnType = unsafe extern "system" fn(this: *mut ItemModel);
+
+impl GenerateBlockInfoFn {
+    pub fn find(main_module_memory: &ModuleMemory) -> Option<Self> {
+        let pattern = "40 53 48 83 ec 20 83 b9 b0 02 00 00 00";
+
+        let ptr = main_module_memory.find_pattern(pattern).unwrap()?;
+
+        let f = unsafe { transmute::<*const u8, GenerateBlockInfoFnType>(ptr) };
+
+        Some(Self(f))
+    }
+
+    pub fn call(&self, item_model: &mut ItemModel) {
+        unsafe { (self.0)(item_model) };
+    }
+}
