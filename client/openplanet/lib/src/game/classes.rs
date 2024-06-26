@@ -392,7 +392,7 @@ autopad! {
             param_11: u32,
             param_12: u32,
             param_13: u32,
-            param_14: u32,
+            is_air_variant: u32,
             param_15: u32,
             param_16: usize,
             is_free: u32,
@@ -426,6 +426,7 @@ impl EditorCommon {
         block_info: &BlockInfo,
         coord: Vec3<u8>,
         dir: Direction,
+        is_air_variant: bool,
         elem_color: ElemColor,
     ) -> Option<NodRef<Block>> {
         if self.can_place_block(block_info, coord, dir) {
@@ -446,7 +447,7 @@ impl EditorCommon {
                     1,
                     0,
                     0,
-                    0xffffffff,
+                    is_air_variant as u32,
                     1,
                     0,
                     0,

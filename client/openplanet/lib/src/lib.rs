@@ -200,6 +200,7 @@ async fn connection(
             block_info,
             block_desc.coord,
             block_desc.dir,
+            block_desc.is_air_variant,
             block_desc.elem_color,
             place_block_fn,
         );
@@ -221,6 +222,7 @@ async fn connection(
             block_info,
             ghost_block_desc.coord,
             ghost_block_desc.dir,
+            ghost_block_desc.is_air_variant,
             ghost_block_desc.elem_color,
         );
 
@@ -531,11 +533,21 @@ fn place_block(
     block_info: &BlockInfo,
     coord: Vec3<u8>,
     dir: Direction,
+    is_air_variant: bool,
     elem_color: ElemColor,
     place_block_fn: PlaceBlockFn,
 ) -> Option<NodRef<Block>> {
     if editor_common.can_place_block(block_info, coord, dir) {
-        unsafe { place_block_fn.call(editor_common, block_info, coord, dir, elem_color) }
+        unsafe {
+            place_block_fn.call(
+                editor_common,
+                block_info,
+                coord,
+                dir,
+                is_air_variant,
+                elem_color,
+            )
+        }
     } else {
         None
     }

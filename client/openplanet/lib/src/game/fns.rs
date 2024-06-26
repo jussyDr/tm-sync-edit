@@ -175,6 +175,7 @@ impl PlaceBlockFn {
         block_info: &BlockInfo,
         coord: Vec3<u8>,
         dir: Direction,
+        is_air_variant: bool,
         elem_color: ElemColor,
     ) -> Option<NodRef<Block>> {
         let mut coord = [coord.x as u32, coord.y as u32, coord.z as u32];

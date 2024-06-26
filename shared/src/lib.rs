@@ -64,6 +64,7 @@ pub struct BlockDesc {
     pub block_info_id: ModelId,
     pub coord: Vec3<u8>,
     pub dir: Direction,
+    pub is_air_variant: bool,
     pub elem_color: ElemColor,
 }
 
@@ -72,6 +73,7 @@ pub struct GhostBlockDesc {
     pub block_info_id: ModelId,
     pub coord: Vec3<u8>,
     pub dir: Direction,
+    pub is_air_variant: bool,
     pub elem_color: ElemColor,
 }
 

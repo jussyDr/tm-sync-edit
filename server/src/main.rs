@@ -136,6 +136,7 @@ pub fn load_map() -> MapDesc {
                         block_info_id: model_id,
                         coord: block_kind.coord(),
                         dir: block_kind.direction(),
+                        is_air_variant: block_kind.is_air_variant(),
                         elem_color: block.elem_color(),
                     })
                 } else {
@@ -143,6 +144,7 @@ pub fn load_map() -> MapDesc {
                         block_info_id: model_id,
                         coord: block_kind.coord(),
                         dir: block_kind.direction(),
+                        is_air_variant: block_kind.is_air_variant(),
                         elem_color: block.elem_color(),
                     })
                 }
