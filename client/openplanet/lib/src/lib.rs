@@ -389,8 +389,10 @@ fn load_custom_objects(
             .find(|folder| &*folder.path == "SyncEdit")
             .unwrap();
 
+        sync_edit_folder.update_tree(false);
+
         for hash in custom_block_hashes {
-            let file_name = hash.to_hex();
+            let file_name = format!("{}.Block.Gbx", hash.to_hex());
 
             let file = sync_edit_folder
                 .leaves
@@ -410,7 +412,7 @@ fn load_custom_objects(
         }
 
         for hash in custom_item_hashes {
-            let file_name = hash.to_hex();
+            let file_name = format!("{}.Item.Gbx", hash.to_hex());
 
             let file = sync_edit_folder
                 .leaves

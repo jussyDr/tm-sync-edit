@@ -137,6 +137,21 @@ union FastStringUnion {
     ptr: *const u8,
 }
 
+#[repr(C)]
+pub struct ConstString {
+    ptr: *const u8,
+    len: u32,
+}
+
+impl Deref for ConstString {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        let bytes = unsafe { slice::from_raw_parts(self.ptr, self.len as usize) };
+        unsafe { str::from_utf8_unchecked(bytes) }
+    }
+}
+
 /// CMwSArray.
 #[repr(C)]
 pub struct Array<T> {
@@ -574,7 +589,7 @@ autopad! {
     pub struct FidFile {
                     nod: Nod,
         0x18 => pub parent_folder: NodRef<FidsFolder>,
-        0xd0 => pub name: FastString,
+        0xd0 => pub name: ConstString,
     }
 }
 

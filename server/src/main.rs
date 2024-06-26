@@ -96,17 +96,18 @@ pub fn load_map() -> MapDesc {
             let hash = hash(&bytes);
 
             if file.name().ends_with("Block.Gbx") {
-                custom_block_hashes.insert(
-                    embedded_objects.ids().get(file_index).unwrap().to_owned(),
-                    hash,
+                let id = format!(
+                    "{}_CustomBlock",
+                    embedded_objects.ids().get(file_index).unwrap()
                 );
+
+                custom_block_hashes.insert(id, hash);
 
                 custom_blocks.push(CustomBlockDesc { bytes })
             } else if file.name().ends_with("Item.Gbx") {
-                custom_item_hashes.insert(
-                    embedded_objects.ids().get(file_index).unwrap().to_owned(),
-                    hash,
-                );
+                let id = embedded_objects.ids().get(file_index).unwrap().to_owned();
+
+                custom_item_hashes.insert(id, hash);
 
                 custom_items.push(CustomItemDesc { bytes })
             }
