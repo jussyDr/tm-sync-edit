@@ -295,17 +295,17 @@ impl LoadFidFileFn {
         Some(Self(f))
     }
 
-    pub unsafe fn call(&self, fid_file: &mut FidFile) -> Option<NodRef<Nod>> {
+    pub fn call(&self, fid_file: &mut FidFile) -> Option<NodRef<Nod>> {
         let mut nod = MaybeUninit::uninit();
 
-        (self.0)(nod.as_mut_ptr(), fid_file, 0);
+        unsafe { (self.0)(nod.as_mut_ptr(), fid_file, 0) };
 
-        let nod = nod.assume_init();
+        let nod = unsafe { nod.assume_init() };
 
         if nod.is_null() {
             None
         } else {
-            Some(NodRef::from_ptr(nod))
+            unsafe { Some(NodRef::from_ptr(nod)) }
         }
     }
 }

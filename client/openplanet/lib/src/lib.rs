@@ -16,7 +16,7 @@ use std::{
     error::Error,
     fs,
     future::{poll_fn, Future},
-    io, mem, panic,
+    mem, panic,
     path::Path,
     pin::Pin,
     task::Poll,
@@ -306,36 +306,44 @@ fn load_block_infos(
     folder: &mut FidsFolder,
     block_infos: &mut HashMap<String, NodRef<BlockInfo>>,
     load_fid_file_fn: LoadFidFileFn,
-) {
+) -> Result<(), Box<dyn Error>> {
     for folder in folder.trees.iter_mut() {
-        load_block_infos(folder, block_infos, load_fid_file_fn);
+        load_block_infos(folder, block_infos, load_fid_file_fn)?;
     }
 
     for file in folder.leaves.iter_mut() {
-        let mut nod = unsafe { load_fid_file_fn.call(file).unwrap() };
+        let mut nod = load_fid_file_fn
+            .call(file)
+            .ok_or("Failed to load fid file")?;
 
         if let Some(block_info) = nod.cast_mut::<BlockInfo>() {
             block_infos.insert(block_info.name.to_owned(), NodRef::clone(block_info));
         }
     }
+
+    Ok(())
 }
 
 fn load_item_models(
     folder: &mut FidsFolder,
     item_models: &mut HashMap<String, NodRef<ItemModel>>,
     load_fid_file_fn: LoadFidFileFn,
-) {
+) -> Result<(), Box<dyn Error>> {
     for folder in folder.trees.iter_mut() {
-        load_item_models(folder, item_models, load_fid_file_fn);
+        load_item_models(folder, item_models, load_fid_file_fn)?;
     }
 
     for file in folder.leaves.iter_mut() {
-        let mut nod = unsafe { load_fid_file_fn.call(file).unwrap() };
+        let mut nod = load_fid_file_fn
+            .call(file)
+            .ok_or("Failed to load fid file")?;
 
         if let Some(item_model) = nod.cast_mut::<ItemModel>() {
             item_models.insert(item_model.name.to_owned(), NodRef::clone(item_model));
         }
     }
+
+    Ok(())
 }
 
 fn load_custom_objects(
@@ -345,7 +353,7 @@ fn load_custom_objects(
     custom_item_models: &mut HashMap<Hash, NodRef<ItemModel>>,
     load_fid_file_fn: LoadFidFileFn,
     generate_block_info_fn: GenerateBlockInfoFn,
-) -> io::Result<()> {
+) -> Result<(), Box<dyn Error>> {
     let program_data_folder_path = Path::new(&*context.program_data_folder.path);
 
     let mut sync_edit_folder_path = program_data_folder_path.to_owned();
@@ -376,7 +384,7 @@ fn load_custom_objects_using_folder(
     load_fid_file_fn: LoadFidFileFn,
     generate_block_info_fn: GenerateBlockInfoFn,
     folder: &Path,
-) -> io::Result<()> {
+) -> Result<(), Box<dyn Error>> {
     let mut custom_block_hashes = vec![];
 
     for custom_block in &map_desc.custom_blocks {
@@ -425,13 +433,20 @@ fn load_custom_objects_using_folder(
             .find(|file| *file.name == *file_name)
             .unwrap();
 
-        let mut nod = unsafe { load_fid_file_fn.call(file).unwrap() };
+        let mut nod = load_fid_file_fn
+            .call(file)
+            .ok_or("Failed to load fid file")?;
 
         let item_model = nod.cast_mut::<ItemModel>().unwrap();
 
         generate_block_info_fn.call(item_model);
 
-        let block_info = item_model.entity_model.cast_mut::<BlockInfo>().unwrap();
+        let block_info = item_model
+            .entity_model
+            .as_mut()
+            .unwrap()
+            .cast_mut::<BlockInfo>()
+            .unwrap();
 
         custom_block_infos.insert(hash, NodRef::clone(block_info));
     }
@@ -445,7 +460,9 @@ fn load_custom_objects_using_folder(
             .find(|file| *file.name == *file_name)
             .unwrap();
 
-        let mut nod = unsafe { load_fid_file_fn.call(file).unwrap() };
+        let mut nod = load_fid_file_fn
+            .call(file)
+            .ok_or("Failed to load fid file")?;
 
         let item_model = nod.cast_mut::<ItemModel>().unwrap();
 
@@ -463,11 +480,9 @@ fn place_block(
     elem_color: ElemColor,
     place_block_fn: PlaceBlockFn,
 ) -> Option<NodRef<Block>> {
-    unsafe {
-        if editor_common.can_place_block(block_info, coord, dir) {
-            place_block_fn.call(editor_common, block_info, coord, dir, elem_color)
-        } else {
-            None
-        }
+    if editor_common.can_place_block(block_info, coord, dir) {
+        unsafe { place_block_fn.call(editor_common, block_info, coord, dir, elem_color) }
+    } else {
+        None
     }
 }

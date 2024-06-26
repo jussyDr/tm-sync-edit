@@ -615,7 +615,7 @@ autopad! {
     #[repr(C)]
     pub struct ItemModel {
                      collector: Collector,
-        0x288 => pub entity_model: NodRef<Nod>
+        0x288 => pub entity_model: Option<NodRef<Nod>>
     }
 }
 
