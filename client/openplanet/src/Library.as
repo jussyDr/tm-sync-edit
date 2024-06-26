@@ -75,7 +75,7 @@ class Library {
         m_updateFunc.Call(m_context);
     }
 
-    void Join() {
-        m_joinFunc.Call(m_context);
+    void Join(const string&in host, const string&in port) {
+        m_joinFunc.Call(m_context, host, port);
     }
 }

@@ -14,11 +14,15 @@ mod game {
 use std::{
     collections::HashMap,
     error::Error,
+    ffi::{c_char, CStr, CString},
     fs,
     future::{poll_fn, Future},
-    mem, panic,
+    mem,
+    net::{IpAddr, SocketAddr},
+    panic,
     path::Path,
     pin::Pin,
+    str::FromStr,
     task::Poll,
 };
 
@@ -75,10 +79,13 @@ extern "system" fn Update(context: &mut Context) {
 }
 
 #[no_mangle]
-extern "system" fn Join(context: &mut Context) {
+extern "system" fn Join(context: &mut Context, host: *const c_char, port: *const c_char) {
     let context_ref = unsafe { &mut *(context as *mut Context) };
 
-    context.connection_future = Some(Box::pin(connection(context_ref)));
+    let host = unsafe { CStr::from_ptr(host).to_str().unwrap().to_owned() };
+    let port = unsafe { CStr::from_ptr(port).to_str().unwrap().to_owned() };
+
+    context.connection_future = Some(Box::pin(connection(context_ref, host, port)));
 }
 
 type ConnectionFuture = dyn Future<Output = Result<(), Box<dyn Error>>>;
@@ -101,8 +108,16 @@ impl Context {
     }
 }
 
-async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
-    let tcp_stream = TcpStream::connect("127.0.0.1:8369").compat().await?;
+async fn connection(
+    context: &mut Context,
+    host: String,
+    port: String,
+) -> Result<(), Box<dyn Error>> {
+    let ip_addr = IpAddr::from_str(&host)?;
+    let port = u16::from_str(&port)?;
+    let socket_addr = SocketAddr::new(ip_addr, port);
+
+    let tcp_stream = TcpStream::connect(socket_addr).compat().await?;
 
     let mut framed_tcp_stream = framed_tcp_stream(tcp_stream);
 

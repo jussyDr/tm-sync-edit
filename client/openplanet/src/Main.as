@@ -3,6 +3,12 @@ const string c_pluginTitle = "Sync Edit";
 [Setting hidden]
 bool Setting_InterfaceVisible = true;
 
+[Setting hidden]
+string Setting_Host = "127.0.0.1";
+
+[Setting hidden]
+string Setting_Port = "8369";
+
 Library@ g_library = null;
 
 void Main() {
@@ -23,8 +29,12 @@ void RenderInterface() {
         UI::Text("Error: Failed to load library '" + c_libraryName + "'");
         UI::PopStyleColor();
     } else {
+        Setting_Host = UI::InputText("Host", Setting_Host, UI::InputTextFlags::CharsNoBlank);
+
+        Setting_Port = UI::InputText("Port", Setting_Port, UI::InputTextFlags::CharsDecimal);
+
         if (UI::Button("Join")) {
-           g_library.Join();
+           g_library.Join(Setting_Host, Setting_Port);
         }
     }
 
