@@ -11,6 +11,7 @@ use gamebox::{
     engines::game::map::{Direction, ElemColor, YawPitchRoll},
     Vec3,
 };
+use shared::NotNan;
 
 pub trait Class {
     const ID: u32;
@@ -274,6 +275,7 @@ autopad! {
     /// CGameCtnAnchoredObject.
     #[repr(C)]
     pub struct Item {
+                    nod: Nod,
         0x28 => pub params: ItemParams,
     }
 }
@@ -303,6 +305,14 @@ pub struct ItemParams {
     pub elem_color: u8,
     pub anim_offset: u8,
     pub param_22: u32,
+}
+
+impl Inherits for Item {
+    type Parent = Nod;
+
+    fn parent(&mut self) -> &mut Nod {
+        &mut self.nod
+    }
 }
 
 /// CGameSwitcherModule.
@@ -459,16 +469,16 @@ impl EditorCommon {
     pub fn place_free_block(
         &mut self,
         block_info: &BlockInfo,
-        pos: Vec3<f32>,
+        position: Vec3<f32>,
         rotation: YawPitchRoll,
         elem_color: ElemColor,
     ) -> Option<NodRef<Block>> {
         let coord = [0xffffffff, 0, 0xffffffff];
 
         let transform = [
-            pos.x,
-            pos.y,
-            pos.z,
+            position.x,
+            position.y,
+            position.z,
             rotation.yaw,
             rotation.pitch,
             rotation.roll,

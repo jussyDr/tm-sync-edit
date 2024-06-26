@@ -1,5 +1,5 @@
 use gamebox::{
-    engines::game::map::{Direction, ElemColor, PhaseOffset, YawPitchRoll},
+    engines::game::map::{Direction, ElemColor, PhaseOffset},
     Vec3,
 };
 use serde::{Deserialize, Serialize};
@@ -8,6 +8,7 @@ use tokio_util::codec::{Decoder, Framed, LengthDelimitedCodec};
 
 pub type FramedTcpStream = Framed<TcpStream, LengthDelimitedCodec>;
 pub type Hash = blake3::Hash;
+pub type NotNan<T> = ordered_float::NotNan<T>;
 
 pub fn framed_tcp_stream(tcp_stream: TcpStream) -> FramedTcpStream {
     LengthDelimitedCodec::new().framed(tcp_stream)
@@ -58,7 +59,7 @@ pub struct CustomItemDesc {
     pub bytes: Vec<u8>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct BlockDesc {
     pub block_info_id: ModelId,
     pub coord: Vec3<u8>,
@@ -66,7 +67,7 @@ pub struct BlockDesc {
     pub elem_color: ElemColor,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct GhostBlockDesc {
     pub block_info_id: ModelId,
     pub coord: Vec3<u8>,
@@ -74,25 +75,29 @@ pub struct GhostBlockDesc {
     pub elem_color: ElemColor,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct FreeBlockDesc {
     pub block_info_id: ModelId,
-    pub pos: Vec3<f32>,
-    pub rotation: YawPitchRoll,
+    pub position: Vec3<NotNan<f32>>,
+    pub yaw: NotNan<f32>,
+    pub pitch: NotNan<f32>,
+    pub roll: NotNan<f32>,
     pub elem_color: ElemColor,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ItemDesc {
     pub item_model_id: ModelId,
-    pub pos: Vec3<f32>,
-    pub pivot_pos: Vec3<f32>,
-    pub rotation: YawPitchRoll,
+    pub position: Vec3<NotNan<f32>>,
+    pub yaw: NotNan<f32>,
+    pub pitch: NotNan<f32>,
+    pub roll: NotNan<f32>,
+    pub pivot_position: Vec3<NotNan<f32>>,
     pub elem_color: ElemColor,
     pub anim_offset: PhaseOffset,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ModelId {
     Game { id: String },
     Custom { hash: Hash },

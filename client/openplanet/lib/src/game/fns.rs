@@ -230,23 +230,23 @@ impl PlaceItemFn {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub unsafe fn call(
+    pub fn call(
         &self,
         editor: &mut EditorCommon,
         item_model: &ItemModel,
-        pos: Vec3<f32>,
+        position: Vec3<f32>,
         rotation: YawPitchRoll,
-        pivot_pos: Vec3<f32>,
+        pivot_position: Vec3<f32>,
         elem_color: ElemColor,
         anim_offset: PhaseOffset,
-    ) -> Option<&mut Item> {
+    ) -> Option<NodRef<Item>> {
         let params = ItemParams {
             coord: [20, 20, 20],
             rotation: rotation.into_array(),
             param_3: 0xffffffff,
-            pos: pos.into_array(),
+            pos: position.into_array(),
             param_5: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
-            pivot_pos: pivot_pos.into_array(),
+            pivot_pos: pivot_position.into_array(),
             param_7: 1.0,
             param_8: 1,
             param_9: 0xffffffff,
@@ -268,10 +268,10 @@ impl PlaceItemFn {
 
         let mut item = MaybeUninit::uninit();
 
-        let success = (self.0)(editor, item_model, &params, item.as_mut_ptr());
+        let success = unsafe { (self.0)(editor, item_model, &params, item.as_mut_ptr()) };
 
         if success {
-            Some(&mut *item.assume_init())
+            unsafe { Some(NodRef::from_ptr(item.assume_init())) }
         } else {
             None
         }

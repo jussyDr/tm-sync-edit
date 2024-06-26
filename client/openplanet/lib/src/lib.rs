@@ -30,7 +30,7 @@ use game::{
     PlaceItemFn,
 };
 use gamebox::{
-    engines::game::map::{Direction, ElemColor},
+    engines::game::map::{Direction, ElemColor, YawPitchRoll},
     Vec3,
 };
 use process::Process;
@@ -167,71 +167,110 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
 
     editor_common.remove_all();
 
+    let mut blocks = HashMap::new();
+    let mut ghost_blocks = HashMap::new();
+    let mut free_blocks = HashMap::new();
+    let mut items = HashMap::new();
+
     let air_mode = mem::replace(&mut editor_common.air_mode, true);
 
-    for block in map_desc.blocks {
-        let block_info = match block.block_info_id {
-            ModelId::Game { id } => block_infos.get(&id).unwrap(),
+    for block_desc in map_desc.blocks {
+        let block_info = match block_desc.block_info_id {
+            ModelId::Game { ref id } => block_infos.get(id).unwrap(),
             ModelId::Custom { hash } => custom_block_infos.get(&hash).unwrap(),
         };
 
-        place_block(
+        let block = place_block(
             editor_common,
             block_info,
-            block.coord,
-            block.dir,
-            block.elem_color,
+            block_desc.coord,
+            block_desc.dir,
+            block_desc.elem_color,
             place_block_fn,
         );
+
+        if let Some(block) = block {
+            blocks.insert(block_desc, block);
+        }
     }
 
     editor_common.air_mode = air_mode;
 
-    for ghost_block in map_desc.ghost_blocks {
-        let block_info = match ghost_block.block_info_id {
-            ModelId::Game { id } => block_infos.get(&id).unwrap(),
+    for ghost_block_desc in map_desc.ghost_blocks {
+        let block_info = match ghost_block_desc.block_info_id {
+            ModelId::Game { ref id } => block_infos.get(id).unwrap(),
             ModelId::Custom { hash } => custom_block_infos.get(&hash).unwrap(),
         };
 
-        editor_common.place_ghost_block(
+        let ghost_block = editor_common.place_ghost_block(
             block_info,
-            ghost_block.coord,
-            ghost_block.dir,
-            ghost_block.elem_color,
+            ghost_block_desc.coord,
+            ghost_block_desc.dir,
+            ghost_block_desc.elem_color,
         );
+
+        if let Some(ghost_block) = ghost_block {
+            ghost_blocks.insert(ghost_block_desc, ghost_block);
+        }
     }
 
-    for free_block in map_desc.free_blocks {
-        let block_info = match free_block.block_info_id {
-            ModelId::Game { id } => block_infos.get(&id).unwrap(),
+    for free_block_desc in map_desc.free_blocks {
+        let block_info = match free_block_desc.block_info_id {
+            ModelId::Game { ref id } => block_infos.get(id).unwrap(),
             ModelId::Custom { hash } => custom_block_infos.get(&hash).unwrap(),
         };
 
-        editor_common.place_free_block(
+        let free_block = editor_common.place_free_block(
             block_info,
-            free_block.pos,
-            free_block.rotation,
-            free_block.elem_color,
+            Vec3 {
+                x: free_block_desc.position.x.into_inner(),
+                y: free_block_desc.position.y.into_inner(),
+                z: free_block_desc.position.z.into_inner(),
+            },
+            YawPitchRoll {
+                yaw: free_block_desc.yaw.into_inner(),
+                pitch: free_block_desc.pitch.into_inner(),
+                roll: free_block_desc.roll.into_inner(),
+            },
+            free_block_desc.elem_color,
         );
+
+        if let Some(free_block) = free_block {
+            free_blocks.insert(free_block_desc, free_block);
+        }
     }
 
-    for item in map_desc.items {
-        let item_model = match item.item_model_id {
-            ModelId::Game { id } => item_models.get(&id).unwrap(),
+    for item_desc in map_desc.items {
+        let item_model = match item_desc.item_model_id {
+            ModelId::Game { ref id } => item_models.get(id).unwrap(),
             ModelId::Custom { hash } => custom_item_models.get(&hash).unwrap(),
         };
 
-        unsafe {
-            place_item_fn.call(
-                editor_common,
-                item_model,
-                item.pos,
-                item.rotation,
-                item.pivot_pos,
-                item.elem_color,
-                item.anim_offset,
-            )
-        };
+        let item = place_item_fn.call(
+            editor_common,
+            item_model,
+            Vec3 {
+                x: item_desc.position.x.into_inner(),
+                y: item_desc.position.y.into_inner(),
+                z: item_desc.position.z.into_inner(),
+            },
+            YawPitchRoll {
+                yaw: item_desc.yaw.into_inner(),
+                pitch: item_desc.pitch.into_inner(),
+                roll: item_desc.roll.into_inner(),
+            },
+            Vec3 {
+                x: item_desc.pivot_position.x.into_inner(),
+                y: item_desc.pivot_position.y.into_inner(),
+                z: item_desc.pivot_position.z.into_inner(),
+            },
+            item_desc.elem_color,
+            item_desc.anim_offset,
+        );
+
+        if let Some(item) = item {
+            items.insert(item_desc, item);
+        }
     }
 
     while framed_tcp_stream.try_next().await?.is_some() {}

@@ -7,11 +7,11 @@ use std::{
 };
 
 use futures_util::{SinkExt, TryStreamExt};
-use gamebox::engines::game::map::BlockKind;
+use gamebox::{engines::game::map::BlockKind, Vec3};
 use log::LevelFilter;
 use shared::{
     framed_tcp_stream, hash, serialize, BlockDesc, CustomBlockDesc, CustomItemDesc, FreeBlockDesc,
-    GhostBlockDesc, ItemDesc, MapDesc, MapParamsDesc, ModelId, Mood,
+    GhostBlockDesc, ItemDesc, MapDesc, MapParamsDesc, ModelId, Mood, NotNan,
 };
 use tokio::{net::TcpListener, runtime, spawn, sync::Mutex};
 use zip::ZipArchive;
@@ -145,12 +145,23 @@ pub fn load_map() -> MapDesc {
                     })
                 }
             }
-            BlockKind::Free(block_kind) => free_blocks.push(FreeBlockDesc {
-                block_info_id: model_id,
-                pos: block_kind.position().clone(),
-                rotation: block_kind.rotation().clone(),
-                elem_color: block.elem_color(),
-            }),
+            BlockKind::Free(block_kind) => {
+                let position = block_kind.position();
+                let rotation = block_kind.rotation();
+
+                free_blocks.push(FreeBlockDesc {
+                    block_info_id: model_id,
+                    position: Vec3 {
+                        x: NotNan::new(position.x).unwrap(),
+                        y: NotNan::new(position.y).unwrap(),
+                        z: NotNan::new(position.z).unwrap(),
+                    },
+                    yaw: NotNan::new(rotation.yaw).unwrap(),
+                    pitch: NotNan::new(rotation.pitch).unwrap(),
+                    roll: NotNan::new(rotation.roll).unwrap(),
+                    elem_color: block.elem_color(),
+                });
+            }
         }
     }
 
@@ -165,11 +176,25 @@ pub fn load_map() -> MapDesc {
             }
         };
 
+        let position = item.position();
+        let rotation = item.rotation();
+        let pivot_position = item.pivot_position();
+
         items.push(ItemDesc {
             item_model_id: model_id,
-            pos: item.position().clone(),
-            pivot_pos: item.pivot_position().clone(),
-            rotation: item.rotation().clone(),
+            position: Vec3 {
+                x: NotNan::new(position.x).unwrap(),
+                y: NotNan::new(position.y).unwrap(),
+                z: NotNan::new(position.z).unwrap(),
+            },
+            yaw: NotNan::new(rotation.yaw).unwrap(),
+            pitch: NotNan::new(rotation.pitch).unwrap(),
+            roll: NotNan::new(rotation.roll).unwrap(),
+            pivot_position: Vec3 {
+                x: NotNan::new(pivot_position.x).unwrap(),
+                y: NotNan::new(pivot_position.y).unwrap(),
+                z: NotNan::new(pivot_position.z).unwrap(),
+            },
             elem_color: item.elem_color(),
             anim_offset: item.animation_offset(),
         })
