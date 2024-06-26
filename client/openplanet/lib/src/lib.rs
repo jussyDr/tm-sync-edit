@@ -1,3 +1,5 @@
+#![warn(clippy::unwrap_used)]
+
 mod process;
 
 /// Interacting with the game.
@@ -136,7 +138,7 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
         .find(|folder| &*folder.path == "GameCtnBlockInfo")
         .unwrap();
 
-    load_all_block_infos(block_info_folder, &mut block_infos, load_fid_file_fn);
+    load_block_infos(block_info_folder, &mut block_infos, load_fid_file_fn);
 
     let items_folder = stadium_folder
         .trees
@@ -144,7 +146,7 @@ async fn connection(context: &mut Context) -> Result<(), Box<dyn Error>> {
         .find(|folder| &*folder.path == "Items")
         .unwrap();
 
-    load_all_item_models(items_folder, &mut item_models, load_fid_file_fn);
+    load_item_models(items_folder, &mut item_models, load_fid_file_fn);
 
     let mut custom_block_infos = HashMap::new();
     let mut custom_item_models = HashMap::new();
@@ -300,13 +302,13 @@ fn get_map_editor(context: &mut Context) -> Option<&mut NodRef<EditorCommon>> {
         .next()
 }
 
-fn load_all_block_infos(
+fn load_block_infos(
     folder: &mut FidsFolder,
     block_infos: &mut HashMap<String, NodRef<BlockInfo>>,
     load_fid_file_fn: LoadFidFileFn,
 ) {
     for folder in folder.trees.iter_mut() {
-        load_all_block_infos(folder, block_infos, load_fid_file_fn);
+        load_block_infos(folder, block_infos, load_fid_file_fn);
     }
 
     for file in folder.leaves.iter_mut() {
@@ -318,13 +320,13 @@ fn load_all_block_infos(
     }
 }
 
-fn load_all_item_models(
+fn load_item_models(
     folder: &mut FidsFolder,
     item_models: &mut HashMap<String, NodRef<ItemModel>>,
     load_fid_file_fn: LoadFidFileFn,
 ) {
     for folder in folder.trees.iter_mut() {
-        load_all_item_models(folder, item_models, load_fid_file_fn);
+        load_item_models(folder, item_models, load_fid_file_fn);
     }
 
     for file in folder.leaves.iter_mut() {
@@ -351,90 +353,106 @@ fn load_custom_objects(
 
     fs::create_dir(&sync_edit_folder_path)?;
 
-    let mut f = || {
-        let mut custom_block_hashes = vec![];
+    let result = load_custom_objects_using_folder(
+        context,
+        map_desc,
+        custom_block_infos,
+        custom_item_models,
+        load_fid_file_fn,
+        generate_block_info_fn,
+        &sync_edit_folder_path,
+    );
 
-        for custom_block in &map_desc.custom_blocks {
-            let hash = hash(&custom_block.bytes);
-
-            let mut file_path = sync_edit_folder_path.clone();
-            file_path.push(hash.to_hex().as_str());
-            file_path.set_extension("Block.Gbx");
-
-            fs::write(&file_path, &custom_block.bytes).unwrap();
-
-            custom_block_hashes.push(hash);
-        }
-
-        let mut custom_item_hashes = vec![];
-
-        for custom_item in &map_desc.custom_items {
-            let hash = hash(&custom_item.bytes);
-
-            let mut file_path = sync_edit_folder_path.clone();
-            file_path.push(hash.to_hex().as_str());
-            file_path.set_extension("Item.Gbx");
-
-            fs::write(&file_path, &custom_item.bytes).unwrap();
-
-            custom_item_hashes.push(hash);
-        }
-
-        context.program_data_folder.update_tree(false);
-
-        let sync_edit_folder = context
-            .program_data_folder
-            .trees
-            .iter_mut()
-            .find(|folder| &*folder.path == "SyncEdit")
-            .unwrap();
-
-        sync_edit_folder.update_tree(false);
-
-        for hash in custom_block_hashes {
-            let file_name = format!("{}.Block.Gbx", hash.to_hex());
-
-            let file = sync_edit_folder
-                .leaves
-                .iter_mut()
-                .find(|file| *file.name == *file_name)
-                .unwrap();
-
-            let mut nod = unsafe { load_fid_file_fn.call(file).unwrap() };
-
-            let item_model = nod.cast_mut::<ItemModel>().unwrap();
-
-            generate_block_info_fn.call(item_model);
-
-            let block_info = item_model.entity_model.cast_mut::<BlockInfo>().unwrap();
-
-            custom_block_infos.insert(hash, NodRef::clone(block_info));
-        }
-
-        for hash in custom_item_hashes {
-            let file_name = format!("{}.Item.Gbx", hash.to_hex());
-
-            let file = sync_edit_folder
-                .leaves
-                .iter_mut()
-                .find(|file| *file.name == *file_name)
-                .unwrap();
-
-            let mut nod = unsafe { load_fid_file_fn.call(file).unwrap() };
-
-            let item_model = nod.cast_mut::<ItemModel>().unwrap();
-
-            custom_item_models.insert(hash, NodRef::clone(item_model));
-        }
-
-        Ok(())
-    };
-
-    let result = f();
-
-    fs::remove_dir_all(sync_edit_folder_path)?;
+    fs::remove_dir_all(&sync_edit_folder_path)?;
 
     result
+}
+
+fn load_custom_objects_using_folder(
+    context: &mut Context,
+    map_desc: &MapDesc,
+    custom_block_infos: &mut HashMap<Hash, NodRef<BlockInfo>>,
+    custom_item_models: &mut HashMap<Hash, NodRef<ItemModel>>,
+    load_fid_file_fn: LoadFidFileFn,
+    generate_block_info_fn: GenerateBlockInfoFn,
+    folder: &Path,
+) -> io::Result<()> {
+    let mut custom_block_hashes = vec![];
+
+    for custom_block in &map_desc.custom_blocks {
+        let hash = hash(&custom_block.bytes);
+
+        let mut file_path = folder.to_owned();
+        file_path.push(hash.to_hex().as_str());
+        file_path.set_extension("Block.Gbx");
+
+        fs::write(&file_path, &custom_block.bytes)?;
+
+        custom_block_hashes.push(hash);
+    }
+
+    let mut custom_item_hashes = vec![];
+
+    for custom_item in &map_desc.custom_items {
+        let hash = hash(&custom_item.bytes);
+
+        let mut file_path = folder.to_owned();
+        file_path.push(hash.to_hex().as_str());
+        file_path.set_extension("Item.Gbx");
+
+        fs::write(&file_path, &custom_item.bytes)?;
+
+        custom_item_hashes.push(hash);
+    }
+
+    context.program_data_folder.update_tree(false);
+
+    let sync_edit_folder = context
+        .program_data_folder
+        .trees
+        .iter_mut()
+        .find(|folder| &*folder.path == "SyncEdit")
+        .unwrap();
+
+    sync_edit_folder.update_tree(false);
+
+    for hash in custom_block_hashes {
+        let file_name = format!("{}.Block.Gbx", hash.to_hex());
+
+        let file = sync_edit_folder
+            .leaves
+            .iter_mut()
+            .find(|file| *file.name == *file_name)
+            .unwrap();
+
+        let mut nod = unsafe { load_fid_file_fn.call(file).unwrap() };
+
+        let item_model = nod.cast_mut::<ItemModel>().unwrap();
+
+        generate_block_info_fn.call(item_model);
+
+        let block_info = item_model.entity_model.cast_mut::<BlockInfo>().unwrap();
+
+        custom_block_infos.insert(hash, NodRef::clone(block_info));
+    }
+
+    for hash in custom_item_hashes {
+        let file_name = format!("{}.Item.Gbx", hash.to_hex());
+
+        let file = sync_edit_folder
+            .leaves
+            .iter_mut()
+            .find(|file| *file.name == *file_name)
+            .unwrap();
+
+        let mut nod = unsafe { load_fid_file_fn.call(file).unwrap() };
+
+        let item_model = nod.cast_mut::<ItemModel>().unwrap();
+
+        custom_item_models.insert(hash, NodRef::clone(item_model));
+    }
+
+    Ok(())
 }
 
 fn place_block(

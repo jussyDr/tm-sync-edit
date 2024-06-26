@@ -119,11 +119,11 @@ pub fn load_map() -> MapDesc {
     let mut free_blocks = vec![];
 
     for block in map.blocks() {
-        let model_id = if let Some(&hash) = custom_block_hashes.get(block.id()) {
+        let model_id = if let Some(&hash) = custom_block_hashes.get(block.info_id()) {
             ModelId::Custom { hash }
         } else {
             ModelId::Game {
-                id: block.id().to_owned(),
+                id: block.info_id().to_owned(),
             }
         };
 
@@ -157,11 +157,11 @@ pub fn load_map() -> MapDesc {
     let mut items = vec![];
 
     for item in map.items() {
-        let model_id = if let Some(&hash) = custom_item_hashes.get(item.id()) {
+        let model_id = if let Some(&hash) = custom_item_hashes.get(item.model_id()) {
             ModelId::Custom { hash }
         } else {
             ModelId::Game {
-                id: item.id().to_owned(),
+                id: item.model_id().to_owned(),
             }
         };
 
