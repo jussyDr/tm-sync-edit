@@ -23,6 +23,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let runtime = runtime::Builder::new_multi_thread().enable_io().build()?;
 
+    let _ = load_map();
+
     runtime.block_on(async {
         let socket_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 8369);
 
@@ -95,7 +97,7 @@ pub fn load_map() -> MapDesc {
 
             let hash = hash(&bytes);
 
-            if file.name().ends_with("Block.Gbx") {
+            if file.name().to_lowercase().ends_with("block.gbx") {
                 let id = format!(
                     "{}_CustomBlock",
                     embedded_objects.ids().get(file_index).unwrap()
@@ -104,7 +106,7 @@ pub fn load_map() -> MapDesc {
                 custom_block_hashes.insert(id, hash);
 
                 custom_blocks.push(CustomBlockDesc { bytes })
-            } else if file.name().ends_with("Item.Gbx") {
+            } else if file.name().to_lowercase().ends_with("item.gbx") {
                 let id = embedded_objects.ids().get(file_index).unwrap().to_owned();
 
                 custom_item_hashes.insert(id, hash);

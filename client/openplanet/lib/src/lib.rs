@@ -14,7 +14,7 @@ mod game {
 use std::{
     collections::HashMap,
     error::Error,
-    ffi::{c_char, CStr, CString},
+    ffi::{c_char, CStr},
     fs,
     future::{poll_fn, Future},
     mem,
